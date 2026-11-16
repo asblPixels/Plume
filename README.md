@@ -249,6 +249,34 @@ sudo dnf install google-carlito-fonts google-caladea-fonts liberation-fonts
 
 ---
 
+## Application Windows (et Linux) à installer
+
+Pour les postes sans connexion ou les utilisateurs qui préfèrent un programme classique, Plume existe aussi en **application de bureau** (dossier `desktop/`, basée sur Electron) :
+
+| Fichier | Usage |
+|---|---|
+| `Plume-Setup-1.1.0-x64.exe` | Installateur Windows 10/11 : raccourcis Bureau et menu Démarrer, association des fichiers `.docx`, désinstallation propre |
+| `Plume-Portable-1.1.0-x64.exe` | Version portable : aucun droit administrateur, lancement depuis une clé USB |
+
+Dans l'application de bureau :
+- un double-clic sur un `.docx` dans l'Explorateur l'ouvre dans Plume (une seule fenêtre, même pour plusieurs fichiers) ;
+- **Ctrl+S** réenregistre directement le fichier d'origine ;
+- la vérification orthographique française est intégrée ;
+- les liens s'ouvrent dans le navigateur par défaut.
+
+> Les exécutables ne sont pas signés numériquement : au premier lancement, Windows SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur **Informations complémentaires → Exécuter quand même**.
+
+### Compiler l'application de bureau (Fedora)
+
+```bash
+sudo dnf install nodejs wine        # wine : nécessaire pour l'installateur Windows
+cd desktop
+npm install
+npm run dist:win      # → desktop/dist/Plume-Setup-*.exe et Plume-Portable-*.exe
+npm run dist:linux    # → AppImage et paquet .rpm pour Fedora
+npm start             # lancer l'application en mode développement
+```
+
 ## Installer Plume comme une application
 
 Plume est une **Progressive Web App (PWA)**. Une fois installée, elle a son icône, sa propre fenêtre sans barre d'adresse et fonctionne sans connexion.
@@ -373,6 +401,7 @@ plume/
 │   ├── app.js              Orchestration : fichiers, enregistrement, zoom, règle, navigation, raccourcis
 │   └── icons.js            Tracés d'icônes (base Lucide, ISC)
 ├── icons/                  Logo « Plume » (SVG clair/sombre), icône P (SVG), icônes PWA (192, 512, maskable), apple-touch-icon, favicon
+├── desktop/                Application de bureau Electron (Windows, Linux, macOS)
 ├── vendor/
 │   └── jszip.min.js        Lecture/écriture des archives ZIP (.docx)
 └── docs/captures/          Captures d'écran
@@ -479,6 +508,7 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 ## Historique des versions
 
 ### 1.1.0 — 16 novembre 2026
+- **Application Windows** : installateur et version portable, ouverture des `.docx` par double-clic
 - **Conservation intégrale** des éléments Office non éditables (graphiques, SmartArt, formes, zones de texte, images flottantes, OLE, EMF/WMF, équations) avec aperçu à l'écran
 - Reprise des styles, numérotations, thème, polices et réglages du document d'origine
 - En-têtes de première page et de pages paires, colonnes et autres réglages de section conservés

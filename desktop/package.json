@@ -17,23 +17,66 @@
     "appId": "be.asblpixels.plume",
     "productName": "Plume",
     "copyright": "© 2026 Pixel's ASBL",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["main.js", "preload.js", "app/**/*"],
-    "fileAssociations": [
-      { "ext": "docx", "name": "Document Word", "description": "Document Word (.docx)", "role": "Editor", "icon": "build/icon.ico" }
-    ],
-    "win": { "icon": "build/icon.ico", "signExecutable": false, "target": ["nsis", "portable"] },
-    "nsis": {
-      "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "Plume",
-      "installerIcon": "build/icon.ico", "uninstallerIcon": "build/icon.ico",
-      "artifactName": "Plume-Setup-${version}-x64.${ext}", "language": "1036"
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
     },
-    "portable": { "artifactName": "Plume-Portable-${version}-x64.${ext}" },
-    "linux": { "icon": "build/icon.png", "category": "Office", "target": ["AppImage", "rpm"], "mimeTypes": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] }
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "docx",
+        "name": "Document Word",
+        "description": "Document Word (.docx)",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "signExecutable": false,
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Plume",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "Plume-Setup-${version}-x64.${ext}",
+      "language": "1036"
+    },
+    "portable": {
+      "artifactName": "Plume-Portable-${version}-x64.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office",
+      "target": [
+        "AppImage",
+        "rpm"
+      ],
+      "mimeTypes": [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ]
+    },
+    "publish": null
   },
   "devDependencies": {
     "electron": "^45.3.3",
     "electron-builder": "^26.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asblPixels/Plume.git"
   }
 }
