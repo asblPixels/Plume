@@ -514,3 +514,35 @@ body.reading #exitReading { display: inline-flex; }
 }
 .print-hf { display: none; }
 @media print { .print-hf { display: block; } }
+
+/* ---------- Éléments Office conservés (îlots) ---------- */
+#editor .pl-island, .hf .pl-island { display: inline-block; vertical-align: bottom; position: relative; cursor: pointer; border-radius: 3px; max-width: 100%; }
+#editor .pl-island:hover, .hf .pl-island:hover { outline: 2px dashed var(--brand-ink); outline-offset: 2px; }
+#editor .pl-island img { max-width: 100%; }
+.pl-island-box { display: inline-flex; align-items: center; justify-content: center; background: #f6f8f9; border: 1px solid #d5dde3; border-radius: 4px; overflow: hidden; max-width: 100%; vertical-align: bottom; }
+.pl-island-box svg { display: block; }
+.pl-island-label { font: 12px var(--ui-font); color: #6b7780; }
+.pl-island-label::before { content: "◆ "; color: var(--brand-ink); }
+.pl-island-box.pl-tb { display: inline-block; text-align: left; padding: 6px 8px; background: #fff; align-items: stretch; }
+.pl-island-box.pl-tb p { margin: 0 0 3pt; }
+.pl-smart { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; justify-content: center; }
+.pl-smart span { background: #156082; color: #fff; font: 12px var(--ui-font); padding: 6px 10px; border-radius: 4px; }
+.pl-math { font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", serif; font-style: italic; padding: 0 2px; }
+
+/* ---------- Suivi des modifications ---------- */
+#editor .pl-ins, .hf .pl-ins { color: #1F6F43; text-decoration: underline; text-decoration-color: #1F6F43; }
+#editor .pl-del, .hf .pl-del { color: #B42318; text-decoration: line-through; }
+body.final-view #editor .pl-del { display: none; }
+body.final-view #editor .pl-ins { color: inherit; text-decoration: none; }
+
+/* ---------- Commentaires ---------- */
+#editor .pl-cref, .hf .pl-cref { display: inline-block; width: 16px; height: 14px; margin: 0 1px; vertical-align: text-top; cursor: pointer; border-radius: 3px; background: #FFE58A; position: relative; }
+#editor .pl-cref::after { content: ""; position: absolute; left: 3px; top: 3px; width: 10px; height: 6px; border-radius: 1px; background: #8a6d00; clip-path: polygon(0 0, 100% 0, 100% 100%, 40% 100%, 15% 140%, 20% 100%, 0 100%); }
+::highlight(plume-comment) { background: rgba(255, 213, 79, .45); }
+.np-comment { border: 1px solid var(--ui-border); border-radius: 10px; padding: 10px; margin: 6px; background: var(--ui-bg); cursor: pointer; }
+.np-comment:hover { border-color: var(--brand-ink); }
+.np-comment .who { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.np-comment .when { color: var(--ui-fg-2); font-size: 11px; font-weight: 400; }
+.np-comment .txt { margin-top: 6px; white-space: pre-wrap; line-height: 1.4; }
+.np-comment .acts { display: flex; gap: 6px; margin-top: 8px; }
+.np-comment .acts button { border: 1px solid var(--ui-border); background: transparent; border-radius: 6px; padding: 3px 8px; font-size: 12px; }

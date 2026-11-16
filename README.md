@@ -7,7 +7,7 @@
 
 **Le traitement de texte de Pixel's ASBL : libre d'usage, hors ligne et compatible Word (.docx)**
 
-![Version](https://img.shields.io/badge/version-1.0.0-26EFC5?style=flat-square&labelColor=0D1013)
+![Version](https://img.shields.io/badge/version-1.1.0-26EFC5?style=flat-square&labelColor=0D1013)
 ![Plateformes](https://img.shields.io/badge/plateformes-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-26EFC5?style=flat-square&labelColor=0D1013)
 ![Format](https://img.shields.io/badge/format-.docx%20(OOXML)-26EFC5?style=flat-square&labelColor=0D1013)
 ![Hors ligne](https://img.shields.io/badge/hors%20ligne-oui-26EFC5?style=flat-square&labelColor=0D1013)
@@ -109,7 +109,7 @@ Marges (Normales 2,5 cm, Étroites, Modérées, Larges, ou personnalisées) · O
 **Table des matières** générée à partir des titres, avec numéros de page. Elle est exportée comme un vrai champ TOC, que Word met à jour à l'ouverture. **Notes de bas de page** : numérotation automatique, affichage en bas de page, modification au clic.
 
 ### Révision
-Vérification orthographique (dictionnaire du navigateur ou du système) · Langue du document (FR-BE, FR-FR, NL-BE, EN-GB, EN-US, DE, ES, IT, AR) · Statistiques · **Lecture à voix haute** du document ou de la sélection.
+**Commentaires** (nouveau, modifier, supprimer, volet Commentaires, surlignage du passage commenté) · **Suivi des modifications** (affichage des insertions et suppressions, accepter tout, refuser tout, affichage « Final ») · Vérification orthographique (dictionnaire du navigateur ou du système) · Langue du document (FR-BE, FR-FR, NL-BE, EN-GB, EN-US, DE, ES, IT, AR) · Statistiques · **Lecture à voix haute** du document ou de la sélection.
 
 ### Affichage
 Mode Lecture · Plein écran · Règle · **Volet de navigation** (plan des titres cliquable et résultats de recherche avec extraits) · Zoom de 25 à 300 % (100 %, Une page, Largeur de la page, Ctrl+molette) · Thème clair ou sombre (le choix du système est suivi par défaut).
@@ -129,6 +129,16 @@ Il apparaît dès que le curseur entre dans un tableau : insérer une ligne au-d
 ## Compatibilité .docx
 
 Plume lit et écrit directement le format **Office Open XML** (ISO/IEC 29500). Les fichiers produits sont reconnus par Microsoft Word 2007 et suivants (dont Microsoft 365), LibreOffice, Google Docs, Pages et OnlyOffice.
+
+### Conservation intégrale
+
+Quand un document vient d'un fichier `.docx`, Plume garde en mémoire le paquet d'origine et applique trois règles :
+
+1. **Ce que Plume sait éditer** (texte, styles, listes, tableaux, images en ligne, en-têtes…) est réécrit à partir du document modifié.
+2. **Ce que Plume ne sait pas éditer** (graphiques, SmartArt, formes, zones de texte, images flottantes, objets OLE, images EMF/WMF, équations) devient un *îlot* : un aperçu fidèle est affiché, et le XML d'origine est **réécrit à l'identique**, avec toutes les parties qu'il référence (données du graphique, classeur Excel incorporé, images…).
+3. **Les définitions du document** (styles personnalisés, numérotations, thème, polices, réglages de compatibilité, en-têtes de première page et de pages paires, colonnes, bordures de page, numérotation des lignes) sont **reprises depuis le fichier d'origine**. Plume n'ajoute que ce qui manque.
+
+Résultat : un document ouvert puis réenregistré par Plume se rouvre dans Word avec ses graphiques, ses styles et sa mise en page d'origine, y compris les éléments que Plume ne sait pas modifier.
 
 ### Éléments pris en charge
 
@@ -153,22 +163,33 @@ Plume lit et écrit directement le format **Office Open XML** (ISO/IEC 29500). L
 | Sauts de page, sauts de section | ✅ | ✅ | |
 | Format, orientation, marges de page | ✅ | ✅ | |
 | Propriétés (titre, auteur, dates) | ✅ | ✅ | |
-| Contrôles de contenu, champs complexes, révisions insérées | ✅ | — | Le contenu est conservé |
+| **Graphiques** (barres, lignes, secteurs…) | ✅ aperçu | ✅ à l'identique | Données et classeur incorporé conservés |
+| **SmartArt** | ✅ aperçu | ✅ à l'identique | |
+| **Formes, zones de texte, groupes** | ✅ aperçu | ✅ à l'identique | |
+| **Images flottantes** (habillage) | ✅ flottantes à l'écran | ✅ position et habillage d'origine | |
+| **Équations** (OMML) | ✅ aperçu (exposants, indices, fractions, racines) | ✅ à l'identique | |
+| Objets OLE, images EMF/WMF | ✅ aperçu ou repère | ✅ à l'identique | |
+| **Commentaires** | ✅ | ✅ | Ajout, modification, suppression, volet dédié |
+| **Suivi des modifications** (insertions, suppressions) | ✅ | ✅ | Accepter / refuser tout, affichage « Final » |
+| Styles personnalisés du document | ✅ | ✅ | `styles.xml` d'origine conservé |
+| Numérotations personnalisées | ✅ | ✅ | `numbering.xml` d'origine conservé |
+| Thème, table des polices, réglages de compatibilité | — | ✅ | Repris depuis le fichier d'origine |
+| En-tête/pied de **première page**, pages paires | ✅ (1re page affichée) | ✅ à l'identique | |
+| Colonnes, bordures de page, numérotation des lignes | — | ✅ à l'identique | Affichage sur une colonne dans Plume |
+| Contrôles de contenu, champs complexes | ✅ | — | Le contenu est conservé |
 
 ### Limites connues
 
+Aucun logiciel tiers n'atteint 100 % de compatibilité avec Word. Voici ce qui reste perfectible dans Plume :
+
 | Élément | Comportement actuel |
 |---|---|
-| Images flottantes (habillage) | Converties en images en ligne ; l'alignement gauche ou droite est gardé à l'écran |
-| Zones de texte, formes | Affichées comme encadrés dans le flux du texte |
-| Graphiques, SmartArt | Remplacés par un repère `[Graphique]` / `[SmartArt]` |
-| Images EMF / WMF | Remplacées par un repère `[Image]` (format non affichable par les navigateurs) |
-| En-têtes de première page / pages paires | Seul l'en-tête par défaut est repris |
-| Commentaires | Non importés |
-| Suivi des modifications | Les modifications sont acceptées à l'ouverture |
-| Colonnes multiples | Le texte est affiché sur une colonne |
-| Équations | Conservées sous forme de texte |
-| Styles de tableau conditionnels (bandes, première colonne) | Seules les bordures sont reprises |
+| Contenu des îlots (graphiques, SmartArt, formes, équations) | Conservé et réécrit à l'identique, mais **non modifiable dans Plume** (déplacement et suppression possibles) |
+| Nouvelles modifications | Le suivi des modifications existantes est géré ; l'**enregistrement de nouvelles révisions** n'est pas encore disponible |
+| Réponses aux commentaires, commentaires « résolus » | Importés comme commentaires simples |
+| Colonnes multiples | Conservées dans le fichier, affichées sur une colonne |
+| Plusieurs sections avec des mises en page différentes | La mise en page de la dernière section s'applique à l'affichage ; les sauts de section sont convertis en sauts de page |
+| Styles de tableau conditionnels (bandes, première colonne) | Seules les bordures et trames explicites sont reprises |
 | Macros (`.docm`) | Ouvertes sans les macros, qui ne sont jamais exécutées |
 | Ancien format `.doc` (Word 97-2003) | Non pris en charge : convertir d'abord en `.docx` |
 
@@ -315,6 +336,7 @@ Fonctions avancées utilisées : propriété CSS `zoom`, CSS Custom Highlight AP
 | Rechercher | `Ctrl+F` | | Agrandir / réduire la police | `Ctrl+>` / `Ctrl+<` |
 | Remplacer | `Ctrl+H` | | Indice / Exposant | `Ctrl+=` / `Ctrl+Maj+=` |
 | Lien | `Ctrl+K` | | Note de bas de page | `Ctrl+Alt+F` |
+| Nouveau commentaire | `Ctrl+Alt+M` | | | |
 | Saut de page | `Ctrl+Entrée` | | Marques de paragraphe | `Ctrl+*` |
 | Recherche de commande | `Alt+Q` | | Orthographe (activer/désactiver) | `F7` |
 | Réduire le ruban | `Ctrl+F1` | | Plein écran | `F11` |
@@ -408,6 +430,8 @@ Les tests de bout en bout pilotent Chromium en mode sans interface (Playwright) 
 | Import d'un `.docx` produit par python-docx (titres, listes, tableau fusionné, image, en-tête, saut de page) | Contenu, nombre de pages, absence d'erreur console |
 | Export puis relecture avec **python-docx** | Styles, mise en forme directe, cellules fusionnées, en-tête, image |
 | Export puis conversion PDF avec **LibreOffice** | Ouverture sans erreur, table des matières, notes, numéros de page |
+| Document « riche » (graphique, équation, image flottante, commentaire, révisions, en-tête de 1re page, 2 colonnes, style personnalisé) | Chaque élément présent et identique après aller-retour (python-docx, LibreOffice, inspection XML) |
+| Même document après passage par LibreOffice | Aller-retour sans erreur |
 | Validation XML | Toutes les parties du paquet sont des XML bien formés |
 | Ré-import dans Plume du fichier exporté | Aller-retour sans perte sur les éléments pris en charge |
 | Captures mobile (390 × 844) et bureau (1440 × 900) | Mise à l'échelle automatique, thèmes clair et sombre |
@@ -430,12 +454,11 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 
 | Priorité | Évolution |
 |---|---|
-| Haute | Commentaires (lecture, ajout, export) |
-| Haute | Suivi des modifications |
-| Haute | Images flottantes avec habillage du texte |
+| Haute | Enregistrement de nouvelles révisions (mode « Suivi » actif) |
 | Haute | Coupure des paragraphes entre deux pages (pagination à la ligne) |
-| Moyenne | En-tête de première page différente, pages paires/impaires |
-| Moyenne | Colonnes multiples |
+| Haute | Modification des données des graphiques |
+| Moyenne | Affichage des colonnes multiples et des sections multiples |
+| Moyenne | Réponses aux commentaires (commentsExtended) |
 | Moyenne | Styles de tableau prédéfinis (bandes, en-tête coloré) |
 | Moyenne | Correcteur grammatical local (LanguageTool auto-hébergé, en option) |
 | Moyenne | Publipostage depuis un fichier CSV |
@@ -446,6 +469,14 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 ---
 
 ## Historique des versions
+
+### 1.1.0 — 16 novembre 2026
+- **Conservation intégrale** des éléments Office non éditables (graphiques, SmartArt, formes, zones de texte, images flottantes, OLE, EMF/WMF, équations) avec aperçu à l'écran
+- Reprise des styles, numérotations, thème, polices et réglages du document d'origine
+- En-têtes de première page et de pages paires, colonnes et autres réglages de section conservés
+- Commentaires : import, export, création, volet dédié
+- Suivi des modifications : import, export, accepter/refuser tout, affichage « Final »
+- Images flottantes affichées avec habillage
 
 ### 1.0.0 — 16 novembre 2026
 - Première version : ruban complet (Accueil, Insertion, Création, Mise en page, Références, Révision, Affichage, Aide, Tableau)

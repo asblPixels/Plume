@@ -184,8 +184,18 @@ const Ed = {
   },
   fillHF(card, i) {
     const hd = card.querySelector('.header'), ft = card.querySelector('.footer');
-    if (document.activeElement !== hd) hd.innerHTML = this.headerHTML;
-    if (document.activeElement !== ft) ft.innerHTML = this.footerHTML;
+    // Première page différente (document Word d'origine) : affichée, conservée telle quelle
+    const first = i === 0 && this.page.titlePg && this.page.first;
+    for (const [elx, html, firstHtml] of [[hd, this.headerHTML, first && this.page.first.header], [ft, this.footerHTML, first && this.page.first.footer]]) {
+      if (first) {
+        elx.contentEditable = 'false';
+        elx.title = 'En-tête/pied de la première page — conservé tel quel depuis le document d’origine';
+        elx.innerHTML = firstHtml || '';
+      } else {
+        if (elx.contentEditable === 'false' && !document.body.classList.contains('reading')) { elx.contentEditable = 'true'; elx.removeAttribute('title'); }
+        if (document.activeElement !== elx) elx.innerHTML = html;
+      }
+    }
     this.updateFields(card, i);
   },
   updateFields(card, i) {
@@ -200,7 +210,7 @@ const Ed = {
     if (isHeader) this.headerHTML = html; else this.footerHTML = html;
     Array.from(this.pagesLayer.children).forEach((card, i) => {
       const t = card.querySelector(isHeader ? '.header' : '.footer');
-      if (t !== h) { t.innerHTML = html; this.updateFields(card, i); }
+      if (t !== h && !(i === 0 && this.page.titlePg)) { t.innerHTML = html; this.updateFields(card, i); }
     });
     this.changed(true);
   },
@@ -668,6 +678,16 @@ const Ed = {
     this.afterCmd();
     this.relayout();
   },
+  /** Élément Office conservé : explication + suppression possible */
+  async islandInfo(isl) {
+    const names = { chart: 'Graphique', smartart: 'SmartArt', textbox: 'Zone de texte', float: 'Image flottante', image: 'Image', ole: 'Objet incorporé', shape: 'Forme', math: 'Équation' };
+    const name = names[isl.dataset.kind] || 'Élément Office';
+    const r = await dialog({
+      title: name, body: `<p style="line-height:1.5">Cet élément vient du document Word d’origine. Plume l’affiche en aperçu et le <b>réenregistre à l’identique</b> dans le fichier .docx : il restera modifiable dans Word.</p><p style="color:var(--ui-fg-2)">Vous pouvez le déplacer en coupant/collant le paragraphe qui le contient, ou le supprimer.</p>`,
+      buttons: [{ label: 'Supprimer l’élément', value: 'del' }, { label: 'Fermer', primary: true, value: null }]
+    });
+    if (r === 'del') { isl.remove(); this.changed(false); }
+  },
   async editFootnote(span) {
     const ta = el('textarea', { rows: 4, style: 'width:100%' });
     ta.value = span.dataset.note || '';
@@ -802,6 +822,10 @@ const Ed = {
   onClick(e) {
     if (e.target.tagName === 'IMG') { this.selectImage(e.target); const r = document.createRange(); r.selectNode(e.target); const s = getSelection(); s.removeAllRanges(); s.addRange(r); this.lastRange = r; }
     else this.selectImage(null);
+    const isl = e.target.closest('.pl-island');
+    if (isl) { this.islandInfo(isl); return; }
+    const cref = e.target.closest('.pl-cref');
+    if (cref) { App.openNav('comments'); Comments.goto(cref.dataset.cid); return; }
     const fn = e.target.closest('.pl-fn');
     if (fn) this.editFootnote(fn);
     if (e.target.classList.contains('toc-upd')) { e.preventDefault(); this.insertToc(); }
@@ -979,7 +1003,7 @@ const Sanitize = {
             if (!/^(data:image\/|blob:|https?:)/i.test(a.value)) c.remove();
           } else if (['colspan', 'rowspan', 'start', 'alt', 'width', 'height'].includes(n)) { /* conservé */ }
           else if (n === 'class' && /^(pl-|title$|subtitle$)/.test(a.value)) { /* classes Plume */ }
-          else if (n === 'data-borders' || n === 'data-field' || n === 'data-note' || n === 'contenteditable' || n === 'id') { /* conservé */ }
+          else if (/^data-(borders|field|note|x|kind|part|cid|author|date|text|initials|pstyle|numid)$/.test(n) || n === 'contenteditable' || n === 'id') { /* conservé */ }
           else c.removeAttribute(a.name);
         }
         if (tag === 'FONT') {

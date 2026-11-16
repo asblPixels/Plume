@@ -272,6 +272,16 @@ const DocxImport = (() => {
     return base.join('/');
   }
 
+  /** XML brut encodé en base64 (UTF-8) pour les îlots conservés tels quels */
+  const b64 = str => btoa(unescape(encodeURIComponent(str)));
+  const rawXml = node => b64(new XMLSerializer().serializeToString(node));
+  const isSimplePicture = d => {
+    const inl = d.getElementsByTagName('wp:inline')[0];
+    if (!inl || d.getElementsByTagName('w:txbxContent')[0]) return false;
+    const gd = d.getElementsByTagName('a:graphicData')[0];
+    return !!(gd && /picture$/.test(gd.getAttribute('uri') || '') && d.getElementsByTagName('a:blip')[0]);
+  };
+
   const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml', webp: 'image/webp', tif: 'image/tiff', tiff: 'image/tiff' };
 
   /* =====================================================================
@@ -316,6 +326,17 @@ const DocxImport = (() => {
       }
     }
 
+    // Commentaires
+    const comments = {};
+    const cPart = partOf('comments');
+    if (cPart) {
+      const x = await read(cPart);
+      if (x) for (const c of parseXml(x).getElementsByTagName('w:comment')) {
+        const paras = Array.from(c.getElementsByTagName('w:p')).map(p => Array.from(p.getElementsByTagName('w:t')).map(t => t.textContent).join(''));
+        comments[c.getAttribute('w:id')] = { author: c.getAttribute('w:author') || '', date: c.getAttribute('w:date') || '', initials: c.getAttribute('w:initials') || '', text: paras.join('\n').trim() };
+      }
+    }
+
     // Réglages du document (style Normal)
     const normal = chain(st, st.normalId);
     const baseR = Object.assign({}, st.defaults.rPr, normal.rPr);
@@ -352,6 +373,7 @@ const DocxImport = (() => {
       return relsCache[part];
     }
 
+    let convertInline = null;
     /* ---------- Conversion d'une "story" (corps, en-tête, pied) ---------- */
     async function convertStory(part, rootEl) {
       const rels = await relsFor(part);
@@ -363,6 +385,7 @@ const DocxImport = (() => {
 
       const closeLists = () => { listStack.length = 0; };
 
+      convertInline = async (container, target) => { const saved = listStack.splice(0); await blocks(container, target); listStack.length = 0; listStack.push(...saved); };
       async function blocks(container, target) {
         for (const n of container.children) {
           switch (n.nodeName) {
@@ -409,11 +432,13 @@ const DocxImport = (() => {
             const li = listItem(eff);
             li.innerHTML = html || '<br>';
             if (css) li.setAttribute('style', css);
+            if (direct.pStyle && direct.pStyle !== st.normalId) li.dataset.pstyle = direct.pStyle;
           } else {
             if (!isList) closeLists();
             const b = document.createElement(tag);
             if (cls) b.className = cls;
             if (css) b.setAttribute('style', css);
+            if (styleId !== st.normalId) b.dataset.pstyle = styleId;
             b.innerHTML = html || '<br>';
             target.append(b);
           }
@@ -442,6 +467,7 @@ const DocxImport = (() => {
             const lvl2 = numbering.nums[eff.numId][lv] || lvl;
             const ls2 = listStyleOf(lvl2);
             const L = document.createElement(ls2.tag);
+            L.dataset.numid = eff.numId;
             if (!['disc', 'decimal'].includes(ls2.type)) L.style.listStyleType = ls2.type;
             if (ls2.tag === 'ol') {
               const key = eff.numId + ':' + lv;
@@ -474,23 +500,34 @@ const DocxImport = (() => {
         const segs = [''];
         let link = null;          // {href}
         let buf = null;           // texte en attente {open, close, text}
+        let rev = null;           // révision en cours {type, author, date}
 
+        const revWrap = h => rev ? `<span class="pl-${rev.type}" data-author="${xmlEsc(rev.author)}" data-date="${xmlEsc(rev.date)}"${rev.type === 'del' ? ' contenteditable="false"' : ''}>${h}</span>` : h;
         const flush = () => {
           if (!buf) return;
           let h = buf.open + buf.text + buf.close;
           if (buf.link) h = `<a href="${xmlEsc(buf.link)}">${h}</a>`;
+          h = revWrap(h);
           segs[segs.length - 1] += h;
           buf = null;
         };
         const pushText = (html, rp, raw = false) => {
           const w = runWrap(rp, styleR);
           const lk = currentLink();
-          if (buf && buf.open === w.open && buf.link === lk && !raw) { buf.text += html; return; }
+          if (buf && buf.open === w.open && buf.link === lk && buf.rev === rev && !raw) { buf.text += html; return; }
           flush();
-          buf = { open: w.open, close: w.close, text: html, link: lk };
+          buf = { open: w.open, close: w.close, text: html, link: lk, rev };
           if (raw) flush();
         };
         const pushRaw = html => { flush(); segs[segs.length - 1] += html; };
+        const island = (node, kind, preview, block) => {
+          flush();
+          const tag = block ? 'div' : 'span';
+          const fl = preview.match(/float:(left|right);margin:([^;"]+);/);
+          const outer = fl ? ` style="float:${fl[1]};margin:${fl[2]}"` : '';
+          if (fl) preview = preview.replace(fl[0], '');
+          segs[segs.length - 1] += `<${tag} class="pl-island" contenteditable="false" data-kind="${kind}" data-part="${xmlEsc(part)}" data-x="${rawXml(node)}"${outer}>${preview}</${tag}>`;
+        };
         const currentLink = () => {
           if (link) return link;
           for (let k = fields.length - 1; k >= 0; k--) if (fields[k].phase === 'result' && fields[k].href) return fields[k].href;
@@ -523,7 +560,17 @@ const DocxImport = (() => {
                 } else await walk(n);
                 break;
               }
-              case 'w:ins': case 'w:moveTo': case 'w:smartTag': case 'w:customXml': case 'w:sdtContent': case 'w:dir': case 'w:bdo':
+              case 'w:ins': case 'w:moveTo': case 'w:del': case 'w:moveFrom': {
+                const prev = rev;
+                flush();
+                rev = { type: /ins|moveTo/.test(n.nodeName) ? 'ins' : 'del', author: n.getAttribute('w:author') || '', date: n.getAttribute('w:date') || '' };
+                await walk(n); flush();
+                rev = prev;
+                break;
+              }
+              case 'w:commentRangeStart': pushRaw(`<span class="pl-cstart" data-cid="${xmlEsc(n.getAttribute('w:id'))}"></span>`); break;
+              case 'w:commentRangeEnd': pushRaw(`<span class="pl-cend" data-cid="${xmlEsc(n.getAttribute('w:id'))}"></span>`); break;
+              case 'w:smartTag': case 'w:customXml': case 'w:sdtContent': case 'w:dir': case 'w:bdo':
                 await walk(n); break;
               case 'w:sdt': await walk(kid(n, 'w:sdtContent') || n); break;
               case 'w:bookmarkStart': {
@@ -532,8 +579,7 @@ const DocxImport = (() => {
                 break;
               }
               case 'm:oMath': case 'm:oMathPara': {
-                const t = Array.from(n.getElementsByTagName('m:t')).map(x => x.textContent).join('');
-                if (t) pushText(`<i>${xmlEsc(t)}</i>`, {}, true);
+                island(n, 'math', `<span class="pl-math">${mathHtml(n) || 'équation'}</span>`);
                 break;
               }
               case 'mc:AlternateContent': { const c = kid(n, 'mc:Choice') || kid(n, 'mc:Fallback'); if (c) await walk(c); break; }
@@ -546,6 +592,13 @@ const DocxImport = (() => {
           const charStyle = direct.rStyle ? chain(st, direct.rStyle).rPr : {};
           const rp = Object.assign({}, styleR, charStyle, direct);
           if (rp.vanish) return;
+          // Objets Office non éditables dans Plume : conservés tels quels (îlot)
+          const complex = Array.from(r.children).find(c => (c.nodeName === 'w:drawing' && !isSimplePicture(c)) || c.nodeName === 'mc:AlternateContent' || c.nodeName === 'w:pict' || c.nodeName === 'w:object');
+          if (complex && !inInstr() && !skipping()) {
+            const pv = await previewOf(complex, part);
+            island(r, pv.kind, pv.html, false);
+            return;
+          }
           for (const c of r.children) {
             const nm = c.nodeName;
             if (nm === 'w:fldChar') {
@@ -573,7 +626,12 @@ const DocxImport = (() => {
             if (nm === 'w:instrText') { const f = fields[fields.length - 1]; if (f && f.phase === 'instr') f.instr += c.textContent; continue; }
             if (inInstr() || skipping()) continue;
             switch (nm) {
-              case 'w:t': if (c.textContent) pushText(xmlEsc(c.textContent), rp); break;
+              case 'w:t': case 'w:delText': if (c.textContent) pushText(xmlEsc(c.textContent), rp); break;
+              case 'w:commentReference': {
+                const id = c.getAttribute('w:id'); const cm = comments[id] || {};
+                pushRaw(`<span class="pl-cref" contenteditable="false" data-cid="${xmlEsc(id)}" data-author="${xmlEsc(cm.author || '')}" data-initials="${xmlEsc(cm.initials || '')}" data-date="${xmlEsc(cm.date || '')}" data-text="${xmlEsc(cm.text || '')}"></span>`);
+                break;
+              }
               case 'w:tab': pushText('<span class="pl-tab">\t</span>', rp); break;
               case 'w:noBreakHyphen': pushText('‑', rp); break;
               case 'w:softHyphen': pushText('­', rp); break;
@@ -741,6 +799,129 @@ const DocxImport = (() => {
       return out.innerHTML;
     }
 
+    /* ---------- Aperçus des objets conservés ---------- */
+    async function previewOf(node, part) {
+      const rels = await relsFor(part);
+      const choice = node.nodeName === 'mc:AlternateContent' ? (kid(node, 'mc:Choice') || kid(node, 'mc:Fallback')) : node;
+      const ext = choice.getElementsByTagName('wp:extent')[0];
+      const w = ext ? Math.round(U.emuToPx(+ext.getAttribute('cx'))) : 200;
+      const h = ext ? Math.round(U.emuToPx(+ext.getAttribute('cy'))) : 120;
+      const anchor = choice.getElementsByTagName('wp:anchor')[0];
+      let float = '';
+      if (anchor) {
+        const al = anchor.getElementsByTagName('wp:align')[0];
+        const behind = anchor.getAttribute('behindDoc') === '1';
+        // habillage : tout sauf « aucun » et « haut et bas » fait flotter l'objet
+        const wrapped = !anchor.getElementsByTagName('wp:wrapNone')[0] && !anchor.getElementsByTagName('wp:wrapTopAndBottom')[0];
+        const side = al && /right/.test(al.textContent) ? 'right' : (al && /left/.test(al.textContent) ? 'left' : null);
+        if (wrapped && !behind) float = `float:${side || 'left'};margin:2px ${side === 'right' ? 0 : 10}px 6px ${side === 'right' ? 10 : 0}px;`;
+      }
+      const box = (inner, kind, label) => ({ kind, html: `<span class="pl-island-box" style="width:${w}px;height:${h}px;${float}" title="${xmlEsc(label)} — conservé tel quel à l'enregistrement">${inner}</span>` });
+      const gd = choice.getElementsByTagName('a:graphicData')[0];
+      const uri = gd ? gd.getAttribute('uri') || '' : '';
+      // graphique
+      if (/chart/.test(uri)) {
+        const c = choice.getElementsByTagName('c:chart')[0];
+        const rel = c && rels[c.getAttribute('r:id')];
+        let svg = '';
+        if (rel) { const x = await read(resolveTarget(part, rel.target)); if (x) svg = chartSvg(x, w, h); }
+        return box(svg || '<span class="pl-island-label">Graphique</span>', 'chart', 'Graphique Office');
+      }
+      // SmartArt
+      if (/diagram/.test(uri)) {
+        const ri = choice.getElementsByTagName('dgm:relIds')[0];
+        const rel = ri && rels[ri.getAttribute('r:dm')];
+        let items = [];
+        if (rel) { const x = await read(resolveTarget(part, rel.target)); if (x) items = Array.from(parseXml(x).getElementsByTagName('dgm:pt')).map(p => Array.from(p.getElementsByTagName('a:t')).map(t => t.textContent).join('')).filter(Boolean); }
+        return box(`<span class="pl-smart">${items.slice(0, 12).map(t => `<span>${xmlEsc(t)}</span>`).join('')}</span>`, 'smartart', 'SmartArt');
+      }
+      // zone de texte / forme avec texte
+      const tx = choice.getElementsByTagName('w:txbxContent')[0];
+      if (tx) {
+        const holder = document.createElement('div');
+        const saved = []; // listes indépendantes
+        await (async () => { const out = document.createElement('div'); await convertInline(tx, out); holder.append(...out.childNodes); })();
+        return { kind: 'textbox', html: `<span class="pl-island-box pl-tb" style="width:${w}px;min-height:${Math.min(h, 400)}px;${float}" title="Zone de texte — conservée telle quelle">${holder.innerHTML}</span>` };
+      }
+      // image (flottante, EMF/WMF, VML, objet OLE)
+      const blip = choice.getElementsByTagName('a:blip')[0];
+      const vimg = choice.getElementsByTagName('v:imagedata')[0];
+      const rid = blip ? (blip.getAttribute('r:embed') || blip.getAttribute('r:link')) : vimg ? vimg.getAttribute('r:id') : null;
+      if (rid) {
+        const url = await imageUrl(part, rid);
+        let ww = w, hh = h;
+        if (!ext) {
+          const shape = choice.getElementsByTagName('v:shape')[0];
+          const sm = shape && (shape.getAttribute('style') || '');
+          const wm = sm && sm.match(/width:([\d.]+)pt/), hm = sm && sm.match(/height:([\d.]+)pt/);
+          if (wm && hm) { ww = Math.round(U.ptToPx(+wm[1])); hh = Math.round(U.ptToPx(+hm[1])); }
+        }
+        const kind = node.nodeName === 'w:object' ? 'ole' : anchor ? 'float' : 'image';
+        if (url) return { kind, html: `<img src="${url}" alt="" style="width:${ww}px;height:${hh}px;${float}" draggable="false">` };
+        return { kind, html: `<span class="pl-island-box" style="width:${ww}px;height:${hh}px;${float}" title="Image EMF/WMF — conservée telle quelle"><span class="pl-island-label">Image (EMF/WMF)</span></span>` };
+      }
+      return box('<span class="pl-island-label">Forme</span>', 'shape', 'Forme Office');
+    }
+    /** Aperçu HTML simple d'une équation OMML (exposants, indices, fractions, racines) */
+    function mathHtml(n) {
+      const k = (x, name) => x && Array.from(x.children).find(c => c.nodeName === name);
+      const all = x => x ? Array.from(x.children).map(mathHtml).join('') : '';
+      switch (n.nodeName) {
+        case 'm:t': return xmlEsc(n.textContent);
+        case 'm:sSup': return all(k(n, 'm:e')) + '<sup>' + all(k(n, 'm:sup')) + '</sup>';
+        case 'm:sSub': return all(k(n, 'm:e')) + '<sub>' + all(k(n, 'm:sub')) + '</sub>';
+        case 'm:sSubSup': return all(k(n, 'm:e')) + '<sub>' + all(k(n, 'm:sub')) + '</sub><sup>' + all(k(n, 'm:sup')) + '</sup>';
+        case 'm:f': return '<span style="display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.9em"><span style="border-bottom:1px solid">' + all(k(n, 'm:num')) + '</span><span>' + all(k(n, 'm:den')) + '</span></span>';
+        case 'm:rad': return '√<span style="border-top:1px solid">' + all(k(n, 'm:e')) + '</span>';
+        case 'm:d': return '(' + Array.from(n.children).filter(c => c.nodeName === 'm:e').map(all).join(', ') + ')';
+        case 'm:rPr': case 'm:ctrlPr': case 'w:rPr': case 'm:sSupPr': case 'm:sSubPr': case 'm:fPr': case 'm:radPr': case 'm:dPr': case 'm:deg': return '';
+        default: return all(n);
+      }
+    }
+    /** Mini rendu SVG d'un graphique Office (barres, lignes, secteurs) */
+    function chartSvg(xml, w, h) {
+      const d = parseXml(xml);
+      const title = Array.from((d.getElementsByTagName('c:title')[0] || { getElementsByTagName: () => [] }).getElementsByTagName('a:t')).map(t => t.textContent).join('');
+      const plot = d.getElementsByTagName('c:plotArea')[0];
+      if (!plot) return '';
+      const type = Array.from(plot.children).find(c => /Chart$/.test(c.nodeName));
+      const series = Array.from(plot.getElementsByTagName('c:ser')).slice(0, 6).map(s => {
+        const v = s.getElementsByTagName('c:val')[0] || s.getElementsByTagName('c:yVal')[0];
+        const pts = v ? Array.from(v.getElementsByTagName('c:pt')).map(p => ({ i: +p.getAttribute('idx'), v: parseFloat((p.getElementsByTagName('c:v')[0] || {}).textContent) || 0 })) : [];
+        const clr = s.getElementsByTagName('a:srgbClr')[0];
+        return { pts, color: clr ? '#' + clr.getAttribute('val') : null };
+      });
+      const COLORS = ['#156082', '#E97132', '#196B24', '#0F9ED5', '#A02B93', '#4EA72E'];
+      const n = Math.max(1, ...series.map(s => s.pts.length));
+      const max = Math.max(1e-9, ...series.flatMap(s => s.pts.map(p => p.v)));
+      const top = title ? 26 : 10, left = 24, bottom = h - 16, right = w - 10;
+      let g = '';
+      const kindName = type ? type.nodeName : '';
+      if (/pie|doughnut/i.test(kindName) && series[0]) {
+        const tot = series[0].pts.reduce((a, p) => a + Math.max(0, p.v), 0) || 1;
+        const cx = w / 2, cy = (top + bottom) / 2, r = Math.max(10, Math.min(w, bottom - top) / 2 - 4);
+        let a0 = -Math.PI / 2;
+        series[0].pts.forEach((p, i) => {
+          const a1 = a0 + Math.max(0, p.v) / tot * Math.PI * 2;
+          const large = a1 - a0 > Math.PI ? 1 : 0;
+          g += `<path d="M${cx},${cy} L${cx + r * Math.cos(a0)},${cy + r * Math.sin(a0)} A${r},${r} 0 ${large} 1 ${cx + r * Math.cos(a1)},${cy + r * Math.sin(a1)} Z" fill="${COLORS[i % 6]}"/>`;
+          a0 = a1;
+        });
+      } else if (/line|scatter|area/i.test(kindName)) {
+        series.forEach((s, k) => {
+          const pts = s.pts.map(p => `${left + (n > 1 ? p.i / (n - 1) : .5) * (right - left)},${bottom - p.v / max * (bottom - top)}`).join(' ');
+          g += `<polyline points="${pts}" fill="none" stroke="${s.color || COLORS[k % 6]}" stroke-width="2"/>`;
+        });
+      } else {
+        const gw = (right - left) / n, bw = gw * .8 / Math.max(1, series.length);
+        series.forEach((s, k) => s.pts.forEach(p => {
+          const bh = Math.max(0, p.v) / max * (bottom - top);
+          g += `<rect x="${left + p.i * gw + gw * .1 + k * bw}" y="${bottom - bh}" width="${Math.max(1, bw - 1)}" height="${bh}" fill="${s.color || COLORS[k % 6]}"/>`;
+        }));
+      }
+      return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${title ? `<text x="${w / 2}" y="18" text-anchor="middle" font-size="13" fill="#404040">${xmlEsc(title)}</text>` : ''}<line x1="${left}" y1="${bottom}" x2="${right}" y2="${bottom}" stroke="#bbb"/>${g}</svg>`;
+    }
+
     /* ---------- Styles CSS ---------- */
     function lineCss(p) {
       if (p.line == null) return null;
@@ -834,6 +1015,21 @@ const DocxImport = (() => {
         const g = a => Math.abs(U.twipToPx(+(mg.getAttribute(a) || 0)));
         Object.assign(page, { mt: g('w:top'), mr: g('w:right'), mb: g('w:bottom'), ml: g('w:left'), mh: g('w:header'), mf: g('w:footer') });
       }
+      // éléments de section conservés tels quels (colonnes, bordures, titlePg, numérotation…)
+      page.sectExtra = kids(sect).filter(c => !['w:pgSz', 'w:pgMar', 'w:headerReference', 'w:footerReference'].includes(c.nodeName)).map(c => new XMLSerializer().serializeToString(c));
+      page.hfExtra = [];
+      for (const tag of ['w:headerReference', 'w:footerReference']) for (const ref of kids(sect, tag)) {
+        const type = ref.getAttribute('w:type') || 'default';
+        if (type === 'default') continue;
+        const rel = mainRels[ref.getAttribute('r:id')];
+        if (rel) page.hfExtra.push({ tag, type, part: resolveTarget(mainPart, rel.target) });
+      }
+      page.titlePg = !!kid(sect, 'w:titlePg') && val(kid(sect, 'w:titlePg')) !== '0';
+      page.first = { header: '', footer: '' };
+      if (page.titlePg) for (const x of page.hfExtra.filter(h => h.type === 'first')) {
+        const xml = await read(x.part);
+        if (xml) page.first[x.tag === 'w:headerReference' ? 'header' : 'footer'] = await convertStory(x.part, parseXml(xml).documentElement);
+      }
       const pick = tag => {
         const refs = kids(sect, tag);
         return refs.find(r => r.getAttribute('w:type') === 'default') || refs[0];
@@ -864,7 +1060,8 @@ const DocxImport = (() => {
 
     return {
       html: html || '<p><br></p>', header: headerHtml, footer: footerHtml,
-      page, settings: { ...settings, fontCss: cssFont(settings.font) }, props: { title, author }
+      page, settings: { ...settings, fontCss: cssFont(settings.font) }, props: { title, author },
+      source: zip
     };
   }
 

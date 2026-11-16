@@ -88,6 +88,12 @@ function registerCommands() {
   cmd('language', 'Langue', 'type', l => App.setLang(l));
   cmd('wordCount', 'Statistiques', 'hash', () => Dialogs.stats());
   cmd('speak', 'Lecture à voix haute', 'volume-2', () => App.speak());
+  cmd('comment', 'Nouveau commentaire', 'message-square-plus', () => Comments.add(), { kbd: 'Ctrl+Alt+M' });
+  cmd('showComments', 'Afficher les commentaires', 'messages-square', () => App.openNav('comments'));
+  cmd('delComments', 'Supprimer tous les commentaires', 'trash-2', () => Comments.removeAll());
+  cmd('acceptAll', 'Accepter toutes les modifications', 'check', () => Revisions.apply(true));
+  cmd('rejectAll', 'Refuser toutes les modifications', 'x', () => Revisions.apply(false));
+  cmd('finalView', 'Affichage « Final » (masquer les marques)', 'eye', () => { document.body.classList.toggle('final-view'); Ribbon.refresh(); });
   // Affichage
   cmd('reading', 'Mode Lecture', 'book-open', () => App.setReading(true));
   cmd('ruler', 'Règle', 'ruler', () => { document.body.classList.toggle('no-ruler'); Ribbon.refresh(); App.drawRuler(); });
@@ -160,6 +166,8 @@ const Ribbon = {
       ]),
       T('revision', 'Révision', [
         G('Vérification', [{ big: 'spell' }, { col: ['wordCount'] }]),
+        G('Commentaires', [{ big: 'comment' }, { col: ['showComments', 'delComments'] }]),
+        G('Suivi', [{ big: 'acceptAll' }, { col: ['rejectAll', 'finalView'] }]),
         G('Voix', [{ big: 'speak' }]),
         G('Langue', [{ bigMenu: 'language', menu: 'langs' }])
       ]),
@@ -211,7 +219,7 @@ const Ribbon = {
   btn(id, big) {
     const c = CMD[id];
     const b = el('button', { class: 'rbtn' + (big ? ' big' : ''), 'data-cmd': id, title: c.label + (c.kbd ? ` (${c.kbd})` : ''), onclick: () => c.run() }, [icon(c.icon), big ? el('span', {}, [c.label]) : null]);
-    if (!big && ['cut', 'copy', 'painter', 'find', 'replace', 'selectAll', 'cover', 'blankPage', 'pageBreak', 'header', 'footer', 'pageNum', 'textbox', 'hr', 'date', 'bookmark', 'wordCount', 'fullscreen', 'ruler', 'nav', 'onePage', 'pageWidth', 'rowAbove', 'rowBelow', 'colLeft', 'colRight', 'delRow', 'delCol', 'delTable', 'merge', 'split', 'distribute', 'tHeader', 'pageDark'].includes(id)) {
+    if (!big && ['cut', 'copy', 'painter', 'find', 'replace', 'selectAll', 'cover', 'blankPage', 'pageBreak', 'header', 'footer', 'pageNum', 'textbox', 'hr', 'date', 'bookmark', 'wordCount', 'fullscreen', 'ruler', 'nav', 'onePage', 'pageWidth', 'rowAbove', 'rowBelow', 'colLeft', 'colRight', 'delRow', 'delCol', 'delTable', 'merge', 'split', 'distribute', 'tHeader', 'pageDark', 'showComments', 'delComments', 'rejectAll', 'finalView'].includes(id)) {
       b.append(el('span', {}, [c.label.replace(' avec la cellule de droite', '')]));
     }
     return b;
@@ -311,6 +319,7 @@ const Ribbon = {
       if (b.dataset.cmd === 'spell') on = Ed.editor.spellcheck;
       if (b.dataset.cmd === 'dark') on = document.documentElement.dataset.theme === 'dark';
       if (b.dataset.cmd === 'pageDark') on = document.documentElement.classList.contains('page-dark');
+      if (b.dataset.cmd === 'finalView') on = document.body.classList.contains('final-view');
       b.classList.toggle('on', !!on);
     });
     const a = Ed.anchorEl();

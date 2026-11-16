@@ -14,7 +14,15 @@ const DocxExport = (() => {
     'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
     'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
     'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ' +
-    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" ' +
+    'xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w10="urn:schemas-microsoft-com:office:word" ' +
+    'xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" ' +
+    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" ' +
+    'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
+    'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"';
+  const IGNORABLE = 'mc:Ignorable="w14 w15 wp14"';
+  const unb64 = s => decodeURIComponent(escape(atob(s)));
   const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
   const STYLE_MAP = {
@@ -84,7 +92,48 @@ const DocxExport = (() => {
   /* =====================================================================
      Export principal
      ===================================================================== */
-  async function exportDocx({ editor, headerEl, footerEl, page, props }) {
+  async function exportDocx({ editor, headerEl, footerEl, page, props, source }) {
+    /* ---------- Parties d'origine (document ouvert depuis un .docx) ---------- */
+    const src = source || null;
+    const srcRead = async p => { const f = src && src.file(p); return f ? f.async('string') : null; };
+    const srcRelsCache = {};
+    const relsPathOf = part => part.replace(/([^/]+)$/, '_rels/$1.rels');
+    const parseRels = xml => {
+      const r = {};
+      if (!xml) return r;
+      for (const e of new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('Relationship'))
+        r[e.getAttribute('Id')] = { target: e.getAttribute('Target'), type: e.getAttribute('Type'), mode: e.getAttribute('TargetMode') };
+      return r;
+    };
+    const resolve = (part, target) => {
+      if (target.startsWith('/')) return target.slice(1);
+      const base = part.split('/').slice(0, -1);
+      for (const seg of target.split('/')) { if (seg === '..') base.pop(); else if (seg !== '.') base.push(seg); }
+      return base.join('/');
+    };
+    const relTarget = (fromPart, toPath) => {
+      const a = fromPart.split('/').slice(0, -1), b = toPath.split('/');
+      while (a.length && b.length && a[0] === b[0]) { a.shift(); b.shift(); }
+      return '../'.repeat(a.length) + b.join('/');
+    };
+    const srcRels = async part => (srcRelsCache[part] ??= parseRels(await srcRead(relsPathOf(part))));
+    const srcCT = src ? new DOMParser().parseFromString(await srcRead('[Content_Types].xml') || '<Types/>', 'application/xml') : null;
+    const copied = new Set();   // parties recopiées telles quelles
+    /** Recopie une partie d'origine et, récursivement, tout ce qu'elle référence */
+    async function copyPart(path) {
+      if (!src || copied.has(path) || !src.file(path)) return;
+      copied.add(path);
+      const rp = relsPathOf(path);
+      if (src.file(rp)) {
+        copied.add(rp);
+        for (const r of Object.values(await srcRels(path))) if (r.mode !== 'External') await copyPart(resolve(path, r.target));
+      }
+    }
+    // Préchargement des relations utilisées par les îlots (sérialisation synchrone ensuite)
+    const islandParts = new Set();
+    for (const root of [editor, headerEl, footerEl]) if (root) root.querySelectorAll('.pl-island').forEach(i => islandParts.add(i.dataset.part || 'word/document.xml'));
+    for (const p of islandParts) await srcRels(p);
+
     // Pour mesurer, on se place à 100 % et en page claire
     const zoomBox = document.getElementById('zoomBox');
     const prevZoom = zoomBox ? zoomBox.style.zoom : '';
@@ -104,7 +153,7 @@ const DocxExport = (() => {
 
     // Images : récupération des octets
     const imgData = new Map();
-    const allImgs = [...editor.querySelectorAll('img'), ...(headerEl ? headerEl.querySelectorAll('img') : []), ...(footerEl ? footerEl.querySelectorAll('img') : [])];
+    const allImgs = [...editor.querySelectorAll('img:not(.pl-island img)'), ...(headerEl ? headerEl.querySelectorAll('img:not(.pl-island img)') : []), ...(footerEl ? footerEl.querySelectorAll('img:not(.pl-island img)') : [])];
     let imgN = 0;
     for (const img of allImgs) {
       const src = img.getAttribute('src');
@@ -115,19 +164,46 @@ const DocxExport = (() => {
         let bytes;
         if (ext) bytes = new Uint8Array(await blob.arrayBuffer());
         else { bytes = await toPng(img); ext = 'png'; }
-        if (bytes) imgData.set(src, { bytes, ext, name: `image${++imgN}.${ext}` });
+        if (bytes) imgData.set(src, { bytes, ext, name: `plume-image${++imgN}.${ext}` });
       } catch (e) { console.warn('Image ignorée', src, e); }
     }
 
     const numbering = { abstracts: [], nums: [] };
+    let inDel = false, revId = 1000;
+    const commentMap = {}, commentData = {};
+    let commentN = 0;
+    const commentId = cid => (commentMap[cid] ??= String(commentN++));
+    /** Réécrit un îlot (XML d'origine) en recréant ses relations dans la partie cible */
+    function islandXml(n, part) {
+      let xml;
+      try { xml = unb64(n.dataset.x); } catch { return ''; }
+      const srcPart = n.dataset.part || 'word/document.xml';
+      const rels = srcRelsCache[srcPart] || {};
+      xml = xml.replace(/\b(r:[A-Za-z]+|o:relid)="([^"]+)"/g, (m, attr, rid) => {
+        const r = rels[rid];
+        if (!r) return m;
+        if (r.mode === 'External') return `${attr}="${part.addRel(r.type, r.target, true)}"`;
+        const path = resolve(srcPart, r.target);
+        pendingCopies.add(path);
+        return `${attr}="${part.addRel(r.type, relTarget(part.name, path))}"`;
+      });
+      // ids de dessin uniques
+      xml = xml.replace(/(<wp:docPr\b[^>]*\bid=")(\d+)"/g, (m, a) => `${a}${5000 + docPrId++}"`);
+      return xml;
+    }
+    const pendingCopies = new Set();
+    const srcStylesXml = src ? await srcRead('word/styles.xml') : null;
+    const srcStyleIds = new Set(srcStylesXml ? Array.from(srcStylesXml.matchAll(/w:styleId="([^"]+)"/g), m => m[1]) : []);
+    const srcNumXml = src ? await srcRead('word/numbering.xml') : null;
+    const srcNumIds = new Set(srcNumXml ? Array.from(srcNumXml.matchAll(/<w:num\b[^>]*w:numId="(\d+)"/g), m => m[1]) : []);
     const footnotes = [];
     let docPrId = 1, bookmarkId = 0;
 
     /** Contexte de sérialisation propre à une partie (document, en-tête…) */
-    function makePart() {
+    function makePart(name) {
       const rels = [];
       return {
-        rels,
+        name, rels,
         addRel(type, target, external) {
           const found = rels.find(r => r.type === type && r.target === target);
           if (found) return found.id;
@@ -163,6 +239,12 @@ const DocxExport = (() => {
 
     function styleOf(e) {
       const t = e.tagName.toLowerCase();
+      if (e.dataset && e.dataset.pstyle && srcStyleIds.has(e.dataset.pstyle)) {
+        // style d'origine conservé si le type de bloc n'a pas été changé dans Plume
+        const mapped = STYLE_MAP[t === 'h1' && e.classList.contains('title') ? 'h1.title' : t === 'p' && e.classList.contains('subtitle') ? 'p.subtitle' : t];
+        const isHeading = /^Heading\d$|^Title$|^Subtitle$|^Quote$/.test(mapped || '');
+        if (!isHeading || /heading|titre|title|subtitle|quote|citation/i.test(e.dataset.pstyle)) return e.dataset.pstyle;
+      }
       if (t === 'h1' && e.classList.contains('title')) return 'Title';
       if (t === 'p' && e.classList.contains('subtitle')) return 'Subtitle';
       return STYLE_MAP[t] || null;
@@ -186,6 +268,7 @@ const DocxExport = (() => {
 
     /** Liste à puces / numérotée */
     function list(L, part, level, inst) {
+      if (!inst && L.dataset.numid && srcNumIds.has(L.dataset.numid)) inst = { numId: L.dataset.numid, original: true };
       if (!inst) {
         // nouvelle instance de numérotation : formats par niveau à partir de la structure
         const fmts = [];
@@ -198,7 +281,7 @@ const DocxExport = (() => {
         const absId = numbering.abstracts.length;
         numbering.abstracts.push(fmts);
         numbering.nums.push(absId);
-        inst = { numId: numbering.nums.length };
+        inst = { numId: 'NEW' + numbering.nums.length };
       }
       let out = '';
       for (const li of Array.from(L.children)) {
@@ -230,7 +313,7 @@ const DocxExport = (() => {
 
     /** Paragraphe à partir d'un bloc HTML */
     function paragraphFromNodes(nodes, blockEl, styleId, numPrXml, part, blockIsParent, isListItem) {
-      const b = base[styleId] || base.Normal;
+      const b = base[styleId] || (srcStyleIds.has(styleId) ? readBlock(blockEl) : base.Normal);
       const me = readBlock(blockEl);
       const ppr = [];
       if (styleId !== 'Normal') ppr.push(`<w:pStyle w:val="${styleId}"/>`);
@@ -270,7 +353,7 @@ const DocxExport = (() => {
         for (const p of parts) {
           if (p === '\t') x += '<w:tab/>';
           else if (p === '\n') x += '<w:br/>';
-          else if (p) x += `<w:t xml:space="preserve">${xmlEsc(p)}</w:t>`;
+          else if (p) x += inDel ? `<w:delText xml:space="preserve">${xmlEsc(p)}</w:delText>` : `<w:t xml:space="preserve">${xmlEsc(p)}</w:t>`;
         }
         return x;
       };
@@ -302,6 +385,26 @@ const DocxExport = (() => {
 
       const walk = (list) => {
         for (const n of list) {
+          if (n.nodeType === 1 && n.classList.contains('pl-island')) { flush(); out += islandXml(n, part); continue; }
+          if (n.nodeType === 1 && n.classList.contains('pl-cstart')) { flush(); out += `<w:commentRangeStart w:id="${commentId(n.dataset.cid)}"/>`; continue; }
+          if (n.nodeType === 1 && n.classList.contains('pl-cend')) { flush(); out += `<w:commentRangeEnd w:id="${commentId(n.dataset.cid)}"/>`; continue; }
+          if (n.nodeType === 1 && n.classList.contains('pl-cref')) {
+            flush();
+            const id = commentId(n.dataset.cid);
+            commentData[id] = { author: n.dataset.author || '', initials: n.dataset.initials || '', date: n.dataset.date || '', text: n.dataset.text || '' };
+            out += `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${id}"/></w:r>`;
+            continue;
+          }
+          if (n.nodeType === 1 && (n.classList.contains('pl-ins') || n.classList.contains('pl-del'))) {
+            flush();
+            const del = n.classList.contains('pl-del');
+            const saveOut = out; out = '';
+            const prevDel = inDel; inDel = del;
+            walk(Array.from(n.childNodes)); flush();
+            inDel = prevDel;
+            out = saveOut + `<w:${del ? 'del' : 'ins'} w:id="${revId++}" w:author="${xmlEsc(n.dataset.author || 'Plume')}"${n.dataset.date ? ` w:date="${xmlEsc(n.dataset.date)}"` : ''}>` + out + `</w:${del ? 'del' : 'ins'}>`;
+            continue;
+          }
           if (n.nodeType === 3) {
             const t = n.textContent.replace(/[\r]/g, '');
             if (!t) continue;
@@ -451,9 +554,9 @@ const DocxExport = (() => {
     }
 
     /* ---------- Parties ---------- */
-    const mainPart = makePart();
+    const mainPart = makePart('word/document.xml');
     let bodyXml = blocks(editor, mainPart);
-    const hdrPart = makePart(), ftrPart = makePart();
+    const hdrPart = makePart('word/plume-header.xml'), ftrPart = makePart('word/plume-footer.xml');
     const hasHF = elx => elx && (elx.textContent.trim() || elx.querySelector('img,.pl-field'));
     const headerXml = hasHF(headerEl) ? blocks(headerEl, hdrPart) || '<w:p/>' : null;
     const footerXml = hasHF(footerEl) ? blocks(footerEl, ftrPart) || '<w:p/>' : null;
@@ -461,14 +564,28 @@ const DocxExport = (() => {
     // Section
     const landscape = page.w > page.h;
     let sect = '<w:sectPr>';
-    if (headerXml) sect += `<w:headerReference w:type="default" r:id="${mainPart.addRel(REL + '/header', 'header1.xml')}"/>`;
-    if (footerXml) sect += `<w:footerReference w:type="default" r:id="${mainPart.addRel(REL + '/footer', 'footer1.xml')}"/>`;
+    if (headerXml) sect += `<w:headerReference w:type="default" r:id="${mainPart.addRel(REL + '/header', 'plume-header.xml')}"/>`;
+    if (footerXml) sect += `<w:footerReference w:type="default" r:id="${mainPart.addRel(REL + '/footer', 'plume-footer.xml')}"/>`;
     sect += `<w:pgSz w:w="${twip(page.w)}" w:h="${twip(page.h)}"${landscape ? ' w:orient="landscape"' : ''}/>`;
     sect += `<w:pgMar w:top="${twip(page.mt)}" w:right="${twip(page.mr)}" w:bottom="${twip(page.mb)}" w:left="${twip(page.ml)}" w:header="${twip(page.mh)}" w:footer="${twip(page.mf)}" w:gutter="0"/>`;
-    sect += '<w:cols w:space="708"/><w:docGrid w:linePitch="360"/></w:sectPr>';
+    // références d'en-têtes supplémentaires (première page, paires) recopiées
+    let extraRefs = '';
+    for (const x of (page.hfExtra || [])) {
+      if (!src || !src.file(x.part)) continue;
+      await copyPart(x.part);
+      extraRefs += `<${x.tag} w:type="${x.type}" r:id="${mainPart.addRel(REL + (x.tag === 'w:headerReference' ? '/header' : '/footer'), relTarget('word/document.xml', x.part))}"/>`;
+    }
+    const ORDER_BEFORE = ['w:footnotePr', 'w:endnotePr', 'w:type'];
+    const extras = page.sectExtra || [];
+    const nameOf = x => (x.match(/^<([\w:]+)/) || [])[1];
+    const strip = x => x.replace(/\sxmlns(:\w+)?="[^"]*"/g, '');
+    const before = extras.filter(x => ORDER_BEFORE.includes(nameOf(x))).map(strip).join('');
+    const after = extras.filter(x => !ORDER_BEFORE.includes(nameOf(x))).map(strip).join('');
+    sect = sect.replace('<w:pgSz', extraRefs + before + '<w:pgSz');
+    sect += (after || '<w:cols w:space="708"/><w:docGrid w:linePitch="360"/>') + '</w:sectPr>';
     if (!bodyXml) bodyXml = '<w:p/>';
 
-    const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS} mc:Ignorable=""><w:body>${bodyXml}${sect}</w:body></w:document>`;
+    const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS} ${IGNORABLE}><w:body>${bodyXml}${sect}</w:body></w:document>`;
 
     /* ---------- styles.xml ---------- */
     const N = base.Normal;
@@ -494,15 +611,26 @@ const DocxExport = (() => {
     stylesXml += `<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style>`;
     stylesXml += `<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>`;
     stylesXml += `<w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:basedOn w:val="TableNormal"/><w:uiPriority w:val="39"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr></w:style>`;
+    stylesXml += `<w:style w:type="character" w:styleId="CommentReference"><w:name w:val="annotation reference"/><w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/><w:rPr><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr></w:style>`;
+    stylesXml += `<w:style w:type="paragraph" w:styleId="CommentText"><w:name w:val="annotation text"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:pPr><w:spacing w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>`;
     stylesXml += '</w:styles>';
+    // Document d'origine : on garde ses styles et on ajoute seulement ceux qui manquent
+    if (srcStylesXml) {
+      const add = Array.from(stylesXml.matchAll(/<w:style\b[^>]*w:styleId="([^"]+)"[\s\S]*?<\/w:style>/g)).filter(m => !srcStyleIds.has(m[1])).map(m => m[0].replace(' w:default="1"', '')).join('');
+      stylesXml = srcStylesXml.replace(/<\/w:styles>\s*$/, add + '</w:styles>');
+    }
 
     /* ---------- numbering.xml ---------- */
     const FMT = { disc: ['bullet', '•'], circle: ['bullet', '◦'], square: ['bullet', '▪'], none: ['none', ''], decimal: ['decimal'], 'lower-alpha': ['lowerLetter'], 'upper-alpha': ['upperLetter'], 'lower-roman': ['lowerRoman'], 'upper-roman': ['upperRoman'], 'lower-latin': ['lowerLetter'], 'upper-latin': ['upperLetter'] };
     let numberingXml = null;
+    const absBase = srcNumXml ? 1 + Math.max(-1, ...Array.from(srcNumXml.matchAll(/w:abstractNumId="(\d+)"/g), m => +m[1])) : 0;
+    const numBase = srcNumXml ? Math.max(0, ...Array.from(srcNumXml.matchAll(/<w:num\b[^>]*w:numId="(\d+)"/g), m => +m[1])) : 0;
+    const fixNum = x => x && x.replace(/w:val="NEW(\d+)"/g, (m, i) => `w:val="${numBase + 1 + +i}"`);
+    let absXml = '', numXml = '';
     if (numbering.abstracts.length) {
-      numberingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:numbering ${NS}>`;
+      numberingXml = '';
       numbering.abstracts.forEach((fmts, a) => {
-        numberingXml += `<w:abstractNum w:abstractNumId="${a}"><w:multiLevelType w:val="hybridMultilevel"/>`;
+        numberingXml += `<w:abstractNum w:abstractNumId="${absBase + a}"><w:multiLevelType w:val="hybridMultilevel"/>`;
         for (let l = 0; l < 9; l++) {
           const f = fmts[l] || (fmts[0] && fmts[0].tag === 'OL' ? { tag: 'OL', type: ['decimal', 'lower-alpha', 'lower-roman'][l % 3] } : { tag: 'UL', type: ['disc', 'circle', 'square'][l % 3] });
           let [nf, txt] = FMT[f.type] || (f.tag === 'OL' ? ['decimal'] : ['bullet', '•']);
@@ -512,9 +640,18 @@ const DocxExport = (() => {
         }
         numberingXml += '</w:abstractNum>';
       });
-      numbering.nums.forEach((a, i) => { numberingXml += `<w:num w:numId="${i + 1}"><w:abstractNumId w:val="${a}"/></w:num>`; });
-      numberingXml += '</w:numbering>';
+      absXml = numberingXml;
+      numbering.nums.forEach((a, i) => { numXml += `<w:num w:numId="${numBase + 1 + i}"><w:abstractNumId w:val="${absBase + a}"/></w:num>`; });
     }
+    if (srcNumXml) {
+      let x = srcNumXml;
+      if (absXml) {
+        const firstNum = x.search(/<w:num\b/);
+        x = firstNum >= 0 ? x.slice(0, firstNum) + absXml + x.slice(firstNum) : x.replace(/<\/w:numbering>/, absXml + '</w:numbering>');
+        x = /<w:numIdMacAtCleanup/.test(x) ? x.replace(/<w:numIdMacAtCleanup/, numXml + '<w:numIdMacAtCleanup') : x.replace(/<\/w:numbering>\s*$/, numXml + '</w:numbering>');
+      }
+      numberingXml = x;
+    } else if (absXml) numberingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:numbering ${NS}>${absXml}${numXml}</w:numbering>`;
 
     /* ---------- footnotes.xml ---------- */
     let footnotesXml = null;
@@ -527,6 +664,18 @@ const DocxExport = (() => {
         footnotesXml += `<w:footnote w:id="${i + 1}">` + paras.map((p, k) => `<w:p><w:pPr><w:pStyle w:val="FootnoteText"/></w:pPr>${k === 0 ? '<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> </w:t></w:r>' : ''}<w:r><w:t xml:space="preserve">${xmlEsc(p)}</w:t></w:r></w:p>`).join('') + '</w:footnote>';
       });
       footnotesXml += '</w:footnotes>';
+    }
+
+    /* ---------- comments.xml ---------- */
+    let commentsXml = null;
+    const cids = Object.keys(commentData);
+    if (cids.length) {
+      commentsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:comments ${NS}>` + cids.map(id => {
+        const c = commentData[id];
+        const paras = String(c.text || '').split('\n');
+        return `<w:comment w:id="${id}" w:author="${xmlEsc(c.author || 'Plume')}"${c.date ? ` w:date="${xmlEsc(c.date)}"` : ''} w:initials="${xmlEsc(c.initials || '')}">` +
+          paras.map((t, k) => `<w:p><w:pPr><w:pStyle w:val="CommentText"/></w:pPr>${k === 0 ? '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>' : ''}<w:r><w:t xml:space="preserve">${xmlEsc(t)}</w:t></w:r></w:p>`).join('') + '</w:comment>';
+      }).join('') + '</w:comments>';
     }
 
     const hasToc = !!editor.querySelector('.pl-toc');
@@ -544,6 +693,39 @@ const DocxExport = (() => {
       { id: 'rId2', type: REL + '/settings', target: 'settings.xml' }];
     if (numberingXml) docRels.push({ id: 'rId3', type: REL + '/numbering', target: 'numbering.xml' });
     if (footnotesXml) docRels.push({ id: 'rId4', type: REL + '/footnotes', target: 'footnotes.xml' });
+    if (commentsXml) docRels.push({ id: 'rId5', type: REL + '/comments', target: 'comments.xml' });
+
+    // Parties d'origine reprises telles quelles : réglages, thème, polices, objets des îlots
+    let useSrcSettings = false;
+    if (src) {
+      const mr = await srcRels('word/document.xml');
+      let k = 10;
+      for (const r of Object.values(mr)) {
+        const kind = r.type.split('/').pop();
+        if (!['theme', 'fontTable', 'webSettings', 'settings'].includes(kind)) continue;
+        const path = resolve('word/document.xml', r.target);
+        if (kind === 'settings') { if (path !== 'word/settings.xml') continue; useSrcSettings = true; }
+        await copyPart(path);
+        if (kind !== 'settings') docRels.push({ id: 'rId' + (k++), type: r.type, target: relTarget('word/document.xml', path) });
+      }
+      for (const p of pendingCopies) await copyPart(p);
+    }
+    // réglages d'origine qui annoncent des notes : les parties correspondantes doivent exister
+    const sep = tag => `<w:${tag} w:type="separator" w:id="-1"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:separator/></w:r></w:p></w:${tag}><w:${tag} w:type="continuationSeparator" w:id="0"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:continuationSeparator/></w:r></w:p></w:${tag}>`;
+    let endnotesXml = null;
+    if (useSrcSettings) {
+      const st = await srcRead('word/settings.xml') || '';
+      if (/<w:footnotePr/.test(st) && !footnotesXml) {
+        footnotesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:footnotes ${NS}>${sep('footnote')}</w:footnotes>`;
+        docRels.push({ id: 'rId4', type: REL + '/footnotes', target: 'footnotes.xml' });
+      }
+      if (/<w:endnotePr/.test(st)) {
+        endnotesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:endnotes ${NS}>${sep('endnote')}</w:endnotes>`;
+        docRels.push({ id: 'rId6', type: REL + '/endnotes', target: 'endnotes.xml' });
+      }
+    }
+    const GENERATED = new Set(['word/endnotes.xml', 'word/document.xml', 'word/styles.xml', 'word/numbering.xml', 'word/footnotes.xml', 'word/comments.xml', '[Content_Types].xml', '_rels/.rels', 'word/_rels/document.xml.rels', 'docProps/core.xml', 'docProps/app.xml']);
+    if (!useSrcSettings) copied.delete('word/settings.xml');
 
     const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
     const ct = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
@@ -559,26 +741,45 @@ const DocxExport = (() => {
       footerXml ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : '',
       '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
       '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>',
+      '%%NOTES%%',
+      commentsXml ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' : '',
       '</Types>'].join('');
+    let ctFinal = ct.replace('%%NOTES%%', (footnotesXml && !ct.includes('/word/footnotes.xml') ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : '') + (endnotesXml ? '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' : '')).replace('/word/header1.xml', '/word/plume-header.xml').replace('/word/footer1.xml', '/word/plume-footer.xml');
+    if (srcCT) {
+      const have = new Set(Array.from(ctFinal.matchAll(/Extension="([^"]+)"/g), m => m[1].toLowerCase()));
+      let extra = '';
+      for (const d of srcCT.getElementsByTagName('Default')) {
+        const e = d.getAttribute('Extension');
+        if (!have.has(e.toLowerCase())) { extra += `<Default Extension="${xmlEsc(e)}" ContentType="${xmlEsc(d.getAttribute('ContentType'))}"/>`; have.add(e.toLowerCase()); }
+      }
+      for (const o of srcCT.getElementsByTagName('Override')) {
+        const pn = o.getAttribute('PartName').replace(/^\//, '');
+        if (copied.has(pn) && !GENERATED.has(pn)) extra += `<Override PartName="/${xmlEsc(pn)}" ContentType="${xmlEsc(o.getAttribute('ContentType'))}"/>`;
+      }
+      ctFinal = ctFinal.replace('</Types>', extra + '</Types>');
+    }
 
-    zip.file('[Content_Types].xml', ct);
+    zip.file('[Content_Types].xml', ctFinal);
+    for (const pth of copied) if (!GENERATED.has(pth) && src.file(pth)) zip.file(pth, await src.file(pth).async('uint8array'));
     zip.file('_rels/.rels', relsXml([
       { id: 'rId1', type: REL + '/officeDocument', target: 'word/document.xml' },
       { id: 'rId2', type: 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties', target: 'docProps/core.xml' },
       { id: 'rId3', type: REL + '/extended-properties', target: 'docProps/app.xml' }]));
-    zip.file('word/document.xml', documentXml);
+    zip.file('word/document.xml', fixNum(documentXml));
     zip.file('word/_rels/document.xml.rels', relsXml(docRels));
     zip.file('word/styles.xml', stylesXml);
-    zip.file('word/settings.xml', settingsXml);
+    if (!useSrcSettings) zip.file('word/settings.xml', settingsXml);
+    if (commentsXml) zip.file('word/comments.xml', commentsXml);
+    if (endnotesXml) zip.file('word/endnotes.xml', endnotesXml);
     if (numberingXml) zip.file('word/numbering.xml', numberingXml);
     if (footnotesXml) zip.file('word/footnotes.xml', footnotesXml);
     if (headerXml) {
-      zip.file('word/header1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:hdr ${NS}>${headerXml}</w:hdr>`);
-      if (hdrPart.rels.length) zip.file('word/_rels/header1.xml.rels', relsXml(hdrPart.rels));
+      zip.file('word/plume-header.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:hdr ${NS} ${IGNORABLE}>${fixNum(headerXml)}</w:hdr>`);
+      if (hdrPart.rels.length) zip.file('word/_rels/plume-header.xml.rels', relsXml(hdrPart.rels));
     }
     if (footerXml) {
-      zip.file('word/footer1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr ${NS}>${footerXml}</w:ftr>`);
-      if (ftrPart.rels.length) zip.file('word/_rels/footer1.xml.rels', relsXml(ftrPart.rels));
+      zip.file('word/plume-footer.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr ${NS} ${IGNORABLE}>${fixNum(footerXml)}</w:ftr>`);
+      if (ftrPart.rels.length) zip.file('word/_rels/plume-footer.xml.rels', relsXml(ftrPart.rels));
     }
     for (const d of imgData.values()) zip.file('word/media/' + d.name, d.bytes);
     zip.file('docProps/core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xmlEsc(props.title || '')}</dc:title><dc:creator>${xmlEsc(props.author || '')}</dc:creator><cp:lastModifiedBy>${xmlEsc(props.author || '')}</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${props.created || now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`);

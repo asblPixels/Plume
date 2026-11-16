@@ -4,7 +4,7 @@
 'use strict';
 
 const App = {
-  VERSION: '1.0.0',
+  VERSION: '1.1.0',
   docId: null, fileHandle: null, dirty: false,
 
   async init() {
@@ -21,7 +21,7 @@ const App = {
     Ed.onSelection = debounce(() => { Ribbon.refresh(); this.updateStatus(); }, 60);
     Ed.onChange = () => { this.dirty = true; this.setSaveState('Modifié'); this.autosave(); this.navRefresh(); };
     Ed.onHistory = () => Ribbon.refresh();
-    Ed.onLayout = () => { this.updateStatus(); Ed.placeHandle && Ed.placeHandle(); this.drawRuler(); };
+    Ed.onLayout = () => { this.updateStatus(); Ed.placeHandle && Ed.placeHandle(); this.drawRuler(); Comments.highlight(); };
     Ed.onOpenFile = f => this.openFile(f);
     $('#docTitle').addEventListener('change', () => { this.dirty = true; this.autosave(); document.title = this.name() + ' — Plume'; });
     $('#fileInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) this.fileInputCb(f); });
@@ -53,7 +53,7 @@ const App = {
   async newDoc(tpl = 'blank', silent) {
     if (!silent && this.dirty) await this.flushAutosave();
     const t = TEMPLATES[tpl] || TEMPLATES.blank;
-    this.docId = uid(); this.fileHandle = null;
+    this.docId = uid(); this.fileHandle = null; Ed.source = null;
     $('#docTitle').value = tpl === 'blank' ? this.nextDocName() : t.name;
     Ed.load({ html: t.html, props: { author: await this.user(), created: new Date().toISOString() } });
     this.afterOpen();
@@ -71,6 +71,7 @@ const App = {
     const d = await Store.getDoc(id).catch(() => null);
     if (!d) return false;
     this.docId = d.id; this.fileHandle = null;
+    Ed.source = d.source ? { zip: await JSZip.loadAsync(d.source), bytes: d.source } : null;
     $('#docTitle').value = d.name;
     Ed.load({ html: await Ed.hydrateImages(d.html), header: await Ed.hydrateImages(d.header || ''), footer: await Ed.hydrateImages(d.footer || ''), page: d.page, settings: d.settings, props: d.props });
     this.afterOpen();
@@ -97,17 +98,19 @@ const App = {
       if (this.dirty) await this.flushAutosave();
       if (ext === 'docx' || ext === 'docm' || ext === 'dotx') {
         this.setSaveState('Ouverture…');
-        const r = await DocxImport.importDocx(await file.arrayBuffer(), { registerImage: b => Ed.registerImage(b) });
+        const bytes = await file.arrayBuffer();
+        const r = await DocxImport.importDocx(bytes, { registerImage: b => Ed.registerImage(b) });
+        Ed.source = { zip: r.source, bytes: new Uint8Array(bytes) };
         this.docId = uid(); this.fileHandle = ext === 'docx' ? handle : null;
         $('#docTitle').value = base;
         Ed.load({ html: r.html, header: r.header, footer: r.footer, page: r.page, settings: { fontCss: r.settings.fontCss, size: r.settings.size, lineHeight: r.settings.lineHeight, after: r.settings.after, before: r.settings.before, color: r.settings.color, heading: '#0B5E4E' }, props: r.props });
       } else if (ext === 'doc') {
         toast('Le format <b>.doc</b> (Word 97-2003) n’est pas pris en charge. Ouvrez-le dans Word et enregistrez-le en <b>.docx</b>.', 6000); return;
       } else if (ext === 'html' || ext === 'htm') {
-        this.docId = uid(); this.fileHandle = null; $('#docTitle').value = base;
+        this.docId = uid(); this.fileHandle = null; Ed.source = null; $('#docTitle').value = base;
         Ed.load({ html: Sanitize.html(await file.text()) });
       } else if (ext === 'txt' || ext === 'md') {
-        this.docId = uid(); this.fileHandle = null; $('#docTitle').value = base;
+        this.docId = uid(); this.fileHandle = null; Ed.source = null; $('#docTitle').value = base;
         const txt = await file.text();
         Ed.load({ html: ext === 'md' ? mdToHtml(txt) : txt.split(/\r?\n/).map(l => `<p>${htmlEsc(l) || '<br>'}</p>`).join('') });
       } else { toast('Format non pris en charge : .' + htmlEsc(ext)); return; }
@@ -125,7 +128,7 @@ const App = {
   /* ---------- Enregistrement ---------- */
   async buildDocx() {
     Ed.props.title = Ed.props.title || this.name();
-    return DocxExport.exportDocx({ editor: Ed.editor, headerEl: Ed.headerEl(), footerEl: Ed.footerEl(), page: Ed.page, props: Ed.props });
+    return DocxExport.exportDocx({ editor: Ed.editor, headerEl: Ed.headerEl(), footerEl: Ed.footerEl(), page: Ed.page, props: Ed.props, source: Ed.source ? Ed.source.zip : null });
   },
   async save(asNew = false) {
     try {
@@ -157,7 +160,7 @@ const App = {
     if (!this.docId) return;
     try {
       const st = await Ed.getState();
-      await Store.putDoc({ id: this.docId, name: this.name(), ...st, updated: Date.now() });
+      await Store.putDoc({ id: this.docId, name: this.name(), ...st, source: Ed.source ? Ed.source.bytes : null, updated: Date.now() });
       this.savedLocally = true;
       if (!force) this.setSaveState('Enregistré sur cet appareil');
     } catch (e) { console.warn('Autosauvegarde impossible', e); this.savedLocally = false; }
@@ -383,6 +386,16 @@ const App = {
       const hs = $$('h1,h2,h3,h4,h5,h6', Ed.editor).filter(h => h.textContent.trim() && !h.closest('.pl-toc'));
       if (!hs.length) body.append(el('div', { class: 'np-empty' }, ['Aucun titre. Appliquez les styles « Titre 1 », « Titre 2 »… pour structurer votre document : ils apparaîtront ici.']));
       hs.forEach(h => body.append(el('button', { class: 'np-item l' + h.tagName[1], onclick: () => { h.scrollIntoView({ block: 'start' }); const r = document.createRange(); r.selectNodeContents(h); r.collapse(true); Ed.selectRange(r); } }, [h.textContent.trim()])));
+    } else if (App.navTab === 'comments') {
+      const list = Comments.list();
+      if (!list.length) body.append(el('div', { class: 'np-empty' }, ['Aucun commentaire. Sélectionnez du texte puis Révision → Nouveau commentaire.']));
+      for (const c of list) {
+        const card = el('div', { class: 'np-comment', onclick: e => { if (!e.target.closest('button')) Comments.goto(c.cid); } }, [
+          el('div', { class: 'who' }, [c.author || 'Anonyme', el('span', { class: 'when' }, [c.date ? fmtDate(Date.parse(c.date)) : ''])]),
+          el('div', { class: 'txt' }, [c.text]),
+          el('div', { class: 'acts' }, [el('button', { onclick: () => Comments.edit(c.cid) }, ['Modifier']), el('button', { onclick: () => Comments.remove(c.cid) }, ['Supprimer'])])]);
+        body.append(card);
+      }
     } else {
       const q = $('#npFind').value;
       const ranges = Ed.find(q);
@@ -461,6 +474,7 @@ const App = {
       if (e.key === '=' || e.key === '+') return run(e.shiftKey ? 'sup' : 'sub');
       if (e.key === '*') return run('marks');
       if (e.altKey && k === 'f') return run('footnote');
+      if (e.altKey && k === 'm') return run('comment');
       if (e.altKey && ['1', '2', '3'].includes(e.key)) return run('style:h' + e.key);
       if (e.shiftKey && k === 'n') return run('style:p');
       if (e.shiftKey && k === 'l') return run('bullets');
@@ -490,3 +504,72 @@ function mdToHtml(md) {
 
 window.addEventListener('DOMContentLoaded', () => App.init());
 App.openBackstage = s => Backstage.open(s);
+
+/* =====================================================================
+   Commentaires et suivi des modifications
+   ===================================================================== */
+const Comments = {
+  refs() { return $$('.pl-cref', Ed.editor); },
+  list() { return this.refs().map(r => ({ cid: r.dataset.cid, author: r.dataset.author, date: r.dataset.date, text: r.dataset.text || '' })); },
+  range(cid) {
+    const a = Ed.editor.querySelector(`.pl-cstart[data-cid="${CSS.escape(cid)}"]`);
+    const b = Ed.editor.querySelector(`.pl-cend[data-cid="${CSS.escape(cid)}"]`);
+    if (!a || !b) return null;
+    const r = document.createRange(); r.setStartAfter(a); r.setEndBefore(b); return r;
+  },
+  highlight() {
+    if (!window.CSS || !CSS.highlights) return;
+    const rs = this.list().map(c => this.range(c.cid)).filter(Boolean);
+    if (rs.length) CSS.highlights.set('plume-comment', new Highlight(...rs)); else CSS.highlights.delete('plume-comment');
+  },
+  async add() {
+    Ed.syncSel();
+    const r = Ed.lastRange;
+    if (!r || r.collapsed || !Ed.editor.contains(r.commonAncestorContainer)) { toast('Sélectionnez d’abord le texte à commenter'); return; }
+    const ta = el('textarea', { rows: 4, style: 'width:100%', placeholder: 'Votre commentaire' });
+    const res = await dialog({ title: 'Nouveau commentaire', body: ta, buttons: [{ label: 'Annuler', value: null }, { label: 'Publier', primary: true, value: 'ok' }] });
+    if (res !== 'ok' || !ta.value.trim()) return;
+    const cid = 'c' + uid();
+    const author = localStorage.getItem('plume-user') || Ed.props.author || 'Utilisateur Plume';
+    const initials = author.split(/\s+/).map(w => w[0] || '').join('').slice(0, 3).toUpperCase();
+    const end = r.cloneRange(); end.collapse(false);
+    const ref = el('span', { class: 'pl-cref', contenteditable: 'false', 'data-cid': cid, 'data-author': author, 'data-initials': initials, 'data-date': new Date().toISOString().replace(/\.\d+Z$/, 'Z'), 'data-text': ta.value.trim() });
+    end.insertNode(ref);
+    end.insertNode(el('span', { class: 'pl-cend', 'data-cid': cid }));
+    const start = r.cloneRange(); start.collapse(true);
+    start.insertNode(el('span', { class: 'pl-cstart', 'data-cid': cid }));
+    Ed.changed(false);
+    App.openNav('comments');
+  },
+  goto(cid) {
+    const r = this.range(cid) || (() => { const x = document.createRange(); const ref = Ed.editor.querySelector(`.pl-cref[data-cid="${CSS.escape(cid)}"]`); if (!ref) return null; x.selectNode(ref); return x; })();
+    if (r) Ed.selectRange(r);
+  },
+  async edit(cid) {
+    const ref = Ed.editor.querySelector(`.pl-cref[data-cid="${CSS.escape(cid)}"]`);
+    if (!ref) return;
+    const ta = el('textarea', { rows: 4, style: 'width:100%' }); ta.value = ref.dataset.text || '';
+    const res = await dialog({ title: 'Modifier le commentaire', body: ta, buttons: [{ label: 'Annuler', value: null }, { label: 'OK', primary: true, value: 'ok' }] });
+    if (res === 'ok') { ref.dataset.text = ta.value; Ed.changed(false); App.navRefresh(); }
+  },
+  remove(cid) {
+    $$(`[data-cid="${CSS.escape(cid)}"]`, Ed.editor).forEach(n => n.remove());
+    Ed.changed(false); App.navRefresh();
+  },
+  removeAll() { $$('.pl-cref,.pl-cstart,.pl-cend', Ed.editor).forEach(n => n.remove()); Ed.changed(false); App.navRefresh(); toast('Tous les commentaires ont été supprimés'); }
+};
+const Revisions = {
+  count() { return $$('.pl-ins,.pl-del', Ed.editor).length + $$('.pl-ins,.pl-del', Ed.pagesLayer).length; },
+  apply(accept) {
+    const roots = [Ed.editor, ...$$('.hf', Ed.pagesLayer)];
+    let n = 0;
+    for (const root of roots) {
+      $$(accept ? '.pl-del' : '.pl-ins', root).forEach(x => { x.remove(); n++; });
+      $$(accept ? '.pl-ins' : '.pl-del', root).forEach(x => { x.replaceWith(...x.childNodes); n++; });
+    }
+    const h = Ed.headerEl(), f = Ed.footerEl();
+    if (h) Ed.headerHTML = h.innerHTML; if (f) Ed.footerHTML = f.innerHTML;
+    Ed.changed(false);
+    toast(n ? `${n} modification(s) ${accept ? 'acceptée(s)' : 'refusée(s)'}` : 'Aucune modification suivie dans ce document');
+  }
+};
