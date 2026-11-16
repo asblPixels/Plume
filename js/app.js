@@ -37,6 +37,11 @@ const App = {
     if (!restored || new URLSearchParams(location.search).has('new')) this.newDoc('blank', true);
 
     // Ouverture depuis le système (application installée)
+    // Application de bureau (Electron) : fichiers ouverts depuis l'Explorateur / le Finder
+    if (window.plumeDesktop) {
+      document.documentElement.classList.add('desktop');
+      window.plumeDesktop.onOpenFile(f => this.openFile(new File([f.data], f.name), null, f.path));
+    }
     if ('launchQueue' in window) {
       launchQueue.setConsumer(async p => { if (p.files && p.files.length) { const h = p.files[0]; this.openFile(await h.getFile(), h); } });
     }
@@ -53,7 +58,7 @@ const App = {
   async newDoc(tpl = 'blank', silent) {
     if (!silent && this.dirty) await this.flushAutosave();
     const t = TEMPLATES[tpl] || TEMPLATES.blank;
-    this.docId = uid(); this.fileHandle = null; Ed.source = null;
+    this.docId = uid(); this.fileHandle = null; this.desktopPath = null; Ed.source = null;
     $('#docTitle').value = tpl === 'blank' ? this.nextDocName() : t.name;
     Ed.load({ html: t.html, props: { author: await this.user(), created: new Date().toISOString() } });
     this.afterOpen();
@@ -91,7 +96,7 @@ const App = {
     this.fileInputCb = f => this.openFile(f);
     fi.click();
   },
-  async openFile(file, handle = null) {
+  async openFile(file, handle = null, desktopPath = null) {
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     const base = file.name.replace(/\.[^.]+$/, '');
     try {
@@ -102,6 +107,7 @@ const App = {
         const r = await DocxImport.importDocx(bytes, { registerImage: b => Ed.registerImage(b) });
         Ed.source = { zip: r.source, bytes: new Uint8Array(bytes) };
         this.docId = uid(); this.fileHandle = ext === 'docx' ? handle : null;
+        this.desktopPath = ext === 'docx' ? desktopPath : null;
         $('#docTitle').value = base;
         Ed.load({ html: r.html, header: r.header, footer: r.footer, page: r.page, settings: { fontCss: r.settings.fontCss, size: r.settings.size, lineHeight: r.settings.lineHeight, after: r.settings.after, before: r.settings.before, color: r.settings.color, heading: '#0B5E4E' }, props: r.props });
       } else if (ext === 'doc') {
@@ -135,13 +141,15 @@ const App = {
       this.setSaveState('Enregistrement…');
       const blob = await this.buildDocx();
       const fname = this.name().replace(/[\\/:*?"<>|]/g, '_') + '.docx';
-      if (this.fileHandle && !asNew) {
+      if (this.desktopPath && window.plumeDesktop && !asNew) {
+        await window.plumeDesktop.writeFile(this.desktopPath, await blob.arrayBuffer());
+      } else if (this.fileHandle && !asNew) {
         const w = await this.fileHandle.createWritable(); await w.write(blob); await w.close();
       } else if (window.showSaveFilePicker) {
         try {
           const h = await showSaveFilePicker({ suggestedName: fname, types: [{ description: 'Document Word', accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] } }] });
           const w = await h.createWritable(); await w.write(blob); await w.close();
-          this.fileHandle = h;
+          this.fileHandle = h; this.desktopPath = null;
           $('#docTitle').value = h.name.replace(/\.docx$/i, '');
         } catch (e) { if (e.name === 'AbortError') { this.setSaveState('Modifié'); return; } throw e; }
       } else downloadBlob(blob, fname);

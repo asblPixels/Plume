@@ -13,7 +13,7 @@
 ![Hors ligne](https://img.shields.io/badge/hors%20ligne-oui-26EFC5?style=flat-square&labelColor=0D1013)
 ![Dépendances](https://img.shields.io/badge/d%C3%A9pendances-1%20(JSZip)-26EFC5?style=flat-square&labelColor=0D1013)
 
-### [▶ Ouvrir Plume en ligne](https://asblpixels.github.io/plume/)
+### [▶ Ouvrir Plume en ligne](https://asblpixels.github.io/Plume/)
 
 <img src="docs/captures/plume-accueil.png" alt="Plume — fenêtre principale" width="900">
 
@@ -203,7 +203,7 @@ Aucun logiciel tiers n'atteint 100 % de compatibilité avec Word. Voici ce qui r
 
 ### En ligne, sans installation
 
-Plume est disponible à l'adresse **https://asblpixels.github.io/plume/**. Aucun compte n'est nécessaire et les documents restent sur votre appareil. Depuis cette adresse, Plume peut aussi être installé comme une application (voir plus bas).
+Plume est disponible à l'adresse **https://asblpixels.github.io/Plume/**. Aucun compte n'est nécessaire et les documents restent sur votre appareil. Depuis cette adresse, Plume peut aussi être installé comme une application (voir plus bas).
 
 ### En local
 
@@ -307,7 +307,7 @@ AddType application/manifest+json .webmanifest
 
 | Service | Remarque |
 |---|---|
-| GitHub Pages | **Version officielle** : https://asblpixels.github.io/plume/ (publiée depuis la branche `main`) |
+| GitHub Pages | **Version officielle** : https://asblpixels.github.io/Plume/ (publiée depuis la branche `main`) |
 | Netlify, Cloudflare Pages | Glisser-déposer du dossier, HTTPS automatique |
 | Serveur de l'ASBL | Configuration Nginx ou Apache ci-dessus |
 

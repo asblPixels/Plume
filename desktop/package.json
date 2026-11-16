@@ -1,0 +1,39 @@
+{
+  "name": "plume",
+  "productName": "Plume",
+  "version": "1.1.0",
+  "description": "Plume — traitement de texte de Pixel's ASBL, compatible .docx",
+  "author": "Pixel's ASBL <info@asblpixels.be>",
+  "homepage": "https://github.com/asblPixels/plume",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "scripts": {
+    "prepare-app": "node prepare.js",
+    "start": "node prepare.js && electron .",
+    "dist:win": "node prepare.js && electron-builder --win nsis portable --x64",
+    "dist:linux": "node prepare.js && electron-builder --linux AppImage rpm --x64"
+  },
+  "build": {
+    "appId": "be.asblpixels.plume",
+    "productName": "Plume",
+    "copyright": "© 2026 Pixel's ASBL",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "app/**/*"],
+    "fileAssociations": [
+      { "ext": "docx", "name": "Document Word", "description": "Document Word (.docx)", "role": "Editor", "icon": "build/icon.ico" }
+    ],
+    "win": { "icon": "build/icon.ico", "signExecutable": false, "target": ["nsis", "portable"] },
+    "nsis": {
+      "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "Plume",
+      "installerIcon": "build/icon.ico", "uninstallerIcon": "build/icon.ico",
+      "artifactName": "Plume-Setup-${version}-x64.${ext}", "language": "1036"
+    },
+    "portable": { "artifactName": "Plume-Portable-${version}-x64.${ext}" },
+    "linux": { "icon": "build/icon.png", "category": "Office", "target": ["AppImage", "rpm"], "mimeTypes": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] }
+  },
+  "devDependencies": {
+    "electron": "^45.3.3",
+    "electron-builder": "^26.0.0"
+  }
+}
