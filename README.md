@@ -13,6 +13,8 @@
 ![Hors ligne](https://img.shields.io/badge/hors%20ligne-oui-26EFC5?style=flat-square&labelColor=0D1013)
 ![Dépendances](https://img.shields.io/badge/d%C3%A9pendances-1%20(JSZip)-26EFC5?style=flat-square&labelColor=0D1013)
 
+### [▶ Ouvrir Plume en ligne](https://asblpixels.github.io/plume/)
+
 <img src="docs/captures/plume-accueil.png" alt="Plume — fenêtre principale" width="900">
 
 </div>
@@ -199,12 +201,18 @@ Aucun logiciel tiers n'atteint 100 % de compatibilité avec Word. Voici ce qui r
 
 ## Installation et lancement
 
+### En ligne, sans installation
+
+Plume est disponible à l'adresse **https://asblpixels.github.io/plume/**. Aucun compte n'est nécessaire et les documents restent sur votre appareil. Depuis cette adresse, Plume peut aussi être installé comme une application (voir plus bas).
+
+### En local
+
 Plume est un ensemble de **fichiers statiques**. Il suffit de les servir en HTTP.
 
 ### Fedora Linux
 
 ```bash
-# Récupérer le projet (dépôt privé : authentification GitHub requise)
+# Récupérer le projet
 git clone https://github.com/asblPixels/plume.git
 cd plume
 
@@ -299,7 +307,7 @@ AddType application/manifest+json .webmanifest
 
 | Service | Remarque |
 |---|---|
-| GitHub Pages | Gratuit pour un dépôt public ; nécessite une offre payante pour un dépôt privé |
+| GitHub Pages | **Version officielle** : https://asblpixels.github.io/plume/ (publiée depuis la branche `main`) |
 | Netlify, Cloudflare Pages | Glisser-déposer du dossier, HTTPS automatique |
 | Serveur de l'ASBL | Configuration Nginx ou Apache ci-dessus |
 
