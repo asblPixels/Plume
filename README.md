@@ -1,8 +1,9 @@
 <div align="center">
 
-<img src="icons/icon-512.png" alt="Logo Plume" width="120">
-
-# Plume
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="icons/plume-wordmark-light.svg">
+  <img src="icons/plume-wordmark-dark.svg" alt="Plume" width="320">
+</picture>
 
 **Le traitement de texte de Pixel's ASBL : libre d'usage, hors ligne et compatible Word (.docx)**
 
@@ -341,7 +342,7 @@ plume/
 │   ├── backstage.js        Menu Fichier, modèles, boîtes de dialogue
 │   ├── app.js              Orchestration : fichiers, enregistrement, zoom, règle, navigation, raccourcis
 │   └── icons.js            Tracés d'icônes (base Lucide, ISC)
-├── icons/                  Logo (SVG), icônes PWA (192, 512, maskable), apple-touch-icon, favicon
+├── icons/                  Logo « Plume » (SVG clair/sombre), icône P (SVG), icônes PWA (192, 512, maskable), apple-touch-icon, favicon
 ├── vendor/
 │   └── jszip.min.js        Lecture/écriture des archives ZIP (.docx)
 └── docs/captures/          Captures d'écran
@@ -465,7 +466,7 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 | [JSZip](https://stuk.github.io/jszip/) | Stuart Knightley et contributeurs | MIT |
 | Tracés d'icônes [Lucide](https://lucide.dev) | Lucide Contributors | ISC |
 
-Le nom **Plume**, le logo et l'identité visuelle sont la propriété de Pixel's ASBL.
+Le nom **Plume**, le logotype (P turquoise #26EFC5 + « lume »), l'icône P et l'identité visuelle sont la propriété de Pixel's ASBL.
 
 ---
 

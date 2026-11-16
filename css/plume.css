@@ -92,8 +92,7 @@ button { cursor: pointer; }
 }
 #docTitle:hover { border-color: rgba(255,255,255,.2); }
 #docTitle:focus { outline: none; border-color: var(--brand); background: rgba(255,255,255,.06); }
-.app-name { color: #9fb0b8; white-space: nowrap; }
-.app-name b { color: var(--brand); font-weight: 700; }
+.app-name { height: 18px; width: auto; margin: 0 4px; opacity: .95; }
 #saveState { color: #8b98a0; font-size: 12px; white-space: nowrap; }
 #cmdSearchWrap { flex: 1; display: flex; justify-content: center; position: relative; min-width: 120px; }
 #cmdSearch {

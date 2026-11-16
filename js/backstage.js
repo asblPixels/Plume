@@ -119,7 +119,7 @@ const Backstage = {
       case 'about':
         main.append(el('h1', {}, ['À propos de Plume']), el('div', {
           html: `<div style="display:flex;gap:18px;align-items:center;margin-bottom:18px"><svg viewBox="0 0 512 512" width="72" height="72"><use href="#plume-logo"/></svg>
-          <div><div style="font-size:22px;font-weight:600">Plume</div><div style="color:var(--ui-fg-2)">Traitement de texte libre de <b>Pixel's ASBL</b> — Boussu</div><div style="color:var(--ui-fg-2)">Version ${App.VERSION}</div></div></div>
+          <div><img src="icons/plume-wordmark-${document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'}.svg" alt="Plume" height="34" style="display:block;margin-bottom:6px"><div style="color:var(--ui-fg-2)">Traitement de texte libre de <b>Pixel's ASBL</b> — Boussu</div><div style="color:var(--ui-fg-2)">Version ${App.VERSION}</div></div></div>
           <p style="max-width:640px;line-height:1.6">Plume fonctionne dans le navigateur, hors ligne, sur Windows, macOS, Linux, Android et iOS. Vos documents restent sur votre appareil : rien n'est envoyé sur Internet.</p>
           <p style="line-height:1.6">Contact : <a href="mailto:info@asblpixels.be">info@asblpixels.be</a> · <a href="https://facebook.com/asblpixels" target="_blank" rel="noopener">facebook.com/asblpixels</a></p>
           <h2>Composants libres</h2><ul style="line-height:1.7"><li>JSZip — licence MIT (Stuart Knightley et contributeurs)</li><li>Tracés d’icônes Lucide — licence ISC, restylés pour Plume</li></ul>
