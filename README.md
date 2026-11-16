@@ -465,8 +465,9 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 |---|---|---|
 | [JSZip](https://stuk.github.io/jszip/) | Stuart Knightley et contributeurs | MIT |
 | Tracés d'icônes [Lucide](https://lucide.dev) | Lucide Contributors | ISC |
+| Police du logotype : [Outfit](https://github.com/Outfitio/Outfit-Fonts) (SemiBold, convertie en tracés) | The Outfit Project Authors | SIL OFL 1.1 |
 
-Le nom **Plume**, le logotype (P turquoise #26EFC5 + « lume »), l'icône P et l'identité visuelle sont la propriété de Pixel's ASBL.
+Le nom **Plume**, le logotype (P turquoise #26EFC5 + « lume », police Outfit), l'icône P et l'identité visuelle sont la propriété de Pixel's ASBL.
 
 ---
 

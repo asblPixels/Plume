@@ -85,19 +85,8 @@
 <!-- Logo Plume : un P turquoise Pixel's -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <filter id="plGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="9" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <symbol id="plume-logo" viewBox="0 0 512 512">
-      <rect x="16" y="16" width="480" height="480" rx="112" fill="#0D1013"/>
-      <g filter="url(#plGlow)" fill="none" stroke="#26EFC5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M206 404 L224 128" stroke-width="54"/>
-        <path d="M222 132 C 318 108 382 150 370 214 C 358 274 290 298 222 280" stroke-width="50"/>
-        <path d="M168 404 L 250 404" stroke-width="22" opacity=".0"/>
-      </g>
-      <circle cx="372" cy="372" r="16" fill="#26EFC5"/>
-    </symbol>
+    <filter id="plGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="10" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <symbol id="plume-logo" viewBox="0 0 512 512"><rect x="16" y="16" width="480" height="480" rx="112" fill="#0D1013"/><g transform="translate(256 256) scale(0.4 -0.4) translate(-328.5 -351.5)"><path d="M72 0V703H349Q416 703 469.5 676.0Q523 649 554.0 599.5Q585 550 585.0 482.0Q585 414 554.0 364.5Q523 315 469.5 288.0Q416 261 349 261H208V0ZM208 592V372H335Q367 372 393.0 385.0Q419 398 434.0 422.5Q449 447 449 482Q449 516 434.0 541.0Q419 566 393.0 579.0Q367 592 335 592Z" fill="#26EFC5" filter="url(#plGlow)"/></g></symbol>
   </defs>
 </svg>
 

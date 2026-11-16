@@ -1,5 +1,5 @@
 /* Plume — service worker : l'application fonctionne hors ligne */
-const CACHE = 'plume-v2';
+const CACHE = 'plume-v3';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'css/plume.css', 'vendor/jszip.min.js',
   'js/icons.js', 'js/util.js', 'js/docx-import.js', 'js/docx-export.js', 'js/editor.js', 'js/ribbon.js', 'js/backstage.js', 'js/app.js',
   'icons/favicon.svg', 'icons/plume-wordmark-light.svg', 'icons/plume-wordmark-dark.svg', 'icons/favicon-32.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'];
