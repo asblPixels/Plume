@@ -1,0 +1,872 @@
+/* =====================================================================
+   Plume — import .docx (Office Open XML → HTML éditable)
+   Écrit pour Plume : lit document.xml, styles, numérotation, thème,
+   relations, images, en-têtes / pieds de page et notes de bas de page.
+   ===================================================================== */
+'use strict';
+
+const DocxImport = (() => {
+
+  const HIGHLIGHT = {
+    yellow: '#FFFF00', green: '#00FF00', cyan: '#00FFFF', magenta: '#FF00FF', blue: '#0000FF', red: '#FF0000',
+    darkBlue: '#000080', darkCyan: '#008080', darkGreen: '#008000', darkMagenta: '#800080', darkRed: '#800000',
+    darkYellow: '#808000', darkGray: '#808080', lightGray: '#C0C0C0', black: '#000000', white: '#FFFFFF'
+  };
+
+  /** Polices de remplacement libres (métriques compatibles quand elles existent) */
+  const FALLBACK = {
+    'calibri': 'Carlito, "Liberation Sans", Arial, sans-serif',
+    'calibri light': 'Carlito, "Liberation Sans", Arial, sans-serif',
+    'cambria': 'Caladea, "Liberation Serif", Georgia, serif',
+    'arial': '"Liberation Sans", Arimo, Helvetica, sans-serif',
+    'helvetica': '"Liberation Sans", Arimo, Arial, sans-serif',
+    'times new roman': '"Liberation Serif", Tinos, Times, serif',
+    'courier new': '"Liberation Mono", Cousine, monospace',
+    'aptos': '"Aptos", "Segoe UI", Carlito, "Liberation Sans", sans-serif',
+    'aptos display': '"Aptos", "Segoe UI", Carlito, sans-serif',
+    'georgia': 'Gelasio, Georgia, serif',
+    'verdana': '"DejaVu Sans", Verdana, sans-serif',
+    'segoe ui': '"Segoe UI", "Open Sans", "Noto Sans", sans-serif',
+    'consolas': '"DejaVu Sans Mono", "Liberation Mono", monospace'
+  };
+  function cssFont(name) {
+    if (!name) return null;
+    const fb = FALLBACK[name.toLowerCase()] ||
+      (/(mono|courier|consol|code)/i.test(name) ? 'monospace' : /(times|serif|garamond|georgia|cambria|book)/i.test(name) && !/sans/i.test(name) ? 'serif' : 'sans-serif');
+    // guillemets simples : la valeur est placée dans un attribut style="…"
+    return `'${name.replace(/["']/g, '')}', ${fb}`.replace(/"/g, "'");
+  }
+
+  /* ---------- Accès XML ---------- */
+  const parseXml = s => new DOMParser().parseFromString(s, 'application/xml');
+  const kids = (n, name) => n ? Array.from(n.children).filter(c => !name || c.nodeName === name) : [];
+  const kid = (n, name) => n ? Array.from(n.children).find(c => c.nodeName === name) || null : null;
+  const val = (n, a = 'w:val') => n ? n.getAttribute(a) : null;
+  const onOff = n => { if (!n) return undefined; const v = val(n); return !(v === '0' || v === 'false' || v === 'off'); };
+  const num = v => (v == null || v === '' ? null : parseFloat(v));
+  const tw2pt = v => (v == null ? null : Math.round(v / 20 * 10) / 10);
+
+  /* ---------- Propriétés de texte (rPr) ---------- */
+  function parseRPr(r, ctx) {
+    const o = {};
+    if (!r) return o;
+    for (const c of r.children) {
+      switch (c.nodeName) {
+        case 'w:rStyle': o.rStyle = val(c); break;
+        case 'w:b': o.b = onOff(c); break;
+        case 'w:i': o.i = onOff(c); break;
+        case 'w:strike': o.strike = onOff(c); break;
+        case 'w:dstrike': o.strike = onOff(c); break;
+        case 'w:caps': o.caps = onOff(c); break;
+        case 'w:smallCaps': o.smallCaps = onOff(c); break;
+        case 'w:vanish': o.vanish = onOff(c); break;
+        case 'w:u': o.u = val(c) && val(c) !== 'none'; break;
+        case 'w:sz': o.sz = num(val(c)) / 2; break;
+        case 'w:color': {
+          let v = val(c);
+          const th = c.getAttribute('w:themeColor');
+          if ((!v || v === 'auto') && th && ctx.theme.colors[th]) v = ctx.theme.colors[th];
+          o.color = v === 'auto' ? 'auto' : (v ? '#' + v.toUpperCase() : undefined);
+          break;
+        }
+        case 'w:highlight': if (val(c) && val(c) !== 'none') o.hl = HIGHLIGHT[val(c)] || null; else o.hl = null; break;
+        case 'w:shd': { const f = c.getAttribute('w:fill'); if (f && f !== 'auto') o.shd = '#' + f.toUpperCase(); break; }
+        case 'w:vertAlign': o.vert = val(c) === 'superscript' ? 'sup' : val(c) === 'subscript' ? 'sub' : null; break;
+        case 'w:spacing': o.spacing = tw2pt(num(val(c))); break;
+        case 'w:rFonts': {
+          let f = c.getAttribute('w:ascii') || c.getAttribute('w:hAnsi');
+          const th = c.getAttribute('w:asciiTheme') || c.getAttribute('w:hAnsiTheme');
+          if (!f && th) f = th.startsWith('major') ? ctx.theme.major : ctx.theme.minor;
+          if (f) o.font = f;
+          break;
+        }
+      }
+    }
+    return o;
+  }
+
+  /* ---------- Propriétés de paragraphe (pPr) ---------- */
+  function parsePPr(p, ctx) {
+    const o = {};
+    if (!p) return o;
+    for (const c of p.children) {
+      switch (c.nodeName) {
+        case 'w:pStyle': o.pStyle = val(c); break;
+        case 'w:jc': o.jc = val(c); break;
+        case 'w:ind': {
+          const l = c.getAttribute('w:left') ?? c.getAttribute('w:start');
+          const r = c.getAttribute('w:right') ?? c.getAttribute('w:end');
+          if (l != null) o.indL = tw2pt(num(l));
+          if (r != null) o.indR = tw2pt(num(r));
+          if (c.getAttribute('w:firstLine') != null) { o.first = tw2pt(num(c.getAttribute('w:firstLine'))); o.hang = 0; }
+          if (c.getAttribute('w:hanging') != null) { o.hang = tw2pt(num(c.getAttribute('w:hanging'))); o.first = 0; }
+          break;
+        }
+        case 'w:spacing': {
+          if (c.getAttribute('w:before') != null) o.before = tw2pt(num(c.getAttribute('w:before')));
+          if (c.getAttribute('w:after') != null) o.after = tw2pt(num(c.getAttribute('w:after')));
+          if (c.getAttribute('w:beforeAutospacing') === '1') o.before = 14;
+          if (c.getAttribute('w:afterAutospacing') === '1') o.after = 14;
+          if (c.getAttribute('w:line') != null) {
+            o.line = num(c.getAttribute('w:line'));
+            o.lineRule = c.getAttribute('w:lineRule') || 'auto';
+          }
+          break;
+        }
+        case 'w:shd': { const f = c.getAttribute('w:fill'); if (f && f !== 'auto') o.shd = '#' + f.toUpperCase(); break; }
+        case 'w:pageBreakBefore': o.pbb = onOff(c); break;
+        case 'w:numPr': {
+          const id = kid(c, 'w:numId'), lv = kid(c, 'w:ilvl');
+          if (id) o.numId = val(id);
+          if (lv) o.ilvl = parseInt(val(lv), 10) || 0;
+          break;
+        }
+        case 'w:pBdr': {
+          for (const side of ['top', 'bottom', 'left', 'right']) {
+            const b = kid(c, 'w:' + side);
+            if (b && val(b) && val(b) !== 'none' && val(b) !== 'nil') {
+              o['bdr_' + side] = {
+                w: Math.max(0.5, (num(b.getAttribute('w:sz')) || 4) / 8),
+                color: (b.getAttribute('w:color') && b.getAttribute('w:color') !== 'auto') ? '#' + b.getAttribute('w:color') : '#000000',
+                space: num(b.getAttribute('w:space')) || 0
+              };
+            }
+          }
+          break;
+        }
+        case 'w:rPr': o.markRPr = c; break;
+        case 'w:sectPr': o.sectPr = c; break;
+      }
+    }
+    return o;
+  }
+
+  /* ---------- Styles ---------- */
+  function loadStyles(xml, ctx) {
+    const st = { byId: {}, defaults: { rPr: {}, pPr: {} }, normalId: 'Normal', tableBorders: {} };
+    if (!xml) return st;
+    const doc = parseXml(xml).documentElement;
+    const dd = kid(doc, 'w:docDefaults');
+    if (dd) {
+      st.defaults.rPr = parseRPr(kid(kid(dd, 'w:rPrDefault'), 'w:rPr'), ctx);
+      st.defaults.pPr = parsePPr(kid(kid(dd, 'w:pPrDefault'), 'w:pPr'), ctx);
+    }
+    for (const s of kids(doc, 'w:style')) {
+      const id = s.getAttribute('w:styleId');
+      const type = s.getAttribute('w:type');
+      const o = {
+        id, type,
+        name: (val(kid(s, 'w:name')) || id || '').toLowerCase(),
+        basedOn: val(kid(s, 'w:basedOn')),
+        pPr: parsePPr(kid(s, 'w:pPr'), ctx),
+        rPr: parseRPr(kid(s, 'w:rPr'), ctx)
+      };
+      if (type === 'table') {
+        const tb = kid(kid(s, 'w:tblPr'), 'w:tblBorders');
+        o.tblBorders = tb ? hasBorders(tb) : undefined;
+      }
+      st.byId[id] = o;
+      if (type === 'paragraph' && s.getAttribute('w:default') === '1') st.normalId = id;
+    }
+    return st;
+  }
+  function hasBorders(tb) {
+    return kids(tb).some(b => val(b) && val(b) !== 'none' && val(b) !== 'nil');
+  }
+  /** Fusionne la chaîne basedOn d'un style (du plus général au plus précis) */
+  function chain(st, id, depth = 0) {
+    const s = st.byId[id];
+    if (!s || depth > 20) return { pPr: {}, rPr: {}, names: [] };
+    if (s._chain) return s._chain;
+    const base = s.basedOn ? chain(st, s.basedOn, depth + 1) : { pPr: {}, rPr: {}, names: [] };
+    const pPr = Object.assign({}, base.pPr, s.pPr);
+    delete pPr.pStyle;
+    s._chain = { pPr, rPr: Object.assign({}, base.rPr, s.rPr), names: [s.name, ...base.names], tblBorders: s.tblBorders ?? base.tblBorders };
+    return s._chain;
+  }
+
+  /* ---------- Thème ---------- */
+  function loadTheme(xml) {
+    const t = { colors: {}, minor: null, major: null };
+    if (!xml) return t;
+    const d = parseXml(xml);
+    const minor = d.getElementsByTagName('a:minorFont')[0];
+    const major = d.getElementsByTagName('a:majorFont')[0];
+    t.minor = minor && val(minor.getElementsByTagName('a:latin')[0], 'typeface');
+    t.major = major && val(major.getElementsByTagName('a:latin')[0], 'typeface');
+    const cs = d.getElementsByTagName('a:clrScheme')[0];
+    if (cs) for (const c of cs.children) {
+      const name = c.nodeName.replace('a:', '');
+      const srgb = c.getElementsByTagName('a:srgbClr')[0];
+      const sys = c.getElementsByTagName('a:sysClr')[0];
+      const v = srgb ? val(srgb, 'val') : sys ? val(sys, 'lastClr') : null;
+      if (v) t.colors[name] = v;
+    }
+    const map = { text1: 'dk1', background1: 'lt1', text2: 'dk2', background2: 'lt2', dark1: 'dk1', light1: 'lt1', dark2: 'dk2', light2: 'lt2', hyperlink: 'hlink', followedHyperlink: 'folHlink' };
+    for (const [k, v] of Object.entries(map)) if (t.colors[v]) t.colors[k] = t.colors[v];
+    return t;
+  }
+
+  /* ---------- Numérotation ---------- */
+  function loadNumbering(xml) {
+    const n = { abs: {}, nums: {} };
+    if (!xml) return n;
+    const d = parseXml(xml).documentElement;
+    for (const a of kids(d, 'w:abstractNum')) {
+      const lv = {};
+      for (const l of kids(a, 'w:lvl')) {
+        lv[l.getAttribute('w:ilvl')] = {
+          fmt: val(kid(l, 'w:numFmt')) || 'decimal',
+          text: val(kid(l, 'w:lvlText')) || '',
+          start: parseInt(val(kid(l, 'w:start')) || '1', 10)
+        };
+      }
+      n.abs[a.getAttribute('w:abstractNumId')] = lv;
+    }
+    for (const m of kids(d, 'w:num')) {
+      const id = m.getAttribute('w:numId');
+      const absId = val(kid(m, 'w:abstractNumId'));
+      const lv = JSON.parse(JSON.stringify(n.abs[absId] || {}));
+      for (const ov of kids(m, 'w:lvlOverride')) {
+        const so = kid(ov, 'w:startOverride');
+        const il = ov.getAttribute('w:ilvl');
+        if (so && lv[il]) lv[il].start = parseInt(val(so), 10);
+      }
+      n.nums[id] = lv;
+    }
+    return n;
+  }
+  function listStyleOf(lvl) {
+    if (!lvl) return { tag: 'ul', type: 'disc' };
+    switch (lvl.fmt) {
+      case 'bullet': {
+        const ch = lvl.text;
+        const type = ch === 'o' ? 'circle' : (ch === '' || ch === '§' || ch === '▪' || ch === '■') ? 'square' : (ch === '–' || ch === '-') ? '"– "' : 'disc';
+        return { tag: 'ul', type };
+      }
+      case 'lowerLetter': return { tag: 'ol', type: 'lower-alpha' };
+      case 'upperLetter': return { tag: 'ol', type: 'upper-alpha' };
+      case 'lowerRoman': return { tag: 'ol', type: 'lower-roman' };
+      case 'upperRoman': return { tag: 'ol', type: 'upper-roman' };
+      case 'none': return { tag: 'ul', type: 'none' };
+      default: return { tag: 'ol', type: 'decimal' };
+    }
+  }
+
+  /* ---------- Relations ---------- */
+  function loadRels(xml) {
+    const r = {};
+    if (!xml) return r;
+    for (const e of parseXml(xml).getElementsByTagName('Relationship')) {
+      r[e.getAttribute('Id')] = { target: e.getAttribute('Target'), type: e.getAttribute('Type'), mode: e.getAttribute('TargetMode') };
+    }
+    return r;
+  }
+  const relsPath = part => part.replace(/([^/]+)$/, '_rels/$1.rels');
+  function resolveTarget(part, target) {
+    if (target.startsWith('/')) return target.slice(1);
+    const base = part.split('/').slice(0, -1);
+    for (const seg of target.split('/')) {
+      if (seg === '..') base.pop(); else if (seg !== '.') base.push(seg);
+    }
+    return base.join('/');
+  }
+
+  const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml', webp: 'image/webp', tif: 'image/tiff', tiff: 'image/tiff' };
+
+  /* =====================================================================
+     Conversion principale
+     ===================================================================== */
+  async function importDocx(buffer, opts = {}) {
+    const zip = await JSZip.loadAsync(buffer);
+    const read = async p => { const f = zip.file(p); return f ? f.async('string') : null; };
+
+    // Trouver le document principal via _rels/.rels
+    const rootRels = loadRels(await read('_rels/.rels'));
+    let mainPart = 'word/document.xml';
+    for (const r of Object.values(rootRels)) if (/officeDocument$/.test(r.type)) mainPart = r.target.replace(/^\//, '');
+    const docXml = await read(mainPart);
+    if (!docXml) throw new Error('Ce fichier ne contient pas de document Word (document.xml manquant).');
+
+    const mainRels = loadRels(await read(relsPath(mainPart)));
+    const findRel = suffix => Object.values(mainRels).find(r => r.type.endsWith('/' + suffix));
+    const partOf = suffix => { const r = findRel(suffix); return r ? resolveTarget(mainPart, r.target) : null; };
+
+    const ctx = { theme: { colors: {}, minor: null, major: null } };
+    const themePart = partOf('theme');
+    ctx.theme = loadTheme(themePart ? await read(themePart) : null);
+    const stylesPart = partOf('styles');
+    const st = loadStyles(stylesPart ? await read(stylesPart) : null, ctx);
+    const numPart = partOf('numbering');
+    const numbering = loadNumbering(numPart ? await read(numPart) : null);
+
+    // Notes de bas de page / de fin (texte simple)
+    const notes = { footnote: {}, endnote: {} };
+    for (const kind of ['footnotes', 'endnotes']) {
+      const p = partOf(kind);
+      if (!p) continue;
+      const x = await read(p);
+      if (!x) continue;
+      const tag = kind === 'footnotes' ? 'w:footnote' : 'w:endnote';
+      for (const fn of parseXml(x).getElementsByTagName(tag)) {
+        const id = fn.getAttribute('w:id');
+        const paras = Array.from(fn.getElementsByTagName('w:p')).map(p =>
+          Array.from(p.getElementsByTagName('w:t')).map(t => t.textContent).join('')).filter(Boolean);
+        notes[kind.slice(0, -1)][id] = paras.join('\n').trim();
+      }
+    }
+
+    // Réglages du document (style Normal)
+    const normal = chain(st, st.normalId);
+    const baseR = Object.assign({}, st.defaults.rPr, normal.rPr);
+    const baseP = Object.assign({}, st.defaults.pPr, normal.pPr);
+    const settings = {
+      font: baseR.font || 'Calibri',
+      size: baseR.sz || 11,
+      color: baseR.color && baseR.color !== 'auto' ? baseR.color : '#000000',
+      lineHeight: lineCss(baseP) || 1,
+      after: baseP.after ?? 0,
+      before: baseP.before ?? 0
+    };
+
+    const images = [];
+    const imgCache = {};
+    async function imageUrl(part, rid) {
+      const rels = await relsFor(part);
+      const r = rels[rid];
+      if (!r || r.mode === 'External') return null;
+      const path = resolveTarget(part, r.target);
+      if (imgCache[path] !== undefined) return imgCache[path];
+      const f = zip.file(path);
+      if (!f) return (imgCache[path] = null);
+      const ext = path.split('.').pop().toLowerCase();
+      if (!MIME[ext]) return (imgCache[path] = null); // EMF/WMF : non affichables dans un navigateur
+      const blob = new Blob([await f.async('uint8array')], { type: MIME[ext] });
+      const url = opts.registerImage ? opts.registerImage(blob) : URL.createObjectURL(blob);
+      images.push(url);
+      return (imgCache[path] = url);
+    }
+    const relsCache = {};
+    async function relsFor(part) {
+      if (!relsCache[part]) relsCache[part] = loadRels(await read(relsPath(part)));
+      return relsCache[part];
+    }
+
+    /* ---------- Conversion d'une "story" (corps, en-tête, pied) ---------- */
+    async function convertStory(part, rootEl) {
+      const rels = await relsFor(part);
+      const out = document.createElement('div');
+      const listStack = [];        // [{el, numId, ilvl}]
+      const counters = {};         // numId:ilvl -> nombre d'éléments déjà vus
+      const fields = [];           // pile des champs complexes
+      let pending = [];            // blocs à insérer après le paragraphe courant (zones de texte)
+
+      const closeLists = () => { listStack.length = 0; };
+
+      async function blocks(container, target) {
+        for (const n of container.children) {
+          switch (n.nodeName) {
+            case 'w:p': await para(n, target); break;
+            case 'w:tbl': closeLists(); target.append(await table(n)); break;
+            case 'w:sdt': await blocks(kid(n, 'w:sdtContent') || n, target); break;
+            case 'w:customXml': case 'w:ins': case 'w:moveTo': await blocks(n, target); break;
+            case 'mc:AlternateContent': { const c = kid(n, 'mc:Choice') || kid(n, 'mc:Fallback'); if (c) await blocks(c, target); break; }
+          }
+        }
+      }
+
+      /** Paragraphe → bloc HTML (ou élément de liste) */
+      async function para(p, target) {
+        const pPrEl = kid(p, 'w:pPr');
+        const direct = parsePPr(pPrEl, ctx);
+        const styleId = direct.pStyle || st.normalId;
+        const ch = chain(st, styleId);
+        const eff = Object.assign({}, st.defaults.pPr, ch.pPr, direct);
+        const styleR = Object.assign({}, st.defaults.rPr, ch.rPr);
+        const names = ch.names;
+
+        // Type de bloc
+        let tag = 'p', cls = '';
+        const hn = names.map(n => n.match(/^heading (\d)$/)).find(Boolean);
+        if (hn && +hn[1] <= 6) tag = 'h' + hn[1];
+        else if (names.includes('title')) { tag = 'h1'; cls = 'title'; }
+        else if (names.includes('subtitle')) cls = 'subtitle';
+        else if (names.includes('quote') || names.includes('intense quote')) tag = 'blockquote';
+
+        // Contenu en ligne (découpé aux sauts de page)
+        const segs = await inline(p, styleR, part);
+
+        if (eff.pbb) { closeLists(); target.append(pageBreak()); }
+
+        const isList = eff.numId && eff.numId !== '0' && numbering.nums[eff.numId] && tag === 'p';
+        const css = blockCss(eff, styleR, tag, cls, !!isList);
+
+        segs.forEach((html, i) => {
+          if (i > 0) { closeLists(); target.append(pageBreak()); }
+          const empty = !html.replace(/<span class="pl-anchor"[^>]*><\/span>/g, '').trim();
+          if (segs.length > 1 && empty) return; // paragraphe ne contenant que le saut de page
+          if (isList && i === 0) {
+            const li = listItem(eff);
+            li.innerHTML = html || '<br>';
+            if (css) li.setAttribute('style', css);
+          } else {
+            if (!isList) closeLists();
+            const b = document.createElement(tag);
+            if (cls) b.className = cls;
+            if (css) b.setAttribute('style', css);
+            b.innerHTML = html || '<br>';
+            target.append(b);
+          }
+        });
+        if (!isList && segs.length === 0) { closeLists(); }
+
+        if (pending.length) { closeLists(); for (const b of pending) target.append(b); pending = []; }
+
+        // Saut de section (page suivante) porté par le paragraphe
+        if (direct.sectPr) {
+          const t = val(kid(direct.sectPr, 'w:type'));
+          if (!t || t === 'nextPage' || t === 'oddPage' || t === 'evenPage') { closeLists(); target.append(pageBreak()); }
+        }
+
+        function listItem(eff) {
+          const ilvl = Math.min(eff.ilvl || 0, 8);
+          const lvl = numbering.nums[eff.numId][ilvl] || numbering.nums[eff.numId][0];
+          const ls = listStyleOf(lvl);
+          while (listStack.length > ilvl + 1) listStack.pop();
+          if (listStack.length === ilvl + 1) {
+            const top = listStack[ilvl];
+            if (top.numId !== eff.numId || top.el.tagName.toLowerCase() !== ls.tag) listStack.pop();
+          }
+          while (listStack.length < ilvl + 1) {
+            const lv = listStack.length;
+            const lvl2 = numbering.nums[eff.numId][lv] || lvl;
+            const ls2 = listStyleOf(lvl2);
+            const L = document.createElement(ls2.tag);
+            if (!['disc', 'decimal'].includes(ls2.type)) L.style.listStyleType = ls2.type;
+            if (ls2.tag === 'ol') {
+              const key = eff.numId + ':' + lv;
+              const start = (lvl2 && lvl2.start) || 1;
+              const seen = counters[key] || 0;
+              const s = seen ? start + seen : start;
+              if (s !== 1) L.setAttribute('start', s);
+            }
+            if (listStack.length === 0) target.append(L);
+            else {
+              const parent = listStack[listStack.length - 1].el;
+              let li = parent.lastElementChild;
+              if (!li) { li = document.createElement('li'); li.style.listStyleType = 'none'; parent.append(li); }
+              li.append(L);
+            }
+            listStack.push({ el: L, numId: eff.numId });
+          }
+          // remise à zéro des niveaux inférieurs
+          for (let k = ilvl + 1; k < 9; k++) delete counters[eff.numId + ':' + k];
+          const key = eff.numId + ':' + ilvl;
+          counters[key] = (counters[key] || 0) + 1;
+          const li = document.createElement('li');
+          listStack[ilvl].el.append(li);
+          return li;
+        }
+      }
+
+      /** Contenu en ligne d'un paragraphe : renvoie des segments HTML séparés par les sauts de page */
+      async function inline(p, styleR, part) {
+        const segs = [''];
+        let link = null;          // {href}
+        let buf = null;           // texte en attente {open, close, text}
+
+        const flush = () => {
+          if (!buf) return;
+          let h = buf.open + buf.text + buf.close;
+          if (buf.link) h = `<a href="${xmlEsc(buf.link)}">${h}</a>`;
+          segs[segs.length - 1] += h;
+          buf = null;
+        };
+        const pushText = (html, rp, raw = false) => {
+          const w = runWrap(rp, styleR);
+          const lk = currentLink();
+          if (buf && buf.open === w.open && buf.link === lk && !raw) { buf.text += html; return; }
+          flush();
+          buf = { open: w.open, close: w.close, text: html, link: lk };
+          if (raw) flush();
+        };
+        const pushRaw = html => { flush(); segs[segs.length - 1] += html; };
+        const currentLink = () => {
+          if (link) return link;
+          for (let k = fields.length - 1; k >= 0; k--) if (fields[k].phase === 'result' && fields[k].href) return fields[k].href;
+          return null;
+        };
+        const inInstr = () => fields.some(f => f.phase === 'instr');
+        const skipping = () => fields.some(f => f.skip && f.phase === 'result');
+
+        async function walk(node) {
+          for (const n of node.children) {
+            switch (n.nodeName) {
+              case 'w:r': await run(n); break;
+              case 'w:hyperlink': {
+                const rid = n.getAttribute('r:id');
+                const anchor = n.getAttribute('w:anchor');
+                const prev = link;
+                if (rid && rels[rid]) link = rels[rid].target;
+                else if (anchor) link = '#' + anchor;
+                await walk(n);
+                flush();
+                link = prev;
+                break;
+              }
+              case 'w:fldSimple': {
+                const instr = (n.getAttribute('w:instr') || '').trim();
+                const f = fieldSpan(instr);
+                if (f) pushRaw(f);
+                else if (/^HYPERLINK/.test(instr)) {
+                  const prev = link; link = hyperlinkFromInstr(instr); await walk(n); flush(); link = prev;
+                } else await walk(n);
+                break;
+              }
+              case 'w:ins': case 'w:moveTo': case 'w:smartTag': case 'w:customXml': case 'w:sdtContent': case 'w:dir': case 'w:bdo':
+                await walk(n); break;
+              case 'w:sdt': await walk(kid(n, 'w:sdtContent') || n); break;
+              case 'w:bookmarkStart': {
+                const nm = n.getAttribute('w:name');
+                if (nm && !nm.startsWith('_GoBack')) pushRaw(`<span class="pl-anchor" id="${xmlEsc(nm)}"></span>`);
+                break;
+              }
+              case 'm:oMath': case 'm:oMathPara': {
+                const t = Array.from(n.getElementsByTagName('m:t')).map(x => x.textContent).join('');
+                if (t) pushText(`<i>${xmlEsc(t)}</i>`, {}, true);
+                break;
+              }
+              case 'mc:AlternateContent': { const c = kid(n, 'mc:Choice') || kid(n, 'mc:Fallback'); if (c) await walk(c); break; }
+            }
+          }
+        }
+
+        async function run(r) {
+          const direct = parseRPr(kid(r, 'w:rPr'), ctx);
+          const charStyle = direct.rStyle ? chain(st, direct.rStyle).rPr : {};
+          const rp = Object.assign({}, styleR, charStyle, direct);
+          if (rp.vanish) return;
+          for (const c of r.children) {
+            const nm = c.nodeName;
+            if (nm === 'w:fldChar') {
+              const t = c.getAttribute('w:fldCharType');
+              if (t === 'begin') fields.push({ phase: 'instr', instr: '' });
+              else if (t === 'separate') {
+                const f = fields[fields.length - 1];
+                if (f) {
+                  f.phase = 'result';
+                  const instr = f.instr.trim();
+                  const fs = fieldSpan(instr);
+                  if (fs) { flush(); pushRaw(fs); f.skip = true; }
+                  else if (/^HYPERLINK/.test(instr)) { flush(); f.href = hyperlinkFromInstr(instr); }
+                }
+              } else if (t === 'end') {
+                const f = fields.pop();
+                if (f && f.phase === 'instr') { // champ sans résultat
+                  const fs = fieldSpan(f.instr.trim());
+                  if (fs) pushRaw(fs);
+                }
+                flush();
+              }
+              continue;
+            }
+            if (nm === 'w:instrText') { const f = fields[fields.length - 1]; if (f && f.phase === 'instr') f.instr += c.textContent; continue; }
+            if (inInstr() || skipping()) continue;
+            switch (nm) {
+              case 'w:t': if (c.textContent) pushText(xmlEsc(c.textContent), rp); break;
+              case 'w:tab': pushText('<span class="pl-tab">\t</span>', rp); break;
+              case 'w:noBreakHyphen': pushText('‑', rp); break;
+              case 'w:softHyphen': pushText('­', rp); break;
+              case 'w:sym': {
+                const code = parseInt(c.getAttribute('w:char') || '0', 16);
+                pushText(xmlEsc(String.fromCharCode(code >= 0xF000 ? code - 0xF000 : code)), rp); break;
+              }
+              case 'w:br': case 'w:cr': {
+                const t = c.getAttribute('w:type');
+                if (t === 'page' || t === 'column') { flush(); segs.push(''); }
+                else pushRaw('<br>');
+                break;
+              }
+              case 'w:footnoteReference': case 'w:endnoteReference': {
+                const kind = nm === 'w:footnoteReference' ? 'footnote' : 'endnote';
+                const txt = notes[kind][c.getAttribute('w:id')] || '';
+                pushRaw(`<span class="pl-fn" contenteditable="false" data-note="${xmlEsc(txt)}">*</span>`);
+                break;
+              }
+              case 'w:drawing': await drawing(c, rp); break;
+              case 'w:pict': case 'w:object': await pict(c, rp); break;
+              case 'mc:AlternateContent': {
+                const ch = kid(c, 'mc:Choice') || kid(c, 'mc:Fallback');
+                if (ch) for (const d of ch.children) {
+                  if (d.nodeName === 'w:drawing') await drawing(d, rp);
+                  else if (d.nodeName === 'w:pict') await pict(d, rp);
+                }
+                break;
+              }
+            }
+          }
+        }
+
+        async function drawing(d, rp) {
+          // Zone de texte ?
+          const txbx = d.getElementsByTagName('w:txbxContent')[0];
+          if (txbx) {
+            const box = document.createElement('div');
+            box.className = 'pl-textbox';
+            const saved = listStack.splice(0);
+            await blocks(txbx, box);
+            listStack.push(...saved);
+            pending.push(box);
+            return;
+          }
+          const blip = d.getElementsByTagName('a:blip')[0];
+          const ext = d.getElementsByTagName('wp:extent')[0];
+          const docPr = d.getElementsByTagName('wp:docPr')[0];
+          const alt = docPr ? (docPr.getAttribute('descr') || docPr.getAttribute('title') || '') : '';
+          const w = ext ? Math.round(U.emuToPx(+ext.getAttribute('cx'))) : null;
+          const h = ext ? Math.round(U.emuToPx(+ext.getAttribute('cy'))) : null;
+          if (blip) {
+            const url = await imageUrl(part, blip.getAttribute('r:embed') || blip.getAttribute('r:link'));
+            if (url) {
+              let style = w ? `width:${w}px;height:${h}px;` : '';
+              const anchor = d.getElementsByTagName('wp:anchor')[0];
+              if (anchor) {
+                const al = anchor.getElementsByTagName('wp:align')[0];
+                const hasWrap = anchor.getElementsByTagName('wp:wrapSquare')[0] || anchor.getElementsByTagName('wp:wrapTight')[0];
+                if (al && hasWrap && /right|left/.test(al.textContent)) style += `float:${al.textContent.trim()};margin:4px 8px;`;
+              }
+              pushRaw(`<img src="${url}" alt="${xmlEsc(alt)}" style="${style}">`);
+              return;
+            }
+          }
+          const gd = d.getElementsByTagName('a:graphicData')[0];
+          const uri = gd ? gd.getAttribute('uri') || '' : '';
+          if (/chart/.test(uri)) pushRaw(`<span class="pl-field" title="Graphique Office : non affiché dans Plume">[Graphique]</span>`);
+          else if (/diagram/.test(uri)) pushRaw(`<span class="pl-field" title="SmartArt : non affiché dans Plume">[SmartArt]</span>`);
+          else if (blip) pushRaw(`<span class="pl-field" title="Format d'image non pris en charge (EMF/WMF)">[Image]</span>`);
+        }
+        async function pict(pc, rp) {
+          const txbx = pc.getElementsByTagName('w:txbxContent')[0];
+          if (txbx) {
+            const box = document.createElement('div'); box.className = 'pl-textbox';
+            const saved = listStack.splice(0);
+            await blocks(txbx, box);
+            listStack.push(...saved);
+            pending.push(box); return;
+          }
+          const im = pc.getElementsByTagName('v:imagedata')[0];
+          if (im) {
+            const url = await imageUrl(part, im.getAttribute('r:id'));
+            const shape = pc.getElementsByTagName('v:shape')[0];
+            let style = '';
+            const sm = shape && (shape.getAttribute('style') || '');
+            const wm = sm && sm.match(/width:([\d.]+)pt/), hm = sm && sm.match(/height:([\d.]+)pt/);
+            if (wm && hm) style = `width:${Math.round(U.ptToPx(+wm[1]))}px;height:${Math.round(U.ptToPx(+hm[1]))}px;`;
+            if (url) pushRaw(`<img src="${url}" alt="" style="${style}">`);
+          }
+        }
+
+        await walk(p);
+        flush();
+        return segs;
+      }
+
+      /** Tableau */
+      async function table(t) {
+        const tblPr = kid(t, 'w:tblPr');
+        const tStyle = val(kid(tblPr, 'w:tblStyle'));
+        const direct = kid(tblPr, 'w:tblBorders');
+        let borders = direct ? hasBorders(direct) : undefined;
+        if (borders === undefined && tStyle) borders = chain(st, tStyle).tblBorders;
+        const T = document.createElement('table');
+        T.dataset.borders = borders ? 'all' : 'none';
+        const jc = val(kid(tblPr, 'w:jc'));
+        const cols = kids(kid(t, 'w:tblGrid'), 'w:gridCol').map(g => Math.max(8, Math.round(U.twipToPx(+g.getAttribute('w:w') || 0))));
+        if (cols.length) {
+          const cg = document.createElement('colgroup');
+          for (const w of cols) { const c = document.createElement('col'); c.style.width = w + 'px'; cg.append(c); }
+          T.append(cg);
+          T.style.width = cols.reduce((a, b) => a + b, 0) + 'px';
+        }
+        if (jc === 'center') { T.style.marginLeft = 'auto'; T.style.marginRight = 'auto'; }
+        const tbody = document.createElement('tbody');
+        T.append(tbody);
+        const grid = []; // grid[row][col] = td
+        let ri = 0;
+        const rowsOf = node => kids(node).flatMap(c => c.nodeName === 'w:tr' ? [c] : (c.nodeName === 'w:sdt' ? rowsOf(kid(c, 'w:sdtContent') || c) : []));
+        for (const tr of rowsOf(t)) {
+          const TR = document.createElement('tr');
+          const trPr = kid(tr, 'w:trPr');
+          const hgt = kid(trPr, 'w:trHeight');
+          if (hgt) TR.style.height = Math.round(U.twipToPx(+hgt.getAttribute('w:val'))) + 'px';
+          if (kid(trPr, 'w:tblHeader')) TR.dataset.header = '1';
+          grid[ri] = [];
+          let ci = +(val(kid(kid(tr, 'w:trPr'), 'w:gridBefore')) || 0);
+          const cellsOf = node => kids(node).flatMap(c => c.nodeName === 'w:tc' ? [c] : (c.nodeName === 'w:sdt' ? cellsOf(kid(c, 'w:sdtContent') || c) : []));
+          for (const tc of cellsOf(tr)) {
+            const tcPr = kid(tc, 'w:tcPr');
+            const span = +(val(kid(tcPr, 'w:gridSpan')) || 1);
+            const vm = kid(tcPr, 'w:vMerge');
+            const vmv = vm ? (val(vm) || 'continue') : null;
+            if (vmv === 'continue') {
+              const above = grid[ri - 1] && grid[ri - 1][ci];
+              if (above) {
+                above.rowSpan = (above.rowSpan || 1) + 1;
+                for (let k = 0; k < span; k++) grid[ri][ci + k] = above;
+                ci += span; continue;
+              }
+            }
+            const TD = document.createElement('td');
+            if (span > 1) TD.colSpan = span;
+            const shd = kid(tcPr, 'w:shd');
+            const fill = shd && shd.getAttribute('w:fill');
+            if (fill && fill !== 'auto') TD.style.backgroundColor = '#' + fill;
+            const va = val(kid(tcPr, 'w:vAlign'));
+            if (va === 'center') TD.style.verticalAlign = 'middle'; else if (va === 'bottom') TD.style.verticalAlign = 'bottom';
+            const saved = listStack.splice(0);
+            await blocks(tc, TD);
+            listStack.length = 0; listStack.push(...saved);
+            if (!TD.firstChild) TD.innerHTML = '<p><br></p>';
+            TR.append(TD);
+            for (let k = 0; k < span; k++) grid[ri][ci + k] = TD;
+            ci += span;
+          }
+          tbody.append(TR);
+          ri++;
+        }
+        return T;
+      }
+
+      await blocks(rootEl, out);
+      return out.innerHTML;
+    }
+
+    /* ---------- Styles CSS ---------- */
+    function lineCss(p) {
+      if (p.line == null) return null;
+      if (p.lineRule === 'auto' || !p.lineRule) return Math.round(p.line / 240 * 100) / 100;
+      return (Math.round(p.line / 20 * 10) / 10) + 'pt';
+    }
+    function blockCss(eff, styleR, tag, cls, isList) {
+      const s = [];
+      const full = tag !== 'p' || cls; // titres : on fixe tout pour reproduire l'aspect d'origine
+      const jc = { both: 'justify', distribute: 'justify', center: 'center', right: 'right', end: 'right' }[eff.jc];
+      if (jc) s.push('text-align:' + jc);
+      if (!isList) {
+        if (eff.indL) s.push(`margin-left:${eff.indL}pt`);
+        if (eff.indR) s.push(`margin-right:${eff.indR}pt`);
+      }
+      if (eff.first) s.push(`text-indent:${eff.first}pt`);
+      else if (eff.hang && !isList) s.push(`text-indent:-${eff.hang}pt`);
+      const before = eff.before ?? 0, after = eff.after ?? 0;
+      if (full || before !== (baseP.before ?? 0)) s.push(`margin-top:${before}pt`);
+      if (full || after !== (baseP.after ?? 0)) s.push(`margin-bottom:${after}pt`);
+      const lh = lineCss(eff);
+      if (lh != null && (full || lh !== settings.lineHeight)) s.push(`line-height:${lh}`);
+      if (eff.shd) s.push(`background-color:${eff.shd}`);
+      for (const side of ['top', 'bottom', 'left', 'right']) {
+        const b = eff['bdr_' + side];
+        if (b) s.push(`border-${side}:${b.w}pt solid ${b.color}`, `padding-${side}:${b.space}pt`);
+      }
+      // propriétés de caractère du style de paragraphe
+      const r = styleR;
+      const diff = (k, def) => full || (r[k] ?? def) !== (baseR[k] ?? def);
+      if (r.font && diff('font')) s.push(`font-family:${cssFont(r.font)}`);
+      if (r.sz && diff('sz')) s.push(`font-size:${r.sz}pt`);
+      if (diff('b', false)) s.push(`font-weight:${r.b ? 'bold' : 'normal'}`);
+      if (diff('i', false)) s.push(`font-style:${r.i ? 'italic' : 'normal'}`);
+      if (r.color && diff('color')) s.push(`color:${r.color === 'auto' ? '#000000' : r.color}`);
+      else if (full && !r.color) s.push('color:#000000');
+      if (r.caps && diff('caps', false)) s.push('text-transform:uppercase');
+      if (r.smallCaps && diff('smallCaps', false)) s.push('font-variant:small-caps');
+      if (r.spacing && diff('spacing')) s.push(`letter-spacing:${r.spacing}pt`);
+      if ((r.u || r.strike) && (diff('u', false) || diff('strike', false))) s.push(`text-decoration:${[r.u && 'underline', r.strike && 'line-through'].filter(Boolean).join(' ')}`);
+      return s.join(';');
+    }
+    /** Enveloppe HTML d'un morceau de texte selon ses différences avec le style du paragraphe */
+    function runWrap(rp, base) {
+      const s = [];
+      if (rp.font && rp.font !== base.font) s.push(`font-family:${cssFont(rp.font)}`);
+      if (rp.sz && rp.sz !== base.sz) s.push(`font-size:${rp.sz}pt`);
+      if (!!rp.b !== !!base.b) s.push(`font-weight:${rp.b ? 'bold' : 'normal'}`);
+      if (!!rp.i !== !!base.i) s.push(`font-style:${rp.i ? 'italic' : 'normal'}`);
+      const deco = [];
+      if (rp.u && !base.u) deco.push('underline');
+      if (rp.strike && !base.strike) deco.push('line-through');
+      if (deco.length) s.push(`text-decoration:${deco.join(' ')}`);
+      if (rp.color && rp.color !== base.color) s.push(`color:${rp.color === 'auto' ? '#000000' : rp.color}`);
+      const bg = rp.hl || rp.shd;
+      if (bg && bg !== (base.hl || base.shd)) s.push(`background-color:${bg}`);
+      if (rp.caps && !base.caps) s.push('text-transform:uppercase');
+      if (rp.smallCaps && !base.smallCaps) s.push('font-variant:small-caps');
+      if (rp.spacing && rp.spacing !== base.spacing) s.push(`letter-spacing:${rp.spacing}pt`);
+      let open = s.length ? `<span style="${s.join(';')}">` : '';
+      let close = s.length ? '</span>' : '';
+      if (rp.vert && rp.vert !== base.vert) { open += `<${rp.vert}>`; close = `</${rp.vert}>` + close; }
+      return { open, close };
+    }
+    function fieldSpan(instr) {
+      const m = instr.match(/^(PAGE|NUMPAGES|SECTIONPAGES)\b/i);
+      if (!m) return null;
+      const f = m[1].toUpperCase() === 'PAGE' ? 'page' : 'numpages';
+      return `<span class="pl-field" contenteditable="false" data-field="${f}">${f === 'page' ? '1' : '1'}</span>`;
+    }
+    function hyperlinkFromInstr(instr) {
+      const m = instr.match(/HYPERLINK\s+(?:\\l\s+)?"([^"]+)"/);
+      if (!m) return null;
+      return /\\l/.test(instr) ? '#' + m[1] : m[1];
+    }
+    const pageBreak = () => { const h = document.createElement('hr'); h.className = 'pl-pagebreak'; h.contentEditable = 'false'; return h; };
+
+    /* ---------- Corps, section, en-têtes ---------- */
+    const docEl = parseXml(docXml).documentElement;
+    const body = kid(docEl, 'w:body');
+    const html = await convertStory(mainPart, body);
+
+    const sect = kid(body, 'w:sectPr');
+    const page = { w: 794, h: 1123, mt: 94.5, mr: 94.5, mb: 94.5, ml: 94.5, mh: 47, mf: 47 };
+    let headerHtml = '', footerHtml = '';
+    if (sect) {
+      const sz = kid(sect, 'w:pgSz');
+      if (sz) { page.w = U.twipToPx(+sz.getAttribute('w:w')); page.h = U.twipToPx(+sz.getAttribute('w:h')); }
+      const mg = kid(sect, 'w:pgMar');
+      if (mg) {
+        const g = a => Math.abs(U.twipToPx(+(mg.getAttribute(a) || 0)));
+        Object.assign(page, { mt: g('w:top'), mr: g('w:right'), mb: g('w:bottom'), ml: g('w:left'), mh: g('w:header'), mf: g('w:footer') });
+      }
+      const pick = tag => {
+        const refs = kids(sect, tag);
+        return refs.find(r => r.getAttribute('w:type') === 'default') || refs[0];
+      };
+      for (const [tag, set] of [['w:headerReference', v => headerHtml = v], ['w:footerReference', v => footerHtml = v]]) {
+        const ref = pick(tag);
+        if (!ref) continue;
+        const rel = mainRels[ref.getAttribute('r:id')];
+        if (!rel) continue;
+        const p = resolveTarget(mainPart, rel.target);
+        const x = await read(p);
+        if (!x) continue;
+        set(await convertStory(p, parseXml(x).documentElement));
+      }
+    }
+    const isEmptyHF = h => !h || !h.replace(/<br>|<p[^>]*>|<\/p>|\s|&nbsp;/g, '');
+    if (isEmptyHF(headerHtml)) headerHtml = '';
+    if (isEmptyHF(footerHtml)) footerHtml = '';
+
+    // Propriétés
+    let title = '', author = '';
+    const core = await read('docProps/core.xml');
+    if (core) {
+      const c = parseXml(core);
+      title = (c.getElementsByTagName('dc:title')[0] || {}).textContent || '';
+      author = (c.getElementsByTagName('dc:creator')[0] || {}).textContent || '';
+    }
+
+    return {
+      html: html || '<p><br></p>', header: headerHtml, footer: footerHtml,
+      page, settings: { ...settings, fontCss: cssFont(settings.font) }, props: { title, author }
+    };
+  }
+
+  return { importDocx, cssFont };
+})();

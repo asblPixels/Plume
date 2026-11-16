@@ -1,0 +1,27 @@
+{
+  "name": "Plume — traitement de texte",
+  "short_name": "Plume",
+  "description": "Traitement de texte libre de Pixel's ASBL, compatible .docx, hors ligne.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#0D1013",
+  "theme_color": "#0D1013",
+  "lang": "fr-BE",
+  "categories": ["productivity", "business"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "file_handlers": [
+    { "action": "./", "accept": { "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"] }, "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }], "launch_type": "single-client" }
+  ],
+  "shortcuts": [
+    { "name": "Nouveau document", "url": "./?new=1", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
