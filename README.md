@@ -27,7 +27,7 @@
 |---|---|---|
 | 🌐 **Navigateur** (tous systèmes) | En ligne | **https://asblpixels.github.io/Plume/** : rien à installer |
 | 🪟 **Windows 10 / 11** | Installateur | `Plume-Setup-1.2.0-x64.exe` (page *Releases*) |
-| 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.2.0-x64.exe` (page *Releases*) |
+| 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.2.0-x64.zip` (page *Releases*) : décompresser, lancer `Plume.exe` |
 | 🐧 **Linux** | AppImage, .deb, .rpm | `Plume-1.2.0.AppImage`, `plume_1.2.0_amd64.deb`, `plume-1.2.0.x86_64.rpm` |
 | 🤖 **Android** | Application installée | Ouvrir l'adresse en ligne dans Chrome → menu ⋮ → **Installer l'application** |
 | 🍎 **iPhone / iPad** | Application d'écran d'accueil | Ouvrir l'adresse en ligne dans Safari → Partager → **Sur l'écran d'accueil** |
@@ -311,8 +311,8 @@ Pour les postes sans connexion ou les utilisateurs qui préfèrent un programme 
 
 | Fichier | Usage |
 |---|---|
-| `Plume-Setup-1.1.0-x64.exe` | Installateur Windows 10/11 : raccourcis Bureau et menu Démarrer, association des fichiers `.docx`, désinstallation propre |
-| `Plume-Portable-1.1.0-x64.exe` | Version portable : aucun droit administrateur, lancement depuis une clé USB |
+| `Plume-Setup-1.2.0-x64.exe` | Installateur Windows 10/11 **sans droits administrateur** : raccourcis Bureau et menu Démarrer, Plume proposé dans « Ouvrir avec » pour `.docx`, `.doc`, `.odt`, `.rtf`, `.pdf`…, désinstallation depuis *Paramètres → Applications* |
+| `Plume-Portable-1.2.0-x64.zip` | Version portable : décompresser puis lancer `Plume.exe`, aucun droit administrateur, fonctionne depuis une clé USB |
 
 Dans l'application de bureau :
 - un double-clic sur un `.docx` dans l'Explorateur l'ouvre dans Plume (une seule fenêtre, même pour plusieurs fichiers) ;
@@ -325,10 +325,13 @@ Dans l'application de bureau :
 ### Compiler l'application de bureau (Fedora)
 
 ```bash
-sudo dnf install nodejs wine        # wine : nécessaire pour l'installateur Windows
+sudo dnf install nodejs mingw32-nsis   # NSIS : installateur Windows
 cd desktop
 npm install
-npm run dist:win      # → desktop/dist/Plume-Setup-*.exe et Plume-Portable-*.exe
+npm run dist:win      # sous Windows : installateur et version portable
+# sous Linux, sans Wine : application Windows + installateur NSIS natif
+npx electron-builder --win dir --x64
+makensis -DVERSION=1.2.0 -DSRC=$PWD/dist/win-unpacked -DOUT=$PWD/dist/Plume-Setup-1.2.0-x64.exe -DICON=$PWD/build/icon.ico installer/plume.nsi
 npm run dist:linux    # → AppImage et paquet .rpm pour Fedora
 npm start             # lancer l'application en mode développement
 ```

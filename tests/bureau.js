@@ -1,0 +1,27 @@
+const { _electron: electron } = require('playwright-core');
+const fs = require('fs');
+(async () => {
+  const app = await electron.launch({ executablePath: '/home/claude/plume/desktop/dist/linux-unpacked/plume', args: ['--no-sandbox'], env: { ...process.env, HOME: '/tmp/plumehome' } });
+  const win = await app.firstWindow();
+  const errs = [];
+  win.on('pageerror', e => errs.push(String(e)));
+  win.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+  await win.waitForTimeout(2500);
+  console.log('URL', win.url(), 'titre', await win.title());
+  console.log('desktop', await win.evaluate(() => !!window.plumeDesktop), 'convertisseur', await win.evaluate(() => Formats.converterAvailable()));
+  const doc = fs.readFileSync('/home/claude/test/fmt/complexe.doc').toString('base64');
+  await win.evaluate(async d => { const b = Uint8Array.from(atob(d), c => c.charCodeAt(0)); await App.openFile(new File([b], 'complexe.doc')); }, doc);
+  await win.waitForTimeout(1500);
+  console.log('DOC via LibreOffice', JSON.stringify(await win.evaluate(() => ({ fmt: App.format, h: Ed.editor.querySelectorAll('h1,h2').length, lists: Ed.editor.querySelectorAll('ul,ol').length, tables: Ed.editor.querySelectorAll('table').length, imgs: Ed.editor.querySelectorAll('img').length }))));
+  const pdfLen = await win.evaluate(async () => { App.preparePrint(); const b = await Formats.build('pdf', App.exportCtx()); App.endPrint(); const a = new Uint8Array(await b.arrayBuffer()); return [b.size, String.fromCharCode(...a.slice(0, 5))]; });
+  console.log('PDF', pdfLen);
+  const docLen = await win.evaluate(async () => { const b = await Formats.build('doc', App.exportCtx()); return b.size; });
+  console.log('export DOC', docLen);
+  const pdfIn = fs.readFileSync('/home/claude/test/fmt/complexe.pdf').toString('base64');
+  await win.evaluate(async d => { const b = Uint8Array.from(atob(d), c => c.charCodeAt(0)); await App.openFile(new File([b], 'complexe.pdf')); }, pdfIn);
+  await win.waitForTimeout(1500);
+  console.log('PDF import (protocole plume://)', await win.evaluate(() => Ed.stats().words));
+  await win.screenshot({ path: '/home/claude/test/electron.png' });
+  console.log('ERREURS', errs);
+  await app.close();
+})().catch(e => { console.error('ECHEC', e); process.exit(1); });

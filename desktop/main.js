@@ -105,7 +105,7 @@ ipcMain.handle('plume:convert', async (e, { data, from, to }) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plume-'));
   const input = path.join(dir, 'document.' + String(from).replace(/[^a-z0-9]/gi, ''));
   fs.writeFileSync(input, Buffer.from(data));
-  const filter = { docx: 'docx:"MS Word 2007 XML"', doc: 'doc:"MS Word 97"', odt: 'odt', pdf: 'pdf' }[to] || to;
+  const filter = { docx: 'docx:MS Word 2007 XML', doc: 'doc:MS Word 97', odt: 'odt', pdf: 'pdf' }[to] || to;   // pas de guillemets : arguments passés sans shell
   const profile = pathToFileURL(path.join(os.tmpdir(), 'plume-lo-profile')).toString();
   try {
     await new Promise((resolve, reject) => execFile(soffice, [`-env:UserInstallation=${profile}`, '--headless', '--norestore', '--nologo', '--convert-to', filter, '--outdir', dir, input], { timeout: 180000, windowsHide: true }, err => err ? reject(err) : resolve()));
