@@ -3,6 +3,7 @@
    ===================================================================== */
 'use strict';
 
+const SCHOOL_FONTS = [['Playwrite FR Moderne', 'cursive scolaire'], ['Playwrite FR Trad', 'cursive traditionnelle'], ['Andika', 'lecture débutante'], ['OpenDyslexic', 'dyslexie'], ['Comic Neue', 'manuscrite simple'], ['Atkinson Hyperlegible', 'malvoyance'], ['Lexend', 'lisibilité']];
 const FONTS = ['Calibri', 'Aptos', 'Arial', 'Cambria', 'Georgia', 'Times New Roman', 'Verdana', 'Segoe UI', 'Trebuchet MS', 'Tahoma', 'Garamond', 'Courier New', 'Consolas', 'Comic Sans MS', 'Liberation Sans', 'Liberation Serif', 'DejaVu Sans', 'Noto Sans', 'Open Sans', 'Roboto'];
 const SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 const PALETTE = ['#000000', '#262626', '#595959', '#7F7F7F', '#A6A6A6', '#D9D9D9', '#FFFFFF', '#0B7A64', '#26EFC5', '#C7F9EC',
@@ -97,6 +98,8 @@ function registerCommands() {
   cmd('protect', 'Restreindre la modification', 'lock', () => Protect.toggle());
   cmd('autocorrect', 'Correction automatique', 'spell-check', () => AutoCorrect.toggle());
   cmd('dictate', 'Dicter', 'mic', () => Dictation.toggle());
+  cmd('addFont', 'Ajouter une police', 'type', () => CustomFonts.add());
+  cmd('myFonts', 'Mes polices', 'type', () => CustomFonts.manage());
   cmd('caption', 'Insérer une légende', 'text-quote', () => Captions.insert());
   cmd('watermark', 'Filigrane', 'droplet', () => Watermark.set());
   cmd('mergeRecipients', 'Destinataires', 'users', () => Merge.pickRecipients());
@@ -130,6 +133,7 @@ function registerCommands() {
   cmd('distribute', 'Uniformiser les colonnes', 'columns-2', () => E.tableOp('distribute'));
   cmd('shade', 'Trame de fond', 'paintbrush', c => E.cellShade(c));
   // Aide
+  cmd('guide', 'Bien démarrer', 'book-open', () => Guide.open());
   cmd('shortcuts', 'Raccourcis clavier', 'keyboard', () => Dialogs.shortcuts());
   cmd('about', 'À propos de Plume', 'info', () => App.openBackstage('about'));
   // Styles
@@ -167,6 +171,7 @@ const Ribbon = {
       ]),
       T('creation', 'Création', [
         G('Mise en forme du document', [{ bigMenu: 'docFont', menu: 'docFonts' }, { bigMenu: 'docSpacing', menu: 'docSpacings' }, { bigMenu: 'docHeading', menu: 'headingColors' }]),
+        G('Polices', [{ big: 'addFont' }, { col: ['myFonts'] }]),
         G('Arrière-plan', [{ big: 'watermark' }, { big: 'pageDark' }])
       ]),
       T('miseenpage', 'Mise en page', [
@@ -198,7 +203,7 @@ const Ribbon = {
         G('Zoom', [{ big: 'zoom100' }, { col: ['onePage', 'pageWidth'] }]),
         G('Apparence', [{ big: 'dark' }, { col: ['pageDark'] }])
       ]),
-      T('aide', 'Aide', [G('Aide', [{ big: 'shortcuts' }, { big: 'about' }])]),
+      T('aide', 'Aide', [G('Aide', [{ big: 'guide' }, { big: 'shortcuts' }, { big: 'about' }])]),
       T('tableau', 'Tableau', [
         G('Lignes et colonnes', [{ col: ['rowAbove', 'rowBelow'] }, { col: ['colLeft', 'colRight'] }, { col: ['delRow', 'delCol', 'delTable'] }]),
         G('Fusionner', [{ col: ['merge', 'split', 'distribute'] }]),
@@ -240,7 +245,7 @@ const Ribbon = {
   btn(id, big) {
     const c = CMD[id];
     const b = el('button', { class: 'rbtn' + (big ? ' big' : ''), 'data-cmd': id, title: c.label + (c.kbd ? ` (${c.kbd})` : ''), onclick: () => c.run() }, [icon(c.icon), big ? el('span', {}, [c.label]) : null]);
-    if (!big && ['cut', 'copy', 'painter', 'find', 'replace', 'selectAll', 'cover', 'blankPage', 'pageBreak', 'header', 'footer', 'pageNum', 'textbox', 'hr', 'date', 'bookmark', 'wordCount', 'fullscreen', 'ruler', 'nav', 'onePage', 'pageWidth', 'rowAbove', 'rowBelow', 'colLeft', 'colRight', 'delRow', 'delCol', 'delTable', 'merge', 'split', 'distribute', 'tHeader', 'pageDark', 'showComments', 'delComments', 'rejectAll', 'finalView', 'autocorrect', 'mergePrev', 'mergeNext'].includes(id)) {
+    if (!big && ['cut', 'copy', 'painter', 'find', 'replace', 'selectAll', 'cover', 'blankPage', 'pageBreak', 'header', 'footer', 'pageNum', 'textbox', 'hr', 'date', 'bookmark', 'wordCount', 'fullscreen', 'ruler', 'nav', 'onePage', 'pageWidth', 'rowAbove', 'rowBelow', 'colLeft', 'colRight', 'delRow', 'delCol', 'delTable', 'merge', 'split', 'distribute', 'tHeader', 'pageDark', 'showComments', 'delComments', 'rejectAll', 'finalView', 'autocorrect', 'mergePrev', 'mergeNext', 'myFonts'].includes(id)) {
       b.append(el('span', {}, [c.label.replace(' avec la cellule de droite', '')]));
     }
     return b;
@@ -396,10 +401,18 @@ const Menus = {
       inp.addEventListener('change', () => { this.close(); fn(inp.value); });
     };
     switch (name) {
-      case 'fonts':
+      case 'fonts': {
+        const font = (f, note) => item(note ? `${f}  ·  ${note}` : f, () => Ed.fontName(DocxImport.cssFont(f)), { style: `font-family:${DocxImport.cssFont(f)};font-size:15px` });
+        const mine = CustomFonts.list();
+        if (mine.length) { m.append(el('div', { class: 'mh' }, ['Mes polices'])); mine.forEach(f => m.append(font(f))); }
+        m.append(el('div', { class: 'mh' }, ['Polices scolaires et accessibilité']));
+        SCHOOL_FONTS.forEach(([f, n]) => m.append(font(f, n)));
         m.append(el('div', { class: 'mh' }, ['Polices']));
-        FONTS.forEach(f => m.append(item(f, () => Ed.fontName(DocxImport.cssFont(f)), { style: `font-family:${DocxImport.cssFont(f)};font-size:14px` })));
+        FONTS.forEach(f => m.append(font(f)));
+        m.append(el('hr'), item('Ajouter une police (.ttf, .otf, .woff)…', () => CustomFonts.add(), { icon: 'plus' }));
+        if (mine.length) m.append(item('Gérer mes polices…', () => CustomFonts.manage(), { icon: 'type' }));
         break;
+      }
       case 'sizes': SIZES.forEach(s => m.append(item(String(s).replace('.', ','), () => Ed.fontSize(s)))); break;
       case 'case':
         [['Majuscule en début de phrase.', 'sentence'], ['minuscules', 'lower'], ['MAJUSCULES', 'upper'], ['Mettre En Majuscules Chaque Mot', 'title'], ['iNVERSER lA cASSE', 'toggle']].forEach(([l, k]) => m.append(item(l, () => Ed.changeCase(k))));
@@ -448,7 +461,7 @@ const Menus = {
         if (!Merge.data) m.append(el('div', { class: 'mh' }, ['Choisissez d’abord les destinataires']), item('Sélectionner un fichier CSV…', () => Merge.pickRecipients(), { icon: 'users' }));
         else Merge.data.cols.forEach(c => m.append(item('«' + c + '»', () => Merge.insertField(c))));
         break;
-      case 'docFonts': ['Calibri', 'Aptos', 'Arial', 'Cambria', 'Georgia', 'Times New Roman', 'Verdana', 'Segoe UI', 'Garamond'].forEach(f => m.append(item(f, () => CMD.docFont.run(f), { style: `font-family:${DocxImport.cssFont(f)};font-size:14px` }))); break;
+      case 'docFonts': [...CustomFonts.list(), ...SCHOOL_FONTS.map(x => x[0]), 'Calibri', 'Aptos', 'Arial', 'Cambria', 'Georgia', 'Times New Roman', 'Verdana', 'Segoe UI', 'Garamond'].forEach(f => m.append(item(f, () => CMD.docFont.run(f), { style: `font-family:${DocxImport.cssFont(f)};font-size:14px` }))); break;
       case 'docSpacings':
         [['Compact', { lineHeight: 1, after: 4 }], ['Normal (par défaut)', { lineHeight: 1.15, after: 8 }], ['Aéré', { lineHeight: 1.3, after: 10 }], ['Ouvert', { lineHeight: 1.5, after: 12 }], ['Double', { lineHeight: 2, after: 8 }]].forEach(([l, v]) => m.append(item(l, () => CMD.docSpacing.run(v))));
         break;

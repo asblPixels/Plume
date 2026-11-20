@@ -7,13 +7,13 @@
 
 **Le traitement de texte de Pixel's ASBL : libre d'usage, hors ligne et compatible Word (.docx)**
 
-![Version](https://img.shields.io/badge/version-1.2.0-26EFC5?style=flat-square&labelColor=0D1013)
+![Version](https://img.shields.io/badge/version-1.3.0-26EFC5?style=flat-square&labelColor=0D1013)
 ![Plateformes](https://img.shields.io/badge/plateformes-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-26EFC5?style=flat-square&labelColor=0D1013)
 ![Format](https://img.shields.io/badge/format-.docx%20(OOXML)-26EFC5?style=flat-square&labelColor=0D1013)
 ![Hors ligne](https://img.shields.io/badge/hors%20ligne-oui-26EFC5?style=flat-square&labelColor=0D1013)
 ![Dépendances](https://img.shields.io/badge/d%C3%A9pendances-2%20(JSZip%2C%20PDF.js)-26EFC5?style=flat-square&labelColor=0D1013)
 
-### [▶ Ouvrir Plume en ligne](https://asblpixels.github.io/Plume/)
+### [▶ Ouvrir Plume : **plume.asblpixels.be**](https://plume.asblpixels.be)
 
 <img src="docs/captures/plume-accueil.png" alt="Plume — fenêtre principale" width="900">
 
@@ -25,10 +25,10 @@
 
 | Plateforme | Version | Comment l'obtenir |
 |---|---|---|
-| 🌐 **Navigateur** (tous systèmes) | En ligne | **https://asblpixels.github.io/Plume/** : rien à installer |
-| 🪟 **Windows 10 / 11** | Installateur | `Plume-Setup-1.2.0-x64.exe` (page *Releases*) |
-| 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.2.0-x64.zip` (page *Releases*) : décompresser, lancer `Plume.exe` |
-| 🐧 **Linux** | AppImage, .deb, .rpm | `Plume-1.2.0.AppImage`, `plume_1.2.0_amd64.deb`, `plume-1.2.0.x86_64.rpm` |
+| 🌐 **Navigateur** (tous systèmes) | En ligne | **https://plume.asblpixels.be** : rien à installer |
+| 🪟 **Windows 10 / 11** | Installateur | `Plume-Setup-1.3.0-x64.exe` (page *Releases*) |
+| 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.3.0-x64.zip` (page *Releases*) : décompresser, lancer `Plume.exe` |
+| 🐧 **Linux** | AppImage, .deb, .rpm | `Plume-1.3.0.AppImage`, `plume_1.3.0_amd64.deb`, `plume-1.3.0.x86_64.rpm` |
 | 🤖 **Android** | Application installée | Ouvrir l'adresse en ligne dans Chrome → menu ⋮ → **Installer l'application** |
 | 🍎 **iPhone / iPad** | Application d'écran d'accueil | Ouvrir l'adresse en ligne dans Safari → Partager → **Sur l'écran d'accueil** |
 
@@ -134,6 +134,23 @@ Il apparaît dès que le curseur entre dans un tableau : insérer une ligne au-d
 
 ### Publipostage
 Lettres et documents personnalisés à partir d'un fichier **CSV** (export de tableur) : choix des destinataires, insertion de champs « Nom », « Adresse »…, aperçu destinataire par destinataire, puis fusion en un document unique (un exemplaire par destinataire, séparés par des sauts de page), prêt à imprimer ou à exporter.
+
+### Polices scolaires et cursives
+Plume intègre des polices libres pensées pour l'école et l'accessibilité :
+
+| Police | Usage |
+|---|---|
+| **Playwrite FR Moderne** | Cursive scolaire française (écriture attachée) |
+| **Playwrite FR Trad** | Cursive française traditionnelle |
+| **Andika** | Apprentissage de la lecture (lettres sans ambiguïté) |
+| **OpenDyslexic** | Lecteurs dyslexiques |
+| **Comic Neue** | Écriture manuscrite simple |
+| **Atkinson Hyperlegible** | Personnes malvoyantes |
+| **Lexend** | Lisibilité, fatigue visuelle |
+
+**Ajouter une police** (par exemple **Marelle**, ou toute police d'école) : liste des polices → **« Ajouter une police… »**, ou onglet **Création → Ajouter une police**. Tout fichier `.ttf`, `.otf`, `.woff` ou `.woff2` est accepté. La police reste disponible à chaque ouverture de Plume sur cet appareil. **Création → Mes polices** permet de les retirer.
+
+> Vérifiez la licence d'une police avant de la diffuser. Un document envoyé au **format PDF** contient toujours la police ; au format Word, l'ordinateur du destinataire doit avoir la police installée.
 
 ### Outils d'écriture
 - **Suivi des modifications en direct** (`Ctrl+Maj+E`) : chaque ajout et chaque suppression est marqué avec l'auteur et la date, puis exporté comme vraies révisions Word.
@@ -259,7 +276,7 @@ Aucun logiciel tiers n'atteint 100 % de compatibilité avec Word. Voici ce qui r
 
 ### En ligne, sans installation
 
-Plume est disponible à l'adresse **https://asblpixels.github.io/Plume/**. Aucun compte n'est nécessaire et les documents restent sur votre appareil. Depuis cette adresse, Plume peut aussi être installé comme une application (voir plus bas).
+Plume est disponible à l'adresse **https://plume.asblpixels.be**. Aucun compte n'est nécessaire et les documents restent sur votre appareil. Depuis cette adresse, Plume peut aussi être installé comme une application (voir plus bas).
 
 ### En local
 
@@ -311,8 +328,8 @@ Pour les postes sans connexion ou les utilisateurs qui préfèrent un programme 
 
 | Fichier | Usage |
 |---|---|
-| `Plume-Setup-1.2.0-x64.exe` | Installateur Windows 10/11 **sans droits administrateur** : raccourcis Bureau et menu Démarrer, Plume proposé dans « Ouvrir avec » pour `.docx`, `.doc`, `.odt`, `.rtf`, `.pdf`…, désinstallation depuis *Paramètres → Applications* |
-| `Plume-Portable-1.2.0-x64.zip` | Version portable : décompresser puis lancer `Plume.exe`, aucun droit administrateur, fonctionne depuis une clé USB |
+| `Plume-Setup-1.3.0-x64.exe` | Installateur Windows 10/11 **sans droits administrateur** : raccourcis Bureau et menu Démarrer, Plume proposé dans « Ouvrir avec » pour `.docx`, `.doc`, `.odt`, `.rtf`, `.pdf`…, désinstallation depuis *Paramètres → Applications* |
+| `Plume-Portable-1.3.0-x64.zip` | Version portable : décompresser puis lancer `Plume.exe`, aucun droit administrateur, fonctionne depuis une clé USB |
 
 Dans l'application de bureau :
 - un double-clic sur un `.docx` dans l'Explorateur l'ouvre dans Plume (une seule fenêtre, même pour plusieurs fichiers) ;
@@ -331,7 +348,7 @@ npm install
 npm run dist:win      # sous Windows : installateur et version portable
 # sous Linux, sans Wine : application Windows + installateur NSIS natif
 npx electron-builder --win dir --x64
-makensis -DVERSION=1.2.0 -DSRC=$PWD/dist/win-unpacked -DOUT=$PWD/dist/Plume-Setup-1.2.0-x64.exe -DICON=$PWD/build/icon.ico installer/plume.nsi
+makensis -DVERSION=1.3.0 -DSRC=$PWD/dist/win-unpacked -DOUT=$PWD/dist/Plume-Setup-1.3.0-x64.exe -DICON=$PWD/build/icon.ico installer/plume.nsi
 npm run dist:linux    # → AppImage et paquet .rpm pour Fedora
 npm start             # lancer l'application en mode développement
 ```
@@ -394,7 +411,7 @@ AddType application/manifest+json .webmanifest
 
 | Service | Remarque |
 |---|---|
-| GitHub Pages | **Version officielle** : https://asblpixels.github.io/Plume/ (publiée depuis la branche `main`) |
+| GitHub Pages | **Version officielle** : https://plume.asblpixels.be (publiée depuis la branche `main`) |
 | Netlify, Cloudflare Pages | Glisser-déposer du dossier, HTTPS automatique |
 | Serveur de l'ASBL | Configuration Nginx ou Apache ci-dessus |
 
@@ -573,6 +590,13 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 
 ## Historique des versions
 
+### 1.3.0 — 20 novembre 2026
+- **Polices scolaires intégrées** : cursives françaises (Playwrite FR Moderne et Trad), Andika, OpenDyslexic, Comic Neue, Atkinson Hyperlegible, Lexend
+- **Ajout de polices personnelles** (Marelle, polices d'école…) conservées sur l'appareil
+- **Guide « Bien démarrer »** intégré (onglet Aide), proposé au premier lancement
+- Adresse simple : **plume.asblpixels.be**
+- Correctif : lecture des réglages enregistrés dans le navigateur
+
 ### 1.2.0 — 20 novembre 2026
 - **Ouverture de tous les formats courants** : OpenDocument (.odt, .ott, .fodt), RTF, PDF, Word 97-2003 (.doc), Markdown complet, CSV ; détection du format réel par le contenu
 - **Export** : OpenDocument (.odt), RTF, Markdown, PDF réel (bureau), Word 97-2003 (bureau + LibreOffice)
@@ -609,6 +633,7 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 |---|---|---|
 | [JSZip](https://stuk.github.io/jszip/) | Stuart Knightley et contributeurs | MIT |
 | [PDF.js](https://mozilla.github.io/pdf.js/) (import des PDF) | Mozilla et contributeurs | Apache 2.0 |
+| Polices Playwrite FR Moderne / Trad, Andika, OpenDyslexic, Comic Neue, Atkinson Hyperlegible, Lexend (via [Fontsource](https://fontsource.org)) | Leurs auteurs respectifs (TypeTogether, SIL International, Abbie Gonzalez, Craig Rozynski, Braille Institute, Bonnie Shaver-Troup…) | SIL OFL 1.1 — textes dans `vendor/fonts/licences/` |
 | Tracés d'icônes [Lucide](https://lucide.dev) | Lucide Contributors | ISC |
 | Police du logotype : [Outfit](https://github.com/Outfitio/Outfit-Fonts) (SemiBold, convertie en tracés) | The Outfit Project Authors | SIL OFL 1.1 |
 

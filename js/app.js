@@ -4,7 +4,7 @@
 'use strict';
 
 const App = {
-  VERSION: '1.2.0',
+  VERSION: '1.3.0',
   docId: null, fileHandle: null, dirty: false,
 
   async init() {
@@ -13,6 +13,7 @@ const App = {
     Ribbon.build();
     Mini.init();
     Track.init();
+    CustomFonts.init();
     AutoCorrect.init();
     this.initTheme();
     this.initStatus();
@@ -50,6 +51,7 @@ const App = {
     if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
     window.addEventListener('beforeunload', e => { if (this.dirty && !this.savedLocally) { e.preventDefault(); e.returnValue = ''; } });
     Ed.editor.focus();
+    if (!localStorage.getItem('plume-guide-vu') && !navigator.webdriver) { localStorage.setItem('plume-guide-vu', '1'); setTimeout(() => Guide.open(), 600); }
     // petits écrans : la page s'adapte à la largeur
     if ($('#canvas').clientWidth < Ed.page.w + 40) this.fitWidth();
   },

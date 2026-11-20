@@ -162,7 +162,7 @@ const Store = {
       const t = db.transaction(store, mode);
       const s = t.objectStore(store);
       const out = fn(s);
-      t.oncomplete = () => res(out && out.result !== undefined ? out.result : out);
+      t.oncomplete = () => res(out instanceof IDBRequest ? out.result : out);   // valeur absente → undefined
       t.onerror = () => rej(t.error);
     });
   },

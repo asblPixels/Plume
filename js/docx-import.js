@@ -27,7 +27,10 @@ const DocxImport = (() => {
     'georgia': 'Gelasio, Georgia, serif',
     'verdana': '"DejaVu Sans", Verdana, sans-serif',
     'segoe ui': '"Segoe UI", "Open Sans", "Noto Sans", sans-serif',
-    'consolas': '"DejaVu Sans Mono", "Liberation Mono", monospace'
+    'consolas': '"DejaVu Sans Mono", "Liberation Mono", monospace',
+    'playwrite fr moderne': 'cursive', 'playwrite fr trad': 'cursive', 'marelle': 'cursive', 'belle allure': 'cursive',
+    'andika': '"Andika", sans-serif', 'opendyslexic': 'sans-serif', 'comic neue': '"Comic Sans MS", sans-serif',
+    'atkinson hyperlegible': 'sans-serif', 'lexend': 'sans-serif'
   };
   function cssFont(name) {
     if (!name) return null;

@@ -333,3 +333,108 @@ const Protect = {
     Ribbon.refresh();
   }
 };
+
+/* ---------- Polices personnelles (ex. Marelle, polices d'école) ---------- */
+const CustomFonts = {
+  fonts: [],          // [{ family, file, data }]
+  list() { return [...new Set(this.fonts.map(f => f.family))].sort((a, b) => a.localeCompare(b, 'fr')); },
+  async init() {
+    try { const v = await Store.getKV('fonts'); this.fonts = Array.isArray(v) ? v : []; } catch { this.fonts = []; }
+    for (const f of this.fonts) await this.register(f).catch(() => { });
+    if (this.fonts.length) Ed.relayout();
+  },
+  async register(f) {
+    const face = new FontFace(f.family, f.data, f.descriptors || {});
+    await face.load();
+    document.fonts.add(face);
+  },
+  /** Nom de famille lu dans la table « name » d'un fichier TrueType / OpenType */
+  familyName(buf, fallback) {
+    try {
+      const dv = new DataView(buf);
+      const tag = dv.getUint32(0);
+      if (tag !== 0x00010000 && tag !== 0x4F54544F && tag !== 0x74727565) return fallback;   // WOFF/WOFF2 : nom du fichier
+      const n = dv.getUint16(4);
+      for (let i = 0; i < n; i++) {
+        const o = 12 + i * 16;
+        if (dv.getUint32(o) !== 0x6E616D65) continue;      // 'name'
+        const base = dv.getUint32(o + 8);
+        const count = dv.getUint16(base + 2), strOff = base + dv.getUint16(base + 4);
+        const found = {};
+        for (let k = 0; k < count; k++) {
+          const r = base + 6 + k * 12;
+          const pid = dv.getUint16(r), nid = dv.getUint16(r + 6), len = dv.getUint16(r + 8), off = dv.getUint16(r + 10);
+          if (nid !== 16 && nid !== 1) continue;
+          let str = '';
+          if (pid === 3 || pid === 0) for (let c = 0; c < len; c += 2) str += String.fromCharCode(dv.getUint16(strOff + off + c));
+          else for (let c = 0; c < len; c++) str += String.fromCharCode(dv.getUint8(strOff + off + c));
+          if (str.trim() && !found[nid]) found[nid] = str.trim();
+        }
+        return found[16] || found[1] || fallback;
+      }
+    } catch { }
+    return fallback;
+  },
+  add() {
+    // champ de fichier dédié (indépendant de celui d'ouverture des documents)
+    let fi = $('#fontInput');
+    if (!fi) { fi = el('input', { type: 'file', id: 'fontInput', multiple: true, accept: '.ttf,.otf,.woff,.woff2', style: 'display:none' }); document.body.append(fi); }
+    fi.onchange = async () => {
+      const files = Array.from(fi.files || []); fi.value = '';
+      const added = [];
+      for (const file of files) {
+        if (!/\.(ttf|otf|woff2?)$/i.test(file.name)) { toast(`<b>${htmlEsc(file.name)}</b> n’est pas un fichier de police (.ttf, .otf, .woff).`); continue; }
+        const data = await file.arrayBuffer();
+        const guess = file.name.replace(/\.[^.]+$/, '').replace(/[-_](Regular|Bold|Italic|BoldItalic|Light|Medium|Book|Normal)$/i, '').replace(/[-_]+/g, ' ').trim();
+        const family = this.familyName(data, guess);
+        const style = /italic|oblique/i.test(file.name) ? 'italic' : 'normal';
+        const weight = /bold|gras/i.test(file.name) ? '700' : '400';
+        const entry = { family, file: file.name, data, descriptors: { style, weight } };
+        try { await this.register(entry); } catch { toast(`<b>${htmlEsc(file.name)}</b> : fichier de police illisible.`); continue; }
+        this.fonts = this.fonts.filter(f => f.file !== file.name);
+        this.fonts.push(entry);
+        added.push(family);
+      }
+      if (!added.length) return;
+      await Store.setKV('fonts', this.fonts).catch(() => { });
+      Ed.relayout();
+      const names = [...new Set(added)].join(', ');
+      toast(`Police ajoutée : <b>${htmlEsc(names)}</b>. Elle est dans le menu des polices, rubrique « Mes polices ».`, 6000);
+    };
+    fi.click();
+  },
+  async manage() {
+    const box = el('div');
+    const render = () => {
+      box.innerHTML = '';
+      if (!this.fonts.length) { box.append(el('p', {}, ['Aucune police ajoutée.'])); return; }
+      for (const f of this.fonts) {
+        box.append(el('div', { style: 'display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--ui-border)' }, [
+          el('span', { style: `font-family:'${f.family.replace(/'/g, '')}', sans-serif;font-size:18px;flex:1` }, [`${f.family} — Abc àéè 123`]),
+          el('span', { style: 'color:var(--ui-fg-2);font-size:12px' }, [f.file]),
+          el('button', { class: 'btn', onclick: async () => { this.fonts = this.fonts.filter(x => x !== f); await Store.setKV('fonts', this.fonts).catch(() => { }); render(); toast('Police retirée (elle disparaîtra au prochain lancement).'); } }, ['Retirer'])]));
+      }
+    };
+    render();
+    await dialog({ title: 'Mes polices', body: box, width: 620, buttons: [{ label: 'Ajouter…', onClick: () => { this.add(); return true; } }, { label: 'Fermer', primary: true }] });
+  }
+};
+
+/* ---------- Guide de prise en main (mots simples) ---------- */
+const Guide = {
+  open() {
+    const step = (n, t, d) => `<div style="display:flex;gap:12px;margin:0 0 14px"><div style="flex:none;width:28px;height:28px;border-radius:50%;background:var(--title-bg);color:var(--brand);display:grid;place-items:center;font-weight:700">${n}</div><div><b>${t}</b><div style="color:var(--ui-fg-2);line-height:1.5;margin-top:2px">${d}</div></div></div>`;
+    const html = `
+      <p style="line-height:1.55;margin-top:0">Plume fonctionne comme les traitements de texte habituels. Vos documents restent sur votre appareil : aucun compte n'est nécessaire.</p>
+      ${step(1, 'Écrire', 'Cliquez dans la page blanche et tapez votre texte. Plume enregistre tout seul vos modifications sur cet appareil.')}
+      ${step(2, 'Mettre en forme', 'Sélectionnez du texte avec la souris, puis utilisez l’onglet <b>Accueil</b> : police, taille, <b>gras</b>, <i>italique</i>, couleur, listes, alignement.')}
+      ${step(3, 'Écrire en cursive', 'Dans la liste des polices (en haut à gauche, sous « Accueil »), choisissez <b>Playwrite FR Moderne</b> ou <b>Playwrite FR Trad</b>. Pour les débutants en lecture : <b>Andika</b>. Pour les élèves dyslexiques : <b>OpenDyslexic</b>.')}
+      ${step(4, 'Ajouter une police (par exemple Marelle)', 'Téléchargez la police sur le site de son auteur (fichier <b>.ttf</b> ou <b>.otf</b>). Dans Plume, ouvrez la liste des polices puis cliquez tout en bas sur <b>« Ajouter une police… »</b> et choisissez le fichier. Elle apparaît dans « Mes polices » et reste disponible à chaque ouverture de Plume sur cet appareil.')}
+      ${step(5, 'Ouvrir un document', 'Menu <b>Fichier → Ouvrir → Parcourir</b>. Plume ouvre les documents Word, LibreOffice, Google Docs (téléchargés), PDF, RTF…')}
+      ${step(6, 'Enregistrer et partager', '<b>Ctrl + S</b> enregistre le fichier. Pour l’envoyer à quelqu’un : <b>Fichier → Exporter</b>, puis choisissez <b>PDF</b> (s’ouvre partout, la police est incluse) ou <b>Word</b>.')}
+      ${step(7, 'Imprimer', '<b>Ctrl + P</b>, ou menu Fichier → Imprimer.')}
+      <p style="background:var(--brand-soft);padding:10px 12px;border-radius:10px;line-height:1.5">💡 <b>Astuce :</b> si vous envoyez un document écrit en cursive au format Word, l’autre ordinateur doit avoir la même police installée. En <b>PDF</b>, la police est toujours incluse.</p>
+      <p style="color:var(--ui-fg-2)">Une question ? Pixel's ASBL — <a href="mailto:info@asblpixels.be">info@asblpixels.be</a></p>`;
+    dialog({ title: 'Bien démarrer avec Plume', body: html, width: 640, buttons: [{ label: 'C’est parti !', primary: true }] });
+  }
+};

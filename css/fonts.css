@@ -1,0 +1,21 @@
+/* Polices scolaires et d’accessibilité intégrées à Plume — toutes sous licence SIL Open Font License 1.1 (voir vendor/fonts/licences) */
+@font-face { font-family: 'Playwrite FR Moderne'; src: url('../vendor/fonts/playwrite-fr-moderne-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Playwrite FR Trad'; src: url('../vendor/fonts/playwrite-fr-trad-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Andika'; src: url('../vendor/fonts/andika-latin-400-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Andika'; src: url('../vendor/fonts/andika-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Andika'; src: url('../vendor/fonts/andika-latin-700-italic.woff2') format('woff2'); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Andika'; src: url('../vendor/fonts/andika-latin-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'OpenDyslexic'; src: url('../vendor/fonts/opendyslexic-latin-400-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'OpenDyslexic'; src: url('../vendor/fonts/opendyslexic-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'OpenDyslexic'; src: url('../vendor/fonts/opendyslexic-latin-700-italic.woff2') format('woff2'); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: 'OpenDyslexic'; src: url('../vendor/fonts/opendyslexic-latin-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Comic Neue'; src: url('../vendor/fonts/comic-neue-latin-400-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Comic Neue'; src: url('../vendor/fonts/comic-neue-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Comic Neue'; src: url('../vendor/fonts/comic-neue-latin-700-italic.woff2') format('woff2'); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Comic Neue'; src: url('../vendor/fonts/comic-neue-latin-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible'; src: url('../vendor/fonts/atkinson-hyperlegible-latin-400-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible'; src: url('../vendor/fonts/atkinson-hyperlegible-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible'; src: url('../vendor/fonts/atkinson-hyperlegible-latin-700-italic.woff2') format('woff2'); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible'; src: url('../vendor/fonts/atkinson-hyperlegible-latin-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lexend'; src: url('../vendor/fonts/lexend-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lexend'; src: url('../vendor/fonts/lexend-latin-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
