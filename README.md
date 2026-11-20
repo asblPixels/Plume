@@ -15,6 +15,8 @@
 
 ### [▶ Ouvrir Plume : **plume.asblpixels.be**](https://plume.asblpixels.be)
 
+<sub>Adresse de secours : https://asblpixels.github.io/Plume/</sub>
+
 <img src="docs/captures/plume-accueil.png" alt="Plume — fenêtre principale" width="900">
 
 </div>
