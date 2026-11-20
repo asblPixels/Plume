@@ -7,17 +7,30 @@
 
 **Le traitement de texte de Pixel's ASBL : libre d'usage, hors ligne et compatible Word (.docx)**
 
-![Version](https://img.shields.io/badge/version-1.1.0-26EFC5?style=flat-square&labelColor=0D1013)
+![Version](https://img.shields.io/badge/version-1.2.0-26EFC5?style=flat-square&labelColor=0D1013)
 ![Plateformes](https://img.shields.io/badge/plateformes-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-26EFC5?style=flat-square&labelColor=0D1013)
 ![Format](https://img.shields.io/badge/format-.docx%20(OOXML)-26EFC5?style=flat-square&labelColor=0D1013)
 ![Hors ligne](https://img.shields.io/badge/hors%20ligne-oui-26EFC5?style=flat-square&labelColor=0D1013)
-![Dépendances](https://img.shields.io/badge/d%C3%A9pendances-1%20(JSZip)-26EFC5?style=flat-square&labelColor=0D1013)
+![Dépendances](https://img.shields.io/badge/d%C3%A9pendances-2%20(JSZip%2C%20PDF.js)-26EFC5?style=flat-square&labelColor=0D1013)
 
 ### [▶ Ouvrir Plume en ligne](https://asblpixels.github.io/Plume/)
 
 <img src="docs/captures/plume-accueil.png" alt="Plume — fenêtre principale" width="900">
 
 </div>
+
+---
+
+## Télécharger Plume
+
+| Plateforme | Version | Comment l'obtenir |
+|---|---|---|
+| 🌐 **Navigateur** (tous systèmes) | En ligne | **https://asblpixels.github.io/Plume/** : rien à installer |
+| 🪟 **Windows 10 / 11** | Installateur | `Plume-Setup-1.2.0-x64.exe` (page *Releases*) |
+| 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.2.0-x64.exe` (page *Releases*) |
+| 🐧 **Linux** | AppImage, .deb, .rpm | `Plume-1.2.0.AppImage`, `plume_1.2.0_amd64.deb`, `plume-1.2.0.x86_64.rpm` |
+| 🤖 **Android** | Application installée | Ouvrir l'adresse en ligne dans Chrome → menu ⋮ → **Installer l'application** |
+| 🍎 **iPhone / iPad** | Application d'écran d'accueil | Ouvrir l'adresse en ligne dans Safari → Partager → **Sur l'écran d'accueil** |
 
 ---
 
@@ -58,7 +71,7 @@ Plume est un traitement de texte complet qui s'exécute entièrement dans le nav
 | **Autonomie** | Aucun serveur applicatif, aucune base de données. Fonctionne hors ligne après la première visite. |
 | **Confidentialité** | Les documents ne quittent jamais l'appareil. |
 | **Accessibilité matérielle** | Tourne sur de vieux PC comme sur les téléphones, sous tous les systèmes d'exploitation. |
-| **Sobriété** | Une seule bibliothèque externe (JSZip). Pas de framework, pas de compilation. |
+| **Sobriété** | Deux bibliothèques libres seulement (JSZip, PDF.js). Pas de framework, pas de compilation. |
 
 > Plume est un logiciel indépendant, sans aucun lien avec Microsoft Corporation. « Microsoft Word » et « Office 365 » sont des marques de Microsoft Corporation. L'identité visuelle de Plume (nom, logo, couleurs, icônes) lui est propre.
 
@@ -119,6 +132,17 @@ Mode Lecture · Plein écran · Règle · **Volet de navigation** (plan des titr
 ### Tableau (onglet contextuel)
 Il apparaît dès que le curseur entre dans un tableau : insérer une ligne au-dessus ou en dessous, une colonne à gauche ou à droite · supprimer une ligne, une colonne ou le tableau · fusionner, fractionner · bordures · trame de fond · ligne d'en-tête répétée · uniformiser les colonnes. **Tab** passe à la cellule suivante et crée une ligne à la fin du tableau.
 
+### Publipostage
+Lettres et documents personnalisés à partir d'un fichier **CSV** (export de tableur) : choix des destinataires, insertion de champs « Nom », « Adresse »…, aperçu destinataire par destinataire, puis fusion en un document unique (un exemplaire par destinataire, séparés par des sauts de page), prêt à imprimer ou à exporter.
+
+### Outils d'écriture
+- **Suivi des modifications en direct** (`Ctrl+Maj+E`) : chaque ajout et chaque suppression est marqué avec l'auteur et la date, puis exporté comme vraies révisions Word.
+- **Correction automatique de la typographie française** : guillemets « », apostrophe ’, espaces fines insécables avant ; : ! ?, tiret demi-cadratin (--), © ; peut être désactivée dans l'onglet Révision.
+- **Dictée vocale** (Accueil → Dicter) : « virgule », « point », « nouvelle ligne » sont reconnus.
+- **Légendes numérotées** (Figure 1, Tableau 2…) avec renumérotation automatique.
+- **Filigrane** (CONFIDENTIEL, BROUILLON…) à l'écran, à l'impression et dans le PDF.
+- **Restreindre la modification** : passage du document en lecture seule.
+
 ### Ergonomie
 - **Recherche de commandes** (`Alt+Q`) : tapez « marge », « puce » ou « pdf » pour lancer la commande sans chercher dans le ruban.
 - **Mini barre flottante** au-dessus d'une sélection de texte.
@@ -127,6 +151,38 @@ Il apparaît dès que le curseur entre dans un tableau : insérer une ligne au-d
 - Ruban repliable (`Ctrl+F1`) et interface adaptée aux écrans tactiles et aux petits écrans.
 
 ---
+
+## Formats de fichiers
+
+### Ouvrir
+
+| Format | Extensions | Application d'origine | Prise en charge |
+|---|---|---|---|
+| Word | `.docx` `.docm` `.dotx` `.dotm` | Microsoft 365, Word 2007+ | ✅ Complète, avec conservation intégrale (voir plus bas) |
+| Word 97-2003 | `.doc` `.dot` | Word 97 à 2003 | ✅ Texte, paragraphes, tableaux ; **mise en forme complète** dans l'application de bureau avec LibreOffice |
+| OpenDocument | `.odt` `.ott` `.fodt` | LibreOffice, OpenOffice, Google Docs, Collabora | ✅ Styles, listes, tableaux, images, en-têtes, notes, commentaires, mise en page |
+| Google Docs | `.docx` / `.odt` téléchargés | Google Docs (*Fichier → Télécharger*) | ✅ ; un raccourci `.gdoc` affiche la marche à suivre |
+| Texte enrichi | `.rtf` | WordPad, TextEdit, tous traitements de texte | ✅ Mise en forme, tableaux, images, liens, notes, en-têtes |
+| PDF | `.pdf` | Tous | ✅ Texte et structure (titres, paragraphes, pages) ; mise en page simplifiée |
+| Markdown | `.md` `.markdown` | Éditeurs, wikis, GitHub | ✅ Titres, listes imbriquées, tableaux, citations, code, liens, images |
+| Page web | `.html` `.htm` `.xhtml` | Navigateurs, éditeurs web | ✅ Contenu nettoyé (scripts supprimés) |
+| Texte / données | `.txt` `.csv` | Bloc-notes, tableurs | ✅ Encodage détecté (UTF-8, UTF-16, Windows-1252) ; CSV converti en tableau |
+| Autres | `.wpd` `.wps` `.pages` `.sxw` `.abw` `.lwp` `.hwp` `.wri` `.xml` (Word 2003)… | WordPerfect, Works, Apple Pages, OpenOffice 1, AbiWord, Lotus… | ✅ Application de bureau avec **module de conversion LibreOffice** |
+
+Plume reconnaît un fichier à son contenu et pas seulement à son extension : un `.doc` qui est en réalité un `.docx` ou un `.rtf` s'ouvre correctement.
+
+### Enregistrer et exporter
+
+| Format | Remarque |
+|---|---|
+| Word (`.docx`) | Format par défaut ; conservation intégrale des documents Word ouverts |
+| OpenDocument (`.odt`) | Validé par ouverture dans LibreOffice |
+| PDF (`.pdf`) | Fichier PDF réel dans l'application de bureau (avec signets) ; impression « Enregistrer au format PDF » dans le navigateur |
+| Texte enrichi (`.rtf`) | Lisible par tous les traitements de texte |
+| Word 97-2003 (`.doc`) | Application de bureau avec LibreOffice |
+| Page web (`.html`), Markdown (`.md`), texte (`.txt`) | |
+
+**Ctrl+S réenregistre dans le format d'origine** quand c'est possible (`.docx`, `.odt`, `.rtf`, `.md`, `.txt`, `.html`, et `.doc` dans l'application de bureau). Un PDF ou un format ancien ouvert est enregistré en `.docx`.
 
 ## Compatibilité .docx
 
@@ -395,6 +451,12 @@ plume/
 │   ├── util.js             Outils DOM, conversions d'unités, couleurs, dialogues, stockage IndexedDB
 │   ├── docx-import.js      Lecteur OOXML → HTML (styles, thème, numérotation, relations, médias)
 │   ├── docx-export.js      Générateur HTML → OOXML (styles, numérotation, notes, en-têtes, médias)
+│   ├── odt.js              OpenDocument : lecture et écriture (.odt, .ott, .fodt)
+│   ├── rtf.js              Rich Text Format : lecture et écriture
+│   ├── markdown.js         Markdown : lecture et écriture (CommonMark + tableaux)
+│   ├── legacy.js           Word 97-2003 (.doc) : conteneur OLE et table des pièces
+│   ├── formats.js          Registre des formats, détection, PDF, module de conversion
+│   ├── tools.js            Suivi des modifications, correction auto, publipostage, dictée, légendes, filigrane
 │   ├── editor.js           Moteur : pagination, en-têtes/pieds, historique, commandes, tableaux
 │   ├── ribbon.js           Registre des commandes, ruban, menus, mini barre, reproduction de mise en forme
 │   ├── backstage.js        Menu Fichier, modèles, boîtes de dialogue
@@ -403,7 +465,8 @@ plume/
 ├── icons/                  Logo « Plume » (SVG clair/sombre), icône P (SVG), icônes PWA (192, 512, maskable), apple-touch-icon, favicon
 ├── desktop/                Application de bureau Electron (Windows, Linux, macOS)
 ├── vendor/
-│   └── jszip.min.js        Lecture/écriture des archives ZIP (.docx)
+│   ├── jszip.min.js        Lecture/écriture des archives ZIP (.docx, .odt)
+│   └── pdfjs/              PDF.js (lecture des PDF)
 └── docs/captures/          Captures d'écran
 ```
 
@@ -507,6 +570,15 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 
 ## Historique des versions
 
+### 1.2.0 — 20 novembre 2026
+- **Ouverture de tous les formats courants** : OpenDocument (.odt, .ott, .fodt), RTF, PDF, Word 97-2003 (.doc), Markdown complet, CSV ; détection du format réel par le contenu
+- **Export** : OpenDocument (.odt), RTF, Markdown, PDF réel (bureau), Word 97-2003 (bureau + LibreOffice)
+- **Module de conversion LibreOffice** dans l'application de bureau : WordPerfect, Works, Pages, OpenOffice 1.x, AbiWord, Lotus Word Pro…
+- Associations de fichiers élargies (Windows, Linux, application installée)
+- Nouvel onglet **Publipostage** ; suivi des modifications en direct ; correction automatique ; dictée ; légendes ; filigrane ; protection
+- Application de bureau : correcteur orthographique avec suggestions au clic droit, protocole interne sécurisé
+- Correctif : numérotation des listes dans les .docx créés par Plume
+
 ### 1.1.0 — 16 novembre 2026
 - **Application Windows** : installateur et version portable, ouverture des `.docx` par double-clic
 - **Conservation intégrale** des éléments Office non éditables (graphiques, SmartArt, formes, zones de texte, images flottantes, OLE, EMF/WMF, équations) avec aperçu à l'écran
@@ -533,6 +605,7 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 | Composant | Auteur | Licence |
 |---|---|---|
 | [JSZip](https://stuk.github.io/jszip/) | Stuart Knightley et contributeurs | MIT |
+| [PDF.js](https://mozilla.github.io/pdf.js/) (import des PDF) | Mozilla et contributeurs | Apache 2.0 |
 | Tracés d'icônes [Lucide](https://lucide.dev) | Lucide Contributors | ISC |
 | Police du logotype : [Outfit](https://github.com/Outfitio/Outfit-Fonts) (SemiBold, convertie en tracés) | The Outfit Project Authors | SIL OFL 1.1 |
 

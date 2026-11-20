@@ -1,7 +1,7 @@
 {
   "name": "plume",
   "productName": "Plume",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Plume — traitement de texte de Pixel's ASBL, compatible .docx",
   "author": "Pixel's ASBL <info@asblpixels.be>",
   "homepage": "https://github.com/asblPixels/plume",
@@ -11,7 +11,7 @@
     "prepare-app": "node prepare.js",
     "start": "node prepare.js && electron .",
     "dist:win": "node prepare.js && electron-builder --win nsis portable --x64",
-    "dist:linux": "node prepare.js && electron-builder --linux AppImage rpm --x64"
+    "dist:linux": "node prepare.js && electron-builder --linux AppImage rpm deb --x64"
   },
   "build": {
     "appId": "be.asblpixels.plume",
@@ -30,7 +30,98 @@
       {
         "ext": "docx",
         "name": "Document Word",
-        "description": "Document Word (.docx)",
+        "description": "Document Word",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "docm",
+        "name": "Document Word avec macros",
+        "description": "Document Word avec macros",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "dotx",
+        "name": "Modèle Word",
+        "description": "Modèle Word",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "doc",
+        "name": "Document Word 97-2003",
+        "description": "Document Word 97-2003",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "dot",
+        "name": "Modèle Word 97-2003",
+        "description": "Modèle Word 97-2003",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "odt",
+        "name": "Document OpenDocument",
+        "description": "Document OpenDocument",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "ott",
+        "name": "Modèle OpenDocument",
+        "description": "Modèle OpenDocument",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "fodt",
+        "name": "Document OpenDocument XML",
+        "description": "Document OpenDocument XML",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "rtf",
+        "name": "Texte enrichi",
+        "description": "Texte enrichi",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "md",
+        "name": "Markdown",
+        "description": "Markdown",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "wpd",
+        "name": "WordPerfect",
+        "description": "WordPerfect",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "wps",
+        "name": "Microsoft Works",
+        "description": "Microsoft Works",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "pages",
+        "name": "Apple Pages",
+        "description": "Apple Pages",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "sxw",
+        "name": "OpenOffice 1.x",
+        "description": "OpenOffice 1.x",
         "role": "Editor",
         "icon": "build/icon.ico"
       }
@@ -63,13 +154,22 @@
       "category": "Office",
       "target": [
         "AppImage",
-        "rpm"
+        "rpm",
+        "deb"
       ],
       "mimeTypes": [
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ]
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+        "application/vnd.oasis.opendocument.text",
+        "application/rtf",
+        "text/markdown"
+      ],
+      "maintainer": "Pixel's ASBL <info@asblpixels.be>"
     },
-    "publish": null
+    "publish": null,
+    "deb": {
+      "packageName": "plume"
+    }
   },
   "devDependencies": {
     "electron": "^45.3.3",

@@ -93,6 +93,18 @@ function registerCommands() {
   cmd('delComments', 'Supprimer tous les commentaires', 'trash-2', () => Comments.removeAll());
   cmd('acceptAll', 'Accepter toutes les modifications', 'check', () => Revisions.apply(true));
   cmd('rejectAll', 'Refuser toutes les modifications', 'x', () => Revisions.apply(false));
+  cmd('track', 'Suivi des modifications', 'square-pen', () => Track.toggle(), { kbd: 'Ctrl+Maj+E' });
+  cmd('protect', 'Restreindre la modification', 'lock', () => Protect.toggle());
+  cmd('autocorrect', 'Correction automatique', 'spell-check', () => AutoCorrect.toggle());
+  cmd('dictate', 'Dicter', 'mic', () => Dictation.toggle());
+  cmd('caption', 'Insérer une légende', 'text-quote', () => Captions.insert());
+  cmd('watermark', 'Filigrane', 'droplet', () => Watermark.set());
+  cmd('mergeRecipients', 'Destinataires', 'users', () => Merge.pickRecipients());
+  cmd('mergeField', 'Insérer un champ', 'braces', () => {});
+  cmd('mergePreview', 'Aperçu', 'eye', () => Merge.togglePreview());
+  cmd('mergePrev', 'Destinataire précédent', 'chevron-left', () => Merge.move(-1));
+  cmd('mergeNext', 'Destinataire suivant', 'chevron-right', () => Merge.move(1));
+  cmd('mergeFinish', 'Fusionner', 'files', () => Merge.finish());
   cmd('finalView', 'Affichage « Final » (masquer les marques)', 'eye', () => { document.body.classList.toggle('final-view'); Ribbon.refresh(); });
   // Affichage
   cmd('reading', 'Mode Lecture', 'book-open', () => App.setReading(true));
@@ -141,7 +153,8 @@ const Ribbon = {
         G('Police', [{ col: [{ row: ['#fontFamily', '#fontSize', 'grow', 'shrink', '#case', 'clear'] }, { row: ['bold', 'italic', 'underline', 'strike', 'sub', 'sup', '#color', '#highlight'] }] }], 'fontDlg'),
         G('Paragraphe', [{ col: [{ row: ['#bullets', '#numbers', 'outdent', 'indent', 'marks'] }, { row: ['left', 'center', 'right', 'justify', '#spacing'] }] }], 'paraDlg'),
         G('Styles', [{ custom: 'gallery' }]),
-        G('Modification', [{ col: ['find', 'replace', 'selectAll'] }])
+        G('Modification', [{ col: ['find', 'replace', 'selectAll'] }]),
+        G('Voix', [{ big: 'dictate' }])
       ]),
       T('insertion', 'Insertion', [
         G('Pages', [{ col: ['cover', 'blankPage', 'pageBreak'] }]),
@@ -154,7 +167,7 @@ const Ribbon = {
       ]),
       T('creation', 'Création', [
         G('Mise en forme du document', [{ bigMenu: 'docFont', menu: 'docFonts' }, { bigMenu: 'docSpacing', menu: 'docSpacings' }, { bigMenu: 'docHeading', menu: 'headingColors' }]),
-        G('Arrière-plan', [{ big: 'pageDark' }])
+        G('Arrière-plan', [{ big: 'watermark' }, { big: 'pageDark' }])
       ]),
       T('miseenpage', 'Mise en page', [
         G('Mise en page', [{ bigMenu: 'margins', menu: 'margins' }, { bigMenu: 'orientation', menu: 'orient' }, { bigMenu: 'size', menu: 'sizes' }, { col: ['pageBreak'] }], 'pageSetup'),
@@ -162,12 +175,20 @@ const Ribbon = {
       ]),
       T('references', 'Références', [
         G('Table des matières', [{ big: 'toc' }]),
-        G('Notes de bas de page', [{ big: 'footnote' }])
+        G('Notes de bas de page', [{ big: 'footnote' }]),
+        G('Légendes', [{ big: 'caption' }])
+      ]),
+      T('publipostage', 'Publipostage', [
+        G('Démarrer', [{ big: 'mergeRecipients' }]),
+        G('Champs', [{ bigMenu: 'mergeField', menu: 'mergeFields' }]),
+        G('Aperçu', [{ big: 'mergePreview' }, { col: ['mergePrev', 'mergeNext'] }]),
+        G('Terminer', [{ big: 'mergeFinish' }])
       ]),
       T('revision', 'Révision', [
-        G('Vérification', [{ big: 'spell' }, { col: ['wordCount'] }]),
+        G('Vérification', [{ big: 'spell' }, { col: ['wordCount', 'autocorrect'] }]),
         G('Commentaires', [{ big: 'comment' }, { col: ['showComments', 'delComments'] }]),
-        G('Suivi', [{ big: 'acceptAll' }, { col: ['rejectAll', 'finalView'] }]),
+        G('Suivi', [{ big: 'track' }, { big: 'acceptAll' }, { col: ['rejectAll', 'finalView'] }]),
+        G('Protéger', [{ big: 'protect' }]),
         G('Voix', [{ big: 'speak' }]),
         G('Langue', [{ bigMenu: 'language', menu: 'langs' }])
       ]),
@@ -219,7 +240,7 @@ const Ribbon = {
   btn(id, big) {
     const c = CMD[id];
     const b = el('button', { class: 'rbtn' + (big ? ' big' : ''), 'data-cmd': id, title: c.label + (c.kbd ? ` (${c.kbd})` : ''), onclick: () => c.run() }, [icon(c.icon), big ? el('span', {}, [c.label]) : null]);
-    if (!big && ['cut', 'copy', 'painter', 'find', 'replace', 'selectAll', 'cover', 'blankPage', 'pageBreak', 'header', 'footer', 'pageNum', 'textbox', 'hr', 'date', 'bookmark', 'wordCount', 'fullscreen', 'ruler', 'nav', 'onePage', 'pageWidth', 'rowAbove', 'rowBelow', 'colLeft', 'colRight', 'delRow', 'delCol', 'delTable', 'merge', 'split', 'distribute', 'tHeader', 'pageDark', 'showComments', 'delComments', 'rejectAll', 'finalView'].includes(id)) {
+    if (!big && ['cut', 'copy', 'painter', 'find', 'replace', 'selectAll', 'cover', 'blankPage', 'pageBreak', 'header', 'footer', 'pageNum', 'textbox', 'hr', 'date', 'bookmark', 'wordCount', 'fullscreen', 'ruler', 'nav', 'onePage', 'pageWidth', 'rowAbove', 'rowBelow', 'colLeft', 'colRight', 'delRow', 'delCol', 'delTable', 'merge', 'split', 'distribute', 'tHeader', 'pageDark', 'showComments', 'delComments', 'rejectAll', 'finalView', 'autocorrect', 'mergePrev', 'mergeNext'].includes(id)) {
       b.append(el('span', {}, [c.label.replace(' avec la cellule de droite', '')]));
     }
     return b;
@@ -320,6 +341,11 @@ const Ribbon = {
       if (b.dataset.cmd === 'dark') on = document.documentElement.dataset.theme === 'dark';
       if (b.dataset.cmd === 'pageDark') on = document.documentElement.classList.contains('page-dark');
       if (b.dataset.cmd === 'finalView') on = document.body.classList.contains('final-view');
+      if (b.dataset.cmd === 'track') on = Track.on;
+      if (b.dataset.cmd === 'protect') on = Protect.on;
+      if (b.dataset.cmd === 'autocorrect') on = AutoCorrect.on;
+      if (b.dataset.cmd === 'dictate') on = !!Dictation.rec;
+      if (b.dataset.cmd === 'mergePreview') on = Merge.preview;
       b.classList.toggle('on', !!on);
     });
     const a = Ed.anchorEl();
@@ -418,6 +444,10 @@ const Menus = {
         m.append(g);
         break;
       }
+      case 'mergeFields':
+        if (!Merge.data) m.append(el('div', { class: 'mh' }, ['Choisissez d’abord les destinataires']), item('Sélectionner un fichier CSV…', () => Merge.pickRecipients(), { icon: 'users' }));
+        else Merge.data.cols.forEach(c => m.append(item('«' + c + '»', () => Merge.insertField(c))));
+        break;
       case 'docFonts': ['Calibri', 'Aptos', 'Arial', 'Cambria', 'Georgia', 'Times New Roman', 'Verdana', 'Segoe UI', 'Garamond'].forEach(f => m.append(item(f, () => CMD.docFont.run(f), { style: `font-family:${DocxImport.cssFont(f)};font-size:14px` }))); break;
       case 'docSpacings':
         [['Compact', { lineHeight: 1, after: 4 }], ['Normal (par défaut)', { lineHeight: 1.15, after: 8 }], ['Aéré', { lineHeight: 1.3, after: 10 }], ['Ouvert', { lineHeight: 1.5, after: 12 }], ['Double', { lineHeight: 2, after: 8 }]].forEach(([l, v]) => m.append(item(l, () => CMD.docSpacing.run(v))));

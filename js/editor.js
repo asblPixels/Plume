@@ -883,7 +883,7 @@ const Ed = {
     const files = Array.from(e.dataTransfer.files || []);
     if (!files.length) return;
     e.preventDefault();
-    const docx = files.find(f => /\.(docx|html?|txt|md)$/i.test(f.name));
+    const docx = files.find(f => !f.type.startsWith('image/') || /\.(pdf)$/i.test(f.name));
     if (docx && this.onOpenFile) { this.onOpenFile(docx); return; }
     const pos = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
     if (pos) { const s = getSelection(); s.removeAllRanges(); s.addRange(pos); this.lastRange = pos; }

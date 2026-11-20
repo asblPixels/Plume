@@ -4,7 +4,7 @@
 'use strict';
 
 const App = {
-  VERSION: '1.1.0',
+  VERSION: '1.2.0',
   docId: null, fileHandle: null, dirty: false,
 
   async init() {
@@ -12,6 +12,8 @@ const App = {
     Ed.init();
     Ribbon.build();
     Mini.init();
+    Track.init();
+    AutoCorrect.init();
     this.initTheme();
     this.initStatus();
     this.initCmdSearch();
@@ -21,7 +23,7 @@ const App = {
     Ed.onSelection = debounce(() => { Ribbon.refresh(); this.updateStatus(); }, 60);
     Ed.onChange = () => { this.dirty = true; this.setSaveState('Modifié'); this.autosave(); this.navRefresh(); };
     Ed.onHistory = () => Ribbon.refresh();
-    Ed.onLayout = () => { this.updateStatus(); Ed.placeHandle && Ed.placeHandle(); this.drawRuler(); Comments.highlight(); };
+    Ed.onLayout = () => { Watermark.render(); Captions.renumber(); this.updateStatus(); Ed.placeHandle && Ed.placeHandle(); this.drawRuler(); Comments.highlight(); };
     Ed.onOpenFile = f => this.openFile(f);
     $('#docTitle').addEventListener('change', () => { this.dirty = true; this.autosave(); document.title = this.name() + ' — Plume'; });
     $('#fileInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) this.fileInputCb(f); });
@@ -58,7 +60,7 @@ const App = {
   async newDoc(tpl = 'blank', silent) {
     if (!silent && this.dirty) await this.flushAutosave();
     const t = TEMPLATES[tpl] || TEMPLATES.blank;
-    this.docId = uid(); this.fileHandle = null; this.desktopPath = null; Ed.source = null;
+    this.docId = uid(); this.fileHandle = null; this.desktopPath = null; this.format = 'docx'; Ed.source = null;
     $('#docTitle').value = tpl === 'blank' ? this.nextDocName() : t.name;
     Ed.load({ html: t.html, props: { author: await this.user(), created: new Date().toISOString() } });
     this.afterOpen();
@@ -75,7 +77,7 @@ const App = {
   async openStored(id, silent) {
     const d = await Store.getDoc(id).catch(() => null);
     if (!d) return false;
-    this.docId = d.id; this.fileHandle = null;
+    this.docId = d.id; this.fileHandle = null; this.desktopPath = null; this.format = d.format || 'docx';
     Ed.source = d.source ? { zip: await JSZip.loadAsync(d.source), bytes: d.source } : null;
     $('#docTitle').value = d.name;
     Ed.load({ html: await Ed.hydrateImages(d.html), header: await Ed.hydrateImages(d.header || ''), footer: await Ed.hydrateImages(d.footer || ''), page: d.page, settings: d.settings, props: d.props });
@@ -86,71 +88,83 @@ const App = {
     return true;
   },
   openPicker() {
-    if (window.showOpenFilePicker) {
-      showOpenFilePicker({ types: [{ description: 'Documents', accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'], 'text/html': ['.html', '.htm'], 'text/plain': ['.txt', '.md'] } }] })
-        .then(async ([h]) => this.openFile(await h.getFile(), h)).catch(() => { });
+    // un sélecteur unique accepte tous les formats (Word, OpenDocument, RTF, PDF, texte…)
+    const fi = $('#fileInput');
+    fi.accept = Formats.ACCEPT;
+    this.fileInputCb = f => this.openFile(f);
+    if (window.showOpenFilePicker && !window.plumeDesktop) {
+      showOpenFilePicker({ excludeAcceptAllOption: false, types: [{ description: 'Tous les documents', accept: { 'application/octet-stream': Formats.ALL_EXT.map(e => '.' + e) } }] })
+        .then(async ([h]) => this.openFile(await h.getFile(), h)).catch(e => { if (e.name !== 'AbortError') fi.click(); });
       return;
     }
-    const fi = $('#fileInput');
-    fi.accept = '.docx,.html,.htm,.txt,.md,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    this.fileInputCb = f => this.openFile(f);
     fi.click();
   },
   async openFile(file, handle = null, desktopPath = null) {
-    const ext = (file.name.split('.').pop() || '').toLowerCase();
     const base = file.name.replace(/\.[^.]+$/, '');
     try {
       if (this.dirty) await this.flushAutosave();
-      if (ext === 'docx' || ext === 'docm' || ext === 'dotx') {
-        this.setSaveState('Ouverture…');
-        const bytes = await file.arrayBuffer();
-        const r = await DocxImport.importDocx(bytes, { registerImage: b => Ed.registerImage(b) });
-        Ed.source = { zip: r.source, bytes: new Uint8Array(bytes) };
-        this.docId = uid(); this.fileHandle = ext === 'docx' ? handle : null;
-        this.desktopPath = ext === 'docx' ? desktopPath : null;
-        $('#docTitle').value = base;
-        Ed.load({ html: r.html, header: r.header, footer: r.footer, page: r.page, settings: { fontCss: r.settings.fontCss, size: r.settings.size, lineHeight: r.settings.lineHeight, after: r.settings.after, before: r.settings.before, color: r.settings.color, heading: '#0B5E4E' }, props: r.props });
-      } else if (ext === 'doc') {
-        toast('Le format <b>.doc</b> (Word 97-2003) n’est pas pris en charge. Ouvrez-le dans Word et enregistrez-le en <b>.docx</b>.', 6000); return;
-      } else if (ext === 'html' || ext === 'htm') {
-        this.docId = uid(); this.fileHandle = null; Ed.source = null; $('#docTitle').value = base;
-        Ed.load({ html: Sanitize.html(await file.text()) });
-      } else if (ext === 'txt' || ext === 'md') {
-        this.docId = uid(); this.fileHandle = null; Ed.source = null; $('#docTitle').value = base;
-        const txt = await file.text();
-        Ed.load({ html: ext === 'md' ? mdToHtml(txt) : txt.split(/\r?\n/).map(l => `<p>${htmlEsc(l) || '<br>'}</p>`).join('') });
-      } else { toast('Format non pris en charge : .' + htmlEsc(ext)); return; }
+      this.setSaveState('Ouverture…');
+      const r = await Formats.open(file, { registerImage: b => Ed.registerImage(b) });
+      Ed.source = r.source ? { zip: r.source, bytes: r.bytes || null } : null;
+      this.docId = uid();
+      this.format = r.format || 'docx';
+      // Ctrl+S réécrit le fichier d'origine seulement si son format est réinscriptible sans perte
+      const writable = Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop);
+      this.fileHandle = writable ? handle : null;
+      this.desktopPath = writable ? desktopPath : null;
+      $('#docTitle').value = base;
+      const s = r.settings || {};
+      Ed.load({
+        html: r.html, header: r.header || '', footer: r.footer || '', page: r.page, props: r.props,
+        settings: { fontCss: s.fontCss, size: s.size, lineHeight: s.lineHeight, after: s.after, before: s.before, color: s.color, heading: '#0B5E4E' }
+      });
       this.afterOpen();
       this.dirty = false;
       await this.flushAutosave(true);
       toast(`<b>${htmlEsc(file.name)}</b> ouvert`);
+      if (r.notice) setTimeout(() => toast(r.notice, 7000), 2700);
     } catch (e) {
       console.error(e);
       this.setSaveState('');
-      dialog({ title: 'Impossible d’ouvrir le fichier', body: `<p>${htmlEsc(file.name)} n’a pas pu être lu.</p><p style="color:var(--ui-fg-2)">${htmlEsc(e.message || String(e))}</p>`, buttons: [{ label: 'OK', primary: true }] });
+      dialog({ title: 'Impossible d’ouvrir le fichier', body: e.userMessage ? `<p style="line-height:1.55">${e.userMessage}</p>` : `<p>${htmlEsc(file.name)} n’a pas pu être lu.</p><p style="color:var(--ui-fg-2)">${htmlEsc(e.message || String(e))}</p>`, buttons: [{ label: 'OK', primary: true }] });
     }
   },
 
-  /* ---------- Enregistrement ---------- */
-  async buildDocx() {
+  /* ---------- Enregistrement et export ---------- */
+  exportCtx() {
     Ed.props.title = Ed.props.title || this.name();
-    return DocxExport.exportDocx({ editor: Ed.editor, headerEl: Ed.headerEl(), footerEl: Ed.footerEl(), page: Ed.page, props: Ed.props, source: Ed.source ? Ed.source.zip : null });
+    return { editor: Ed.editor, headerEl: Ed.headerEl(), footerEl: Ed.footerEl(), page: Ed.page, props: Ed.props, settings: Ed.settings, source: Ed.source ? Ed.source.zip : null };
   },
+  async buildDocx() { return DocxExport.exportDocx(this.exportCtx()); },
+  fileName(ext) { return this.name().replace(/[\\/:*?"<>|]/g, '_') + '.' + ext; },
+  /** Ctrl+S : même format que le fichier ouvert s'il est réinscriptible, sinon .docx */
   async save(asNew = false) {
+    const fmt = (!asNew && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop))) ? this.format : 'docx';
+    return this.saveAs(fmt, asNew);
+  },
+  async saveAs(fmt = 'docx', asNew = true) {
+    const info = Formats.EXPORT[fmt];
     try {
       this.setSaveState('Enregistrement…');
-      const blob = await this.buildDocx();
-      const fname = this.name().replace(/[\\/:*?"<>|]/g, '_') + '.docx';
+      if (fmt === 'pdf' && !(window.plumeDesktop && window.plumeDesktop.printToPdf)) { this.setSaveState(''); this.print(); return; }
+      if (fmt === 'pdf') this.preparePrint();
+      const blob = await Formats.build(fmt, this.exportCtx());
+      if (fmt === 'pdf') this.endPrint();
+      const fname = this.fileName(fmt);
       if (this.desktopPath && window.plumeDesktop && !asNew) {
         await window.plumeDesktop.writeFile(this.desktopPath, await blob.arrayBuffer());
       } else if (this.fileHandle && !asNew) {
         const w = await this.fileHandle.createWritable(); await w.write(blob); await w.close();
+      } else if (window.plumeDesktop && window.plumeDesktop.saveDialog) {
+        const path = await window.plumeDesktop.saveDialog(fname, fmt, info.label);
+        if (!path) { this.setSaveState('Modifié'); return; }
+        await window.plumeDesktop.writeFile(path, await blob.arrayBuffer());
+        if (Formats.SAVABLE.has(fmt) || fmt === 'doc') { this.desktopPath = path; this.format = fmt; $('#docTitle').value = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''); }
       } else if (window.showSaveFilePicker) {
         try {
-          const h = await showSaveFilePicker({ suggestedName: fname, types: [{ description: 'Document Word', accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] } }] });
+          const h = await showSaveFilePicker({ suggestedName: fname, types: [{ description: info.label, accept: { [info.mime]: ['.' + fmt] } }] });
           const w = await h.createWritable(); await w.write(blob); await w.close();
-          this.fileHandle = h; this.desktopPath = null;
-          $('#docTitle').value = h.name.replace(/\.docx$/i, '');
+          if (Formats.SAVABLE.has(fmt)) { this.fileHandle = h; this.desktopPath = null; this.format = fmt; $('#docTitle').value = h.name.replace(/\.[^.]+$/, ''); }
         } catch (e) { if (e.name === 'AbortError') { this.setSaveState('Modifié'); return; } throw e; }
       } else downloadBlob(blob, fname);
       await this.flushAutosave(true);
@@ -159,8 +173,10 @@ const App = {
       toast(`<b>${htmlEsc(fname)}</b> enregistré`);
     } catch (e) {
       console.error(e);
+      this.endPrint && this.endPrint();
       this.setSaveState('Erreur');
-      toast('Erreur à l’enregistrement : ' + htmlEsc(e.message || e), 5000);
+      if (e.userMessage) dialog({ title: 'Export impossible', body: `<p style="line-height:1.55">${e.userMessage}</p>`, buttons: [{ label: 'OK', primary: true }] });
+      else toast('Erreur à l’enregistrement : ' + htmlEsc(e.message || e), 6000);
     }
   },
   autosave: debounce(function () { App.flushAutosave(); }, 1500),
@@ -168,14 +184,15 @@ const App = {
     if (!this.docId) return;
     try {
       const st = await Ed.getState();
-      await Store.putDoc({ id: this.docId, name: this.name(), ...st, source: Ed.source ? Ed.source.bytes : null, updated: Date.now() });
+      await Store.putDoc({ id: this.docId, name: this.name(), ...st, format: this.format || 'docx', source: Ed.source ? Ed.source.bytes : null, updated: Date.now() });
       this.savedLocally = true;
       if (!force) this.setSaveState('Enregistré sur cet appareil');
     } catch (e) { console.warn('Autosauvegarde impossible', e); this.savedLocally = false; }
   },
   setSaveState(t) { $('#saveState').textContent = t ? '• ' + t : ''; },
 
-  print() {
+  /** Prépare la page pour l'impression / le PDF (marges, en-têtes, sans décalages d'écran) */
+  preparePrint() {
     const ph = $('#printHeader'), pf = $('#printFooter');
     ph.innerHTML = Ed.headerHTML; pf.innerHTML = Ed.footerHTML;
     ph.style.top = '0'; pf.style.bottom = '0';
@@ -183,16 +200,20 @@ const App = {
     if (!st) { st = el('style', { id: 'printPage' }); document.head.append(st); }
     const p = Ed.page, cm = v => U.pxToCm(v).toFixed(2) + 'cm';
     st.textContent = `@page { size: ${cm(p.w)} ${cm(p.h)}; margin: ${cm(p.mt)} ${cm(p.mr)} ${cm(p.mb)} ${cm(p.ml)}; }
-      @media print { #pushStyle{} #editor > *, #editor li { margin-top: revert-layer; } .print-hf .pl-field[data-field="page"]{display:none} }`;
-    const push = $('#pushStyle').textContent; $('#pushStyle').textContent = '';
-    setTimeout(() => { window.print(); $('#pushStyle').textContent = push; }, 50);
+      @media print { .print-hf .pl-field[data-field="page"]{display:none} }`;
+    this._push = $('#pushStyle').textContent; $('#pushStyle').textContent = '';
   },
-  async exportHtml() {
+  endPrint() { if (this._push !== undefined) { $('#pushStyle').textContent = this._push; this._push = undefined; } },
+  print() {
+    this.preparePrint();
+    setTimeout(() => { window.print(); this.endPrint(); }, 50);
+  },
+  async htmlDocument() {
     const st = await Ed.getState();
-    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${htmlEsc(this.name())}</title><style>body{font-family:${Ed.settings.fontCss};font-size:${Ed.settings.size}pt;line-height:${Ed.settings.lineHeight};max-width:${Math.round(Ed.contentWidth())}px;margin:40px auto;padding:0 20px}p{margin:0 0 ${Ed.settings.after}pt}table{border-collapse:collapse}td,th{border:1px solid #000;padding:2px 7px;vertical-align:top}table[data-borders=none] td{border:0}img{max-width:100%;height:auto}h1,h2,h3{color:${Ed.settings.heading}}.pl-pagebreak{border:0;page-break-after:always}.pl-toc .toc-upd{display:none}.toc-line{display:flex}.toc-line .dots{flex:1;border-bottom:1px dotted #777;margin:0 4px 4px}</style></head><body>${st.header ? `<header>${st.header}</header>` : ''}${st.html}${st.footer ? `<footer>${st.footer}</footer>` : ''}</body></html>`;
-    downloadBlob(new Blob([html], { type: 'text/html' }), this.name() + '.html');
+    return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Plume"><title>${htmlEsc(this.name())}</title><style>body{font-family:${Ed.settings.fontCss};font-size:${Ed.settings.size}pt;line-height:${Ed.settings.lineHeight};max-width:${Math.round(Ed.contentWidth())}px;margin:40px auto;padding:0 20px}p{margin:0 0 ${Ed.settings.after}pt}table{border-collapse:collapse}td,th{border:1px solid #000;padding:2px 7px;vertical-align:top}table[data-borders=none] td{border:0}img{max-width:100%;height:auto}h1,h2,h3{color:${Ed.settings.heading}}.pl-pagebreak{border:0;page-break-after:always}.pl-toc .toc-upd{display:none}.toc-line{display:flex}.toc-line .dots{flex:1;border-bottom:1px dotted #777;margin:0 4px 4px}.pl-del{text-decoration:line-through;color:#B42318}.pl-ins{text-decoration:underline;color:#1F6F43}.pl-island-box{display:inline-block;border:1px solid #ddd}</style></head><body>${st.header ? `<header>${st.header}</header>` : ''}${st.html}${st.footer ? `<footer>${st.footer}</footer>` : ''}</body></html>`;
   },
-  exportTxt() { downloadBlob(new Blob([Ed.editor.innerText], { type: 'text/plain;charset=utf-8' }), this.name() + '.txt'); },
+  exportHtml() { return this.saveAs('html'); },
+  exportTxt() { return this.saveAs('txt'); },
 
   /* ---------- Insertion ---------- */
   pickImage() {
@@ -483,6 +504,7 @@ const App = {
       if (e.key === '*') return run('marks');
       if (e.altKey && k === 'f') return run('footnote');
       if (e.altKey && k === 'm') return run('comment');
+      if (e.shiftKey && k === 'e') return run('track');
       if (e.altKey && ['1', '2', '3'].includes(e.key)) return run('style:h' + e.key);
       if (e.shiftKey && k === 'n') return run('style:p');
       if (e.shiftKey && k === 'l') return run('bullets');

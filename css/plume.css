@@ -546,3 +546,15 @@ body.final-view #editor .pl-ins { color: inherit; text-decoration: none; }
 .np-comment .txt { margin-top: 6px; white-space: pre-wrap; line-height: 1.4; }
 .np-comment .acts { display: flex; gap: 6px; margin-top: 8px; }
 .np-comment .acts button { border: 1px solid var(--ui-border); background: transparent; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+
+/* ---------- Outils avancés ---------- */
+#editor .pl-merge { background: #E8F6F2; color: #0B5E4E; border-radius: 3px; padding: 0 2px; }
+#editor .pl-merge.previewing { background: #FFF6CC; color: inherit; }
+.pl-watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1;
+  font: 700 64pt var(--doc-font); color: rgba(0,0,0,.08); transform: rotate(-35deg); white-space: nowrap; overflow: hidden; letter-spacing: 4px; }
+#printWatermark { display: none; }
+@media print { #printWatermark:not(:empty) { display: flex; position: fixed; inset: 0; align-items: center; justify-content: center; transform: rotate(-35deg); font: 700 64pt var(--doc-font); color: rgba(0,0,0,.08); z-index: 0; } }
+body.tracking #saveState::after { content: " • Suivi actif"; color: #F59E0B; }
+body.protected #canvas { box-shadow: inset 0 3px 0 #F59E0B; }
+body.dictating #saveState::after { content: " • 🎙 Dictée"; color: var(--brand); }
+#editor .pl-caption { margin-top: 2pt; }

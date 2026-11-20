@@ -281,7 +281,7 @@ const DocxExport = (() => {
         const absId = numbering.abstracts.length;
         numbering.abstracts.push(fmts);
         numbering.nums.push(absId);
-        inst = { numId: 'NEW' + numbering.nums.length };
+        inst = { numId: 'NEW' + (numbering.nums.length - 1) };
       }
       let out = '';
       for (const li of Array.from(L.children)) {

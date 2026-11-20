@@ -92,7 +92,7 @@ const Backstage = {
       case 'open':
         main.append(el('h1', {}, ['Ouvrir']),
           el('div', { class: 'bs-actions' }, [
-            el('button', { class: 'bs-card', onclick: () => { this.close(); App.openPicker(); } }, [icon('folder-open', 'lg'), el('b', {}, ['Parcourir…']), el('span', {}, ['Ouvrir un fichier Word (.docx), HTML, texte ou Markdown depuis votre appareil.'])])
+            el('button', { class: 'bs-card', onclick: () => { this.close(); App.openPicker(); } }, [icon('folder-open', 'lg'), el('b', {}, ['Parcourir…']), el('span', {}, ['Word (.docx, .doc), OpenDocument (.odt), RTF, PDF, Google Docs exportés, Markdown, HTML, texte…'])])
           ]), el('h2', {}, ['Documents récents (sur cet appareil)']), await this.recent());
         break;
       case 'info': {
@@ -108,21 +108,28 @@ const Backstage = {
         main.append(el('h1', {}, ['Informations']), el('h2', {}, [App.name()]), t);
         break;
       }
-      case 'export':
-        main.append(el('h1', {}, ['Exporter / Télécharger']), el('div', { class: 'bs-actions' }, [
-          el('button', { class: 'bs-card', onclick: () => { this.close(); App.save(true); } }, [icon('file-text', 'lg'), el('b', {}, ['Document Word (.docx)']), el('span', {}, ['Compatible Microsoft 365, Word 2007 et suivants, LibreOffice, Google Docs.'])]),
-          el('button', { class: 'bs-card', onclick: () => { this.close(); App.print(); } }, [icon('printer', 'lg'), el('b', {}, ['PDF']), el('span', {}, ['Ouvre l’impression : choisissez « Enregistrer au format PDF ».'])]),
-          el('button', { class: 'bs-card', onclick: () => { this.close(); App.exportHtml(); } }, [icon('file-down', 'lg'), el('b', {}, ['Page web (.html)']), el('span', {}, ['Un fichier unique, images incluses.'])]),
-          el('button', { class: 'bs-card', onclick: () => { this.close(); App.exportTxt(); } }, [icon('file', 'lg'), el('b', {}, ['Texte brut (.txt)']), el('span', {}, ['Uniquement le texte, sans mise en forme.'])])
-        ]));
+      case 'export': {
+        const icons = { docx: 'file-text', odt: 'file-text', pdf: 'printer', rtf: 'file', doc: 'file', html: 'file-down', md: 'file-down', txt: 'file' };
+        const grid = el('div', { class: 'bs-actions' });
+        for (const [k, f] of Object.entries(Formats.EXPORT)) {
+          if (f.desktop && !window.plumeDesktop) continue;
+          grid.append(el('button', { class: 'bs-card', onclick: () => { this.close(); App.saveAs(k); } }, [icon(icons[k] || 'file', 'lg'), el('b', {}, [f.label]), el('span', {}, [f.desc])]));
+        }
+        main.append(el('h1', {}, ['Exporter / Télécharger']), grid);
+        if (window.plumeDesktop) {
+          const st = el('p', { style: 'color:var(--ui-fg-2);margin-top:22px' }, ['Module de conversion LibreOffice : vérification…']);
+          main.append(st);
+          Formats.converterAvailable().then(ok => { st.innerHTML = ok ? '✅ Module de conversion LibreOffice détecté : ouverture des .doc, .wpd, .wps, .pages… et export .doc disponibles.' : 'ℹ️ Installez <a href="https://fr.libreoffice.org/download/telecharger-libreoffice/" target="_blank" rel="noopener">LibreOffice</a> (gratuit) pour ouvrir les formats anciens (.doc avec mise en forme, WordPerfect, Works, Pages…) et exporter en .doc.'; });
+        }
         break;
+      }
       case 'about':
         main.append(el('h1', {}, ['À propos de Plume']), el('div', {
           html: `<div style="display:flex;gap:18px;align-items:center;margin-bottom:18px"><svg viewBox="0 0 512 512" width="72" height="72"><use href="#plume-logo"/></svg>
           <div><img src="icons/plume-wordmark-${document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'}.svg" alt="Plume" height="34" style="display:block;margin-bottom:6px"><div style="color:var(--ui-fg-2)">Traitement de texte libre de <b>Pixel's ASBL</b> — Boussu</div><div style="color:var(--ui-fg-2)">Version ${App.VERSION}</div></div></div>
           <p style="max-width:640px;line-height:1.6">Plume fonctionne dans le navigateur, hors ligne, sur Windows, macOS, Linux, Android et iOS. Vos documents restent sur votre appareil : rien n'est envoyé sur Internet.</p>
           <p style="line-height:1.6">Contact : <a href="mailto:info@asblpixels.be">info@asblpixels.be</a> · <a href="https://facebook.com/asblpixels" target="_blank" rel="noopener">facebook.com/asblpixels</a></p>
-          <h2>Composants libres</h2><ul style="line-height:1.7"><li>JSZip — licence MIT (Stuart Knightley et contributeurs)</li><li>Tracés d’icônes Lucide — licence ISC, restylés pour Plume</li><li>Police du logotype Outfit — SIL Open Font License 1.1</li></ul>
+          <h2>Composants libres</h2><ul style="line-height:1.7"><li>JSZip — licence MIT (Stuart Knightley et contributeurs)</li><li>PDF.js — licence Apache 2.0 (Mozilla et contributeurs)</li><li>Tracés d’icônes Lucide — licence ISC, restylés pour Plume</li><li>Police du logotype Outfit — SIL Open Font License 1.1</li></ul>
           <p style="color:var(--ui-fg-2);font-size:12px">Microsoft Word et Office 365 sont des marques de Microsoft Corporation. Plume est un logiciel indépendant, sans lien avec Microsoft.</p>`
         }));
         break;
