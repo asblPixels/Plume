@@ -13,9 +13,8 @@
 ![Hors ligne](https://img.shields.io/badge/hors%20ligne-oui-26EFC5?style=flat-square&labelColor=0D1013)
 ![Dépendances](https://img.shields.io/badge/d%C3%A9pendances-2%20(JSZip%2C%20PDF.js)-26EFC5?style=flat-square&labelColor=0D1013)
 
-### [▶ Ouvrir Plume : **plume.asblpixels.be**](https://plume.asblpixels.be)
+### [▶ Ouvrir Plume : **asblpixels.github.io/Plume**](https://asblpixels.github.io/Plume/)
 
-<sub>Adresse de secours : https://asblpixels.github.io/Plume/</sub>
 
 <img src="docs/captures/plume-accueil.png" alt="Plume — fenêtre principale" width="900">
 
@@ -27,7 +26,7 @@
 
 | Plateforme | Version | Comment l'obtenir |
 |---|---|---|
-| 🌐 **Navigateur** (tous systèmes) | En ligne | **https://plume.asblpixels.be** : rien à installer |
+| 🌐 **Navigateur** (tous systèmes) | En ligne | **https://asblpixels.github.io/Plume/** : rien à installer |
 | 🪟 **Windows 10 / 11** | Installateur | `Plume-Setup-1.3.0-x64.exe` (page *Releases*) |
 | 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.3.0-x64.zip` (page *Releases*) : décompresser, lancer `Plume.exe` |
 | 🐧 **Linux** | AppImage, .deb, .rpm | `Plume-1.3.0.AppImage`, `plume_1.3.0_amd64.deb`, `plume-1.3.0.x86_64.rpm` |
@@ -279,7 +278,7 @@ Aucun logiciel tiers n'atteint 100 % de compatibilité avec Word. Voici ce qui r
 
 ### En ligne, sans installation
 
-Plume est disponible à l'adresse **https://plume.asblpixels.be**. Aucun compte n'est nécessaire et les documents restent sur votre appareil. Depuis cette adresse, Plume peut aussi être installé comme une application (voir plus bas).
+Plume est disponible à l'adresse **https://asblpixels.github.io/Plume/**. Aucun compte n'est nécessaire et les documents restent sur votre appareil. Depuis cette adresse, Plume peut aussi être installé comme une application (voir plus bas).
 
 ### En local
 
@@ -383,7 +382,7 @@ Pour mettre Plume à disposition des bénéficiaires, hébergez le dossier sur n
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name plume.asblpixels.be;
+    server_name plume.example.org;
     root /var/www/plume;
     index index.html;
 
@@ -414,7 +413,7 @@ AddType application/manifest+json .webmanifest
 
 | Service | Remarque |
 |---|---|
-| GitHub Pages | **Version officielle** : https://plume.asblpixels.be (publiée depuis la branche `main`) |
+| GitHub Pages | **Version officielle** : https://asblpixels.github.io/Plume/ (publiée depuis la branche `main`) |
 | Netlify, Cloudflare Pages | Glisser-déposer du dossier, HTTPS automatique |
 | Serveur de l'ASBL | Configuration Nginx ou Apache ci-dessus |
 
@@ -621,7 +620,7 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 - **Polices scolaires intégrées** : cursives françaises (Playwrite FR Moderne et Trad), Andika, OpenDyslexic, Comic Neue, Atkinson Hyperlegible, Lexend
 - **Ajout de polices personnelles** (Marelle, polices d'école…) conservées sur l'appareil
 - **Guide « Bien démarrer »** intégré (onglet Aide), proposé au premier lancement
-- Adresse simple : **plume.asblpixels.be**
+- Adresse simple : **asblpixels.github.io/Plume**
 - Correctif : lecture des réglages enregistrés dans le navigateur
 
 ### 1.2.0 — 20 novembre 2026
