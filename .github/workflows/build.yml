@@ -22,18 +22,52 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}' }
+      - name: Outils de paquets
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
       - name: Application de bureau Linux
         working-directory: desktop
         run: |
           npm install --no-audit --no-fund
           node prepare.js
-          npx electron-builder --linux dir snap --x64 --publish never
+          npx electron-builder --linux dir snap AppImage deb rpm --x64 --publish never
           tar czf ../flatpak/plume-linux-x64.tar.gz -C dist/linux-unpacked .
-          mkdir -p ../out && cp dist/*.snap ../out/
+          mkdir -p ../out && cp dist/*.snap dist/*.AppImage dist/*.deb dist/*.rpm ../out/
       - uses: actions/upload-artifact@v4
         with: { name: linux-tarball, path: flatpak/plume-linux-x64.tar.gz }
       - uses: actions/upload-artifact@v4
-        with: { name: snap, path: out/*.snap }
+        with: { name: linux-paquets, path: out/* }
+
+  windows:
+    name: Windows (installateur et portable)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - name: Application Windows
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+          node prepare.js
+          npx electron-builder --win dir --x64 --publish never
+      - name: Installateur NSIS et version portable
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress | Out-Null }
+          $nsis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $nsis) { $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe" }
+          $v = node -p "require('./package.json').version"
+          $d = (Get-Location).Path
+          & $nsis "/DVERSION=$v" "/DSRC=$d\dist\win-unpacked" "/DOUT=$d\dist\Plume-Setup-$v-x64.exe" "/DICON=$d\build\icon.ico" installer\plume.nsi
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          New-Item -ItemType Directory -Force ..\out | Out-Null
+          Copy-Item -Recurse dist\win-unpacked Plume
+          Compress-Archive -Path Plume -DestinationPath "..\out\Plume-Portable-$v-x64.zip"
+          Copy-Item "dist\Plume-Setup-$v-x64.exe" ..\out\
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: out/* }
 
   flatpak:
     name: Flatpak
@@ -120,16 +154,25 @@ jobs:
   release:
     name: Publication dans la Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux-base, flatpak, android, ios]
+    needs: [linux-base, windows, flatpak, android, ios]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }
       - run: ls -la dist
+      - uses: actions/checkout@v4
+        with: { path: src }
       - uses: softprops/action-gh-release@v2
         with:
+          name: Plume ${{ github.ref_name }}
+          body_path: src/docs/notes-de-version/${{ github.ref_name }}.md
           files: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.snap
+            dist/*.flatpak
             dist/*.apk
             dist/*.ipa
-            dist/*.flatpak
-            dist/*.snap

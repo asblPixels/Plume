@@ -31,8 +31,9 @@
 | 🪟 **Windows 10 / 11** | Installateur | `Plume-Setup-1.3.0-x64.exe` (page *Releases*) |
 | 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.3.0-x64.zip` (page *Releases*) : décompresser, lancer `Plume.exe` |
 | 🐧 **Linux** | AppImage, .deb, .rpm | `Plume-1.3.0.AppImage`, `plume_1.3.0_amd64.deb`, `plume-1.3.0.x86_64.rpm` |
-| 🤖 **Android** | Application installée | Ouvrir l'adresse en ligne dans Chrome → menu ⋮ → **Installer l'application** |
-| 🍎 **iPhone / iPad** | Application d'écran d'accueil | Ouvrir l'adresse en ligne dans Safari → Partager → **Sur l'écran d'accueil** |
+| 🐧 **Linux** (Flatpak, Snap) | `Plume.flatpak`, `plume_*.snap` | `flatpak install Plume.flatpak` · `sudo snap install --dangerous plume_*.snap` |
+| 🤖 **Android** | APK | `Plume-*-android.apk` : ouvrir le fichier sur le téléphone, autoriser « sources inconnues » ; ou application web : Chrome → ⋮ → **Installer l'application** |
+| 🍎 **iPhone / iPad** | Application d'écran d'accueil | Ouvrir l'adresse en ligne dans Safari → Partager → **Sur l'écran d'accueil** (recommandé). Un `.ipa` non signé est aussi fourni pour AltStore / Sideloadly. |
 
 ---
 
@@ -423,6 +424,23 @@ AddType application/manifest+json .webmanifest
 
 ---
 
+## Compilation automatique
+
+Chaque envoi sur `main` déclenche la compilation (onglet **Actions** du dépôt). La publication d'un **tag `vX.Y.Z`** fabrique et joint automatiquement à la Release :
+
+| Plateforme | Fichier | Fabriqué par |
+|---|---|---|
+| Windows | installateur `.exe` + portable `.zip` | Electron + NSIS (`desktop/installer/plume.nsi`) |
+| Linux | `.AppImage`, `.deb`, `.rpm`, `.snap`, `.flatpak` | Electron, Flatpak (`flatpak/`) |
+| Android | `.apk` | Capacitor (`mobile/`) |
+| iOS | `.ipa` non signée | Capacitor + Xcode (`mobile/`) |
+
+La description de la Release est lue dans `docs/notes-de-version/vX.Y.Z.md`.
+
+**Publier une nouvelle version** : mettre à jour les numéros de version (`desktop/package.json`, `mobile/package.json`, `js/app.js`), écrire `docs/notes-de-version/vX.Y.Z.md`, puis créer le tag `vX.Y.Z`.
+
+> iOS : une application installable depuis l'App Store demande un compte Apple Developer (99 $/an). Sans ce compte, l'application web installée depuis Safari reste la solution la plus simple.
+
 ## Navigateurs pris en charge
 
 | Navigateur | Version minimale | Remarques |
@@ -486,6 +504,9 @@ plume/
 │   └── icons.js            Tracés d'icônes (base Lucide, ISC)
 ├── icons/                  Logo « Plume » (SVG clair/sombre), icône P (SVG), icônes PWA (192, 512, maskable), apple-touch-icon, favicon
 ├── desktop/                Application de bureau Electron (Windows, Linux, macOS)
+├── mobile/                 Application Android / iOS (Capacitor)
+├── flatpak/                Manifeste Flatpak et fiche AppStream
+├── .github/workflows/      Compilation et publication automatiques
 ├── vendor/
 │   ├── jszip.min.js        Lecture/écriture des archives ZIP (.docx, .odt)
 │   └── pdfjs/              PDF.js (lecture des PDF)
@@ -593,6 +614,8 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 ## Historique des versions
 
 ### 1.3.0 — 20 novembre 2026
+- **Nouvelles plateformes** : APK Android, iOS (IPA non signée), Flatpak, Snap ; compilation et publication automatiques (GitHub Actions)
+- Mobile : enregistrement dans *Documents › Plume*, partage, « Ouvrir avec Plume »
 - **Polices scolaires intégrées** : cursives françaises (Playwrite FR Moderne et Trad), Andika, OpenDyslexic, Comic Neue, Atkinson Hyperlegible, Lexend
 - **Ajout de polices personnelles** (Marelle, polices d'école…) conservées sur l'appareil
 - **Guide « Bien démarrer »** intégré (onglet Aide), proposé au premier lancement
