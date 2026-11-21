@@ -1,0 +1,23 @@
+{
+  "name": "plume-mobile",
+  "version": "1.3.0",
+  "private": true,
+  "description": "Plume pour Android et iOS (Capacitor)",
+  "scripts": {
+    "prepare-www": "node prepare-www.js",
+    "android": "node prepare-www.js && npx cap sync android && node patch-android.js",
+    "ios": "node prepare-www.js && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/filesystem": "^6.0.0",
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/share": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.2.0"
+  }
+}

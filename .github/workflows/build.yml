@@ -1,0 +1,135 @@
+# Compilation automatique de Plume : Android (APK), iOS (IPA non signée),
+# Flatpak, Snap. Sur un tag « v* », les fichiers sont joints à la Release.
+name: Compilation
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  linux-base:
+    name: Linux (base pour Flatpak et Snap)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - name: Application de bureau Linux
+        working-directory: desktop
+        run: |
+          npm install --no-audit --no-fund
+          node prepare.js
+          npx electron-builder --linux dir snap --x64 --publish never
+          tar czf ../flatpak/plume-linux-x64.tar.gz -C dist/linux-unpacked .
+          mkdir -p ../out && cp dist/*.snap ../out/
+      - uses: actions/upload-artifact@v4
+        with: { name: linux-tarball, path: flatpak/plume-linux-x64.tar.gz }
+      - uses: actions/upload-artifact@v4
+        with: { name: snap, path: out/*.snap }
+
+  flatpak:
+    name: Flatpak
+    needs: linux-base
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: linux-tarball, path: flatpak }
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: Plume.flatpak
+          manifest-path: flatpak/be.asblpixels.Plume.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+  android:
+    name: Android (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Projet Android
+        working-directory: mobile
+        run: |
+          npm install --no-audit --no-fund
+          node prepare-www.js
+          npx cap add android
+          npx capacitor-assets generate --android --iconBackgroundColor '#0D1013' --iconBackgroundColorDark '#0D1013' --splashBackgroundColor '#0D1013' --splashBackgroundColorDark '#0D1013'
+          node patch-android.js
+          npx cap sync android
+      - name: Compilation de l'APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          VERSION=$(node -p "require('../package.json').version")
+          mkdir -p ../../out && cp app/build/outputs/apk/debug/app-debug.apk ../../out/Plume-$VERSION-android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: out/*.apk }
+
+  ios:
+    name: iOS (IPA non signée)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - name: Projet iOS
+        working-directory: mobile
+        run: |
+          npm install --no-audit --no-fund
+          node prepare-www.js
+          npx cap add ios
+          npx capacitor-assets generate --ios
+          npx cap sync ios
+          PL=ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" $PL || true
+          /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" $PL || true
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Plume" $PL || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Plume" $PL
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes array" $PL || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0 dict" $PL
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeName string Document" $PL
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSHandlerRank string Alternate" $PL
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSItemContentTypes array" $PL
+          i=0; for t in org.openxmlformats.wordprocessingml.document com.microsoft.word.doc org.oasis-open.opendocument.text public.rtf com.adobe.pdf public.plain-text net.daringfireball.markdown; do
+            /usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSItemContentTypes:$i string $t" $PL; i=$((i+1)); done
+      - name: Compilation (sans signature)
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          VERSION=$(node -p "require('../../package.json').version")
+          mkdir -p Payload && cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          mkdir -p ../../../out && zip -qry ../../../out/Plume-$VERSION-ios-non-signee.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with: { name: ios, path: out/*.ipa }
+
+  release:
+    name: Publication dans la Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux-base, flatpak, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - run: ls -la dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.apk
+            dist/*.ipa
+            dist/*.flatpak
+            dist/*.snap

@@ -1,0 +1,48 @@
+# Flatpak de Plume (application de bureau Electron)
+app-id: be.asblpixels.Plume
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '24.08'
+command: plume
+separate-locales: false
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=xdg-documents
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --talk-name=org.freedesktop.Notifications
+  - --env=ELECTRON_TRASH=gio
+modules:
+  - name: plume
+    buildsystem: simple
+    sources:
+      - type: archive
+        path: plume-linux-x64.tar.gz
+        strip-components: 0
+        dest: plume
+      - type: file
+        path: be.asblpixels.Plume.desktop
+      - type: file
+        path: be.asblpixels.Plume.metainfo.xml
+      - type: file
+        path: plume-256.png
+      - type: file
+        path: plume-512.png
+      - type: script
+        dest-filename: plume-launcher
+        commands:
+          - exec zypak-wrapper /app/plume/plume --ozone-platform-hint=auto "$@"
+    build-commands:
+      - cp -r plume /app/plume
+      - chmod 755 /app/plume/plume
+      - install -Dm755 plume-launcher /app/bin/plume
+      - install -Dm644 be.asblpixels.Plume.desktop /app/share/applications/be.asblpixels.Plume.desktop
+      - install -Dm644 be.asblpixels.Plume.metainfo.xml /app/share/metainfo/be.asblpixels.Plume.metainfo.xml
+      - install -Dm644 plume-256.png /app/share/icons/hicolor/256x256/apps/be.asblpixels.Plume.png
+      - install -Dm644 plume-512.png /app/share/icons/hicolor/512x512/apps/be.asblpixels.Plume.png

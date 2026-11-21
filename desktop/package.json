@@ -11,7 +11,8 @@
     "prepare-app": "node prepare.js",
     "start": "node prepare.js && electron .",
     "dist:win": "node prepare.js && electron-builder --win nsis portable --x64",
-    "dist:linux": "node prepare.js && electron-builder --linux AppImage rpm deb --x64"
+    "dist:linux": "node prepare.js && electron-builder --linux AppImage rpm deb --x64",
+    "dist:snap": "node prepare.js && electron-builder --linux snap --x64"
   },
   "build": {
     "appId": "be.asblpixels.plume",
@@ -155,7 +156,8 @@
       "target": [
         "AppImage",
         "rpm",
-        "deb"
+        "deb",
+        "snap"
       ],
       "mimeTypes": [
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -164,11 +166,33 @@
         "application/rtf",
         "text/markdown"
       ],
-      "maintainer": "Pixel's ASBL <info@asblpixels.be>"
+      "maintainer": "Pixel's ASBL <info@asblpixels.be>",
+      "synopsis": "Traitement de texte compatible Word",
+      "desktop": {
+        "entry": {
+          "Name": "Plume",
+          "Comment": "Traitement de texte",
+          "Categories": "Office;WordProcessor;",
+          "Keywords": "traitement de texte;word;docx;odt;"
+        }
+      }
     },
     "publish": null,
     "deb": {
       "packageName": "plume"
+    },
+    "snap": {
+      "grade": "stable",
+      "confinement": "strict",
+      "summary": "Traitement de texte compatible Word, OpenDocument, RTF et PDF",
+      "description": "Plume, le traitement de texte libre de Pixel's ASBL : ouvre et enregistre les documents Word, LibreOffice, Google Docs, RTF et PDF. Fonctionne hors ligne, sans compte.",
+      "plugs": [
+        "default",
+        "removable-media",
+        "home",
+        "cups-control"
+      ],
+      "publish": null
     }
   },
   "devDependencies": {

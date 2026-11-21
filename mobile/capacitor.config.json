@@ -1,0 +1,8 @@
+{
+  "appId": "be.asblpixels.plume",
+  "appName": "Plume",
+  "webDir": "www",
+  "backgroundColor": "#0D1013",
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "never", "backgroundColor": "#0D1013" }
+}

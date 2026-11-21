@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>be.asblpixels.Plume</id>
+  <name>Plume</name>
+  <summary>Traitement de texte compatible Word, OpenDocument, RTF et PDF</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <developer id="be.asblpixels"><name>Pixel's ASBL</name></developer>
+  <description>
+    <p>Plume est le traitement de texte libre d'accès de Pixel's ASBL. Il ouvre et enregistre les documents Word, LibreOffice, Google Docs, RTF et PDF, fonctionne hors ligne et ne demande aucun compte.</p>
+    <ul>
+      <li>Interface à ruban familière</li>
+      <li>Conservation intégrale des documents Word (graphiques, équations, commentaires)</li>
+      <li>Polices scolaires et cursives, publipostage, suivi des modifications</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">be.asblpixels.Plume.desktop</launchable>
+  <url type="homepage">https://github.com/asblPixels/Plume</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.3.0" date="2026-11-20"/>
+  </releases>
+</component>

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Plume
+GenericName=Traitement de texte
+Comment=Traitement de texte compatible Word, OpenDocument, RTF et PDF
+Exec=plume %F
+Icon=be.asblpixels.Plume
+Terminal=false
+Categories=Office;WordProcessor;
+Keywords=traitement de texte;word;docx;odt;rtf;écrire;
+MimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;application/rtf;text/markdown;application/pdf;
+StartupWMClass=Plume

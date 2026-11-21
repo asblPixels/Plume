@@ -135,6 +135,7 @@ function dialog({ title, body, buttons = [{ label: 'OK', primary: true, value: t
 
 /* ---------- Téléchargement ---------- */
 function downloadBlob(blob, name) {
+  if (window.Native && Native.on) { Native.save(blob, name); return; }   // téléphone : Documents + partage
   const a = el('a', { href: URL.createObjectURL(blob), download: name });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);

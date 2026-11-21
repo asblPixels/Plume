@@ -13,6 +13,7 @@ const App = {
     Ribbon.build();
     Mini.init();
     Track.init();
+    Native.init();
     CustomFonts.init();
     AutoCorrect.init();
     this.initTheme();
@@ -207,6 +208,7 @@ const App = {
   },
   endPrint() { if (this._push !== undefined) { $('#pushStyle').textContent = this._push; this._push = undefined; } },
   print() {
+    if (Native.on) { dialog({ title: 'Imprimer ou créer un PDF', body: '<p style="line-height:1.55">Sur téléphone, exportez le document en <b>Word (.docx)</b> ou <b>OpenDocument (.odt)</b> (menu Fichier → Exporter), puis ouvrez-le avec l’application d’impression ou de PDF de votre téléphone grâce au bouton <b>Partager</b>.</p>', buttons: [{ label: 'Exporter en Word', primary: true, onClick: () => { App.saveAs('docx'); } }, { label: 'Fermer' }] }); return; }
     this.preparePrint();
     setTimeout(() => { window.print(); this.endPrint(); }, 50);
   },
