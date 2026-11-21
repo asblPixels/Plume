@@ -351,7 +351,7 @@ npm install
 npm run dist:win      # sous Windows : installateur et version portable
 # sous Linux, sans Wine : application Windows + installateur NSIS natif
 npx electron-builder --win dir --x64
-makensis -DVERSION=1.3.0 -DSRC=$PWD/dist/win-unpacked -DOUT=$PWD/dist/Plume-Setup-1.3.0-x64.exe -DICON=$PWD/build/icon.ico installer/plume.nsi
+makensis -DSEP=/ -DVERSION=1.3.0 -DSRC=$PWD/dist/win-unpacked -DOUT=$PWD/dist/Plume-Setup-1.3.0-x64.exe -DICON=$PWD/build/icon.ico installer/plume.nsi
 npm run dist:linux    # → AppImage et paquet .rpm pour Fedora
 npm start             # lancer l'application en mode développement
 ```

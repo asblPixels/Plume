@@ -10,6 +10,10 @@ SetCompressorDictSize 64
 RequestExecutionLevel user
 ManifestDPIAware true
 
+; séparateur de chemin : « \ » sous Windows (défaut), passer -DSEP=/ pour compiler sous Linux
+!ifndef SEP
+  !define SEP "\"
+!endif
 !ifndef VERSION
   !define VERSION "1.2.0"
 !endif
@@ -62,7 +66,7 @@ Section "Plume" SecMain
   SetOutPath "$INSTDIR"
   ; ferme une instance ouverte avant de remplacer les fichiers
   nsExec::Exec 'taskkill /F /IM Plume.exe'
-  File /r "${SRC}/*.*"
+  File /r "${SRC}${SEP}*.*"
   WriteUninstaller "$INSTDIR\Desinstaller Plume.exe"
 
   ; raccourcis
