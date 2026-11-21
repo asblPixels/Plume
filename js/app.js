@@ -149,7 +149,7 @@ const App = {
     const info = Formats.EXPORT[fmt];
     try {
       this.setSaveState('Enregistrement…');
-      if (fmt === 'pdf' && !(window.plumeDesktop && window.plumeDesktop.printToPdf)) { this.setSaveState(''); this.print(); return; }
+      if (fmt === 'pdf' && !(window.plumeDesktop && window.plumeDesktop.printToPdf)) this.setSaveState('Création du PDF…');
       if (fmt === 'pdf') this.preparePrint();
       const blob = await Formats.build(fmt, this.exportCtx());
       if (fmt === 'pdf') this.endPrint();
@@ -208,7 +208,7 @@ const App = {
   },
   endPrint() { if (this._push !== undefined) { $('#pushStyle').textContent = this._push; this._push = undefined; } },
   print() {
-    if (Native.on) { dialog({ title: 'Imprimer ou créer un PDF', body: '<p style="line-height:1.55">Sur téléphone, exportez le document en <b>Word (.docx)</b> ou <b>OpenDocument (.odt)</b> (menu Fichier → Exporter), puis ouvrez-le avec l’application d’impression ou de PDF de votre téléphone grâce au bouton <b>Partager</b>.</p>', buttons: [{ label: 'Exporter en Word', primary: true, onClick: () => { App.saveAs('docx'); } }, { label: 'Fermer' }] }); return; }
+    if (Native.on) { dialog({ title: 'Imprimer', body: '<p style="line-height:1.55">Sur téléphone ou tablette, créez un <b>PDF</b> puis utilisez le bouton <b>Partager</b> pour l’envoyer à une imprimante ou à une autre application.</p>', buttons: [{ label: 'Créer le PDF', primary: true, onClick: () => { App.saveAs('pdf'); } }, { label: 'Fermer' }] }); return; }
     this.preparePrint();
     setTimeout(() => { window.print(); this.endPrint(); }, 50);
   },
@@ -485,6 +485,7 @@ const App = {
       if (k === 's') return run('save');
       if (k === 'o') return run('open');
       if (k === 'n' && !e.shiftKey) return run('new');
+      if (k === 'p' && e.shiftKey) return run('exportPdf');
       if (k === 'p') return run('print');
       if (inField) return;
       if (k === 'z' && !e.shiftKey) return run('undo');

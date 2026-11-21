@@ -558,3 +558,11 @@ body.tracking #saveState::after { content: " • Suivi actif"; color: #F59E0B; }
 body.protected #canvas { box-shadow: inset 0 3px 0 #F59E0B; }
 body.dictating #saveState::after { content: " • 🎙 Dictée"; color: var(--brand); }
 #editor .pl-caption { margin-top: 2pt; }
+
+/* Export PDF direct : page sans décorations d'écran */
+body.pdf-export .page-card { box-shadow: none; border-radius: 0; }
+body.pdf-export .hf:empty::before { content: none; }
+body.pdf-export #editor .pl-pagebreak { background: none; }
+body.pdf-export #editor .pl-pagebreak::after, body.pdf-export .toc-upd { display: none; }
+body.pdf-export #editor table[data-borders="none"] td { border-color: transparent; }
+body.pdf-export #editor .pl-merge, body.pdf-export #editor .pl-field { background: none; }

@@ -29,7 +29,7 @@ const Formats = (() => {
   const EXPORT = {
     docx: { label: 'Document Word (.docx)', desc: 'Microsoft 365, Word 2007 et suivants, Google Docs, LibreOffice.', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
     odt: { label: 'OpenDocument (.odt)', desc: 'LibreOffice, OpenOffice, Google Docs, Word.', mime: 'application/vnd.oasis.opendocument.text' },
-    pdf: { label: 'PDF (.pdf)', desc: 'Document figé pour l’envoi et l’impression.', mime: 'application/pdf' },
+    pdf: { label: 'PDF (.pdf)', desc: 'Fichier PDF direct, prêt à envoyer ou imprimer. Polices, images et mise en page incluses.', mime: 'application/pdf' },
     rtf: { label: 'Texte enrichi (.rtf)', desc: 'Lisible partout, même par WordPad et TextEdit.', mime: 'application/rtf' },
     doc: { label: 'Word 97-2003 (.doc)', desc: 'Pour les très anciennes versions de Word (application de bureau + LibreOffice).', mime: 'application/msword', desktop: true },
     html: { label: 'Page web (.html)', desc: 'Un fichier unique, images incluses.', mime: 'text/html' },
@@ -234,12 +234,73 @@ const Formats = (() => {
         return new Blob([conv], { type: EXPORT.doc.mime });
       }
       case 'pdf': {
+        // application de bureau : PDF vectoriel (texte sélectionnable) ; ailleurs : PDF direct page par page
         if (window.plumeDesktop && window.plumeDesktop.printToPdf) return new Blob([await window.plumeDesktop.printToPdf()], { type: 'application/pdf' });
-        return null; // navigateur : impression → « Enregistrer au format PDF »
+        return rasterPdf(ctx);
       }
     }
     throw new Error('Format d’export inconnu : ' + format);
   }
 
-  return { OPEN, CONVERT, EXPORT, SAVABLE, ACCEPT, ALL_EXT, extOf, open, build, converterAvailable, importPdf };
+  /* ---------- PDF direct (navigateur, tablette, téléphone) ---------- */
+  const loadScript = src => new Promise((res, rej) => { if (document.querySelector(`script[data-lib="${src}"]`)) return res(); const sc = document.createElement('script'); sc.src = src; sc.dataset.lib = src; sc.onload = res; sc.onerror = () => rej(new Error('Module PDF introuvable : ' + src)); document.head.append(sc); });
+  /**
+   * Fabrique un fichier PDF à partir des pages affichées : chaque page est rendue
+   * en haute définition (≈ 200 ppp) avec ses en-têtes, pieds, images et polices.
+   */
+  async function rasterPdf(ctx, onProgress) {
+    await loadScript('vendor/html2canvas.min.js');
+    await loadScript('vendor/jspdf.umd.min.js');
+    const { jsPDF } = window.jspdf;
+    const page = Ed.page, n = Ed.pageCount, P = page.h + GAP;
+    const canvasEl = $('#canvas'), zoomBox = $('#zoomBox');
+    const saved = { scroll: canvasEl.scrollTop, zoom: zoomBox.style.zoom, cls: document.body.className };
+    // affichage « propre » : 100 %, sans marques d'édition ni surlignages
+    zoomBox.style.zoom = 1; canvasEl.scrollTop = 0;
+    document.body.classList.add('pdf-export');
+    document.body.classList.remove('show-marks');
+    Ed.selectImage && Ed.selectImage(null);
+    if (window.CSS && CSS.highlights) CSS.highlights.clear();
+    getSelection().removeAllRanges();
+    await document.fonts.ready;
+    await new Promise(r => setTimeout(r, 60));
+    const pt = px => px * 0.75;
+    const pdf = new jsPDF({ unit: 'pt', format: [pt(page.w), pt(page.h)], orientation: page.w > page.h ? 'landscape' : 'portrait', compress: true });
+    pdf.setProperties({ title: (ctx.props && ctx.props.title) || App.name(), author: (ctx.props && ctx.props.author) || '', creator: 'Plume — Pixel\'s ASBL' });
+    // scène hors écran : une copie de la feuille, décalée pour montrer une page à la fois
+    const stage = document.createElement('div');
+    stage.style.cssText = `position:absolute;left:0;top:0;width:${page.w}px;height:${page.h}px;overflow:hidden;background:#fff;z-index:-1;pointer-events:none`;
+    const copy = Ed.sheet.cloneNode(true);
+    copy.style.position = 'absolute'; copy.style.left = '0'; copy.style.margin = '0';
+    copy.querySelectorAll('#imgHandle, .page-num-badge, .toc-upd').forEach(e => e.remove());
+    stage.append(copy);
+    document.body.append(stage);
+    await Promise.all(Array.from(copy.querySelectorAll('img')).map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+    try {
+      for (let i = 0; i < n; i++) {
+        onProgress && onProgress(i + 1, n);
+        copy.style.top = (-i * P) + 'px';
+        const canvas = await html2canvas(stage, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, scrollX: -window.scrollX, scrollY: -window.scrollY });
+        if (i > 0) pdf.addPage([pt(page.w), pt(page.h)], page.w > page.h ? 'landscape' : 'portrait');
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pt(page.w), pt(page.h), undefined, 'FAST');
+        // liens cliquables conservés
+        const sr = stage.getBoundingClientRect();
+        for (const a of copy.querySelectorAll('#editor a[href^="http"], #editor a[href^="mailto:"]')) {
+          for (const rr of a.getClientRects()) {
+            const top = rr.top - sr.top;
+            if (top < 0 || top > page.h || !rr.width) continue;
+            pdf.link(pt(rr.left - sr.left), pt(top), pt(rr.width), pt(rr.height), { url: a.href });
+          }
+        }
+      }
+    } finally {
+      stage.remove();
+      zoomBox.style.zoom = saved.zoom; canvasEl.scrollTop = saved.scroll;
+      document.body.classList.remove('pdf-export');
+      if (/show-marks/.test(saved.cls)) document.body.classList.add('show-marks');
+    }
+    return pdf.output('blob');
+  }
+
+  return { rasterPdf, OPEN, CONVERT, EXPORT, SAVABLE, ACCEPT, ALL_EXT, extOf, open, build, converterAvailable, importPdf };
 })();

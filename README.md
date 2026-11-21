@@ -197,7 +197,7 @@ Plume reconnaît un fichier à son contenu et pas seulement à son extension : u
 |---|---|
 | Word (`.docx`) | Format par défaut ; conservation intégrale des documents Word ouverts |
 | OpenDocument (`.odt`) | Validé par ouverture dans LibreOffice |
-| PDF (`.pdf`) | Fichier PDF réel dans l'application de bureau (avec signets) ; impression « Enregistrer au format PDF » dans le navigateur |
+| PDF (`.pdf`) | **Fichier PDF direct partout** (bouton PDF de la barre du haut, `Ctrl+Maj+P`, ou Fichier → Exporter) : polices, images, en-têtes et liens inclus. Dans l'application de bureau, le PDF est vectoriel (texte sélectionnable, signets). |
 | Texte enrichi (`.rtf`) | Lisible par tous les traitements de texte |
 | Word 97-2003 (`.doc`) | Application de bureau avec LibreOffice |
 | Page web (`.html`), Markdown (`.md`), texte (`.txt`) | |
@@ -462,7 +462,7 @@ Fonctions avancées utilisées : propriété CSS `zoom`, CSS Custom Highlight AP
 | Ouvrir | `Ctrl+O` | | Gauche / Centrer / Droite / Justifier | `Ctrl+L` / `Ctrl+E` / `Ctrl+R` / `Ctrl+J` |
 | Enregistrer | `Ctrl+S` | | Titre 1 / 2 / 3 | `Ctrl+Alt+1` / `2` / `3` |
 | Enregistrer sous | `F12` | | Style Normal | `Ctrl+Maj+N` |
-| Imprimer / PDF | `Ctrl+P` | | Liste à puces | `Ctrl+Maj+L` |
+| Imprimer | `Ctrl+P` | | Liste à puces | `Ctrl+Maj+L` |
 | Annuler | `Ctrl+Z` | | Boîte de dialogue Police | `Ctrl+D` |
 | Rétablir | `Ctrl+Y` ou `Ctrl+Maj+Z` | | Effacer la mise en forme | `Ctrl+Espace` |
 | Rechercher | `Ctrl+F` | | Agrandir / réduire la police | `Ctrl+>` / `Ctrl+<` |
@@ -470,6 +470,7 @@ Fonctions avancées utilisées : propriété CSS `zoom`, CSS Custom Highlight AP
 | Lien | `Ctrl+K` | | Note de bas de page | `Ctrl+Alt+F` |
 | Nouveau commentaire | `Ctrl+Alt+M` | | | |
 | Saut de page | `Ctrl+Entrée` | | Marques de paragraphe | `Ctrl+*` |
+| Exporter en PDF | `Ctrl+Maj+P` | | | |
 | Recherche de commande | `Alt+Q` | | Orthographe (activer/désactiver) | `F7` |
 | Réduire le ruban | `Ctrl+F1` | | Plein écran | `F11` |
 | Tabulation / niveau de liste | `Tab` / `Maj+Tab` | | Suivre un lien | `Ctrl+clic` |
@@ -614,6 +615,7 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 ## Historique des versions
 
 ### 1.3.0 — 20 novembre 2026
+- **Export PDF direct** dans le navigateur, sur tablette et sur téléphone (bouton dans la barre du haut, `Ctrl+Maj+P`)
 - **Nouvelles plateformes** : APK Android, iOS (IPA non signée), Flatpak, Snap ; compilation et publication automatiques (GitHub Actions)
 - Mobile : enregistrement dans *Documents › Plume*, partage, « Ouvrir avec Plume »
 - **Polices scolaires intégrées** : cursives françaises (Playwrite FR Moderne et Trad), Andika, OpenDyslexic, Comic Neue, Atkinson Hyperlegible, Lexend
@@ -658,6 +660,7 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 |---|---|---|
 | [JSZip](https://stuk.github.io/jszip/) | Stuart Knightley et contributeurs | MIT |
 | [PDF.js](https://mozilla.github.io/pdf.js/) (import des PDF) | Mozilla et contributeurs | Apache 2.0 |
+| [jsPDF](https://github.com/parallax/jsPDF) et [html2canvas](https://html2canvas.hertzen.com) (export PDF direct) | James Hall, Niklas von Hertzen et contributeurs | MIT |
 | Polices Playwrite FR Moderne / Trad, Andika, OpenDyslexic, Comic Neue, Atkinson Hyperlegible, Lexend (via [Fontsource](https://fontsource.org)) | Leurs auteurs respectifs (TypeTogether, SIL International, Abbie Gonzalez, Craig Rozynski, Braille Institute, Bonnie Shaver-Troup…) | SIL OFL 1.1 — textes dans `vendor/fonts/licences/` |
 | Tracés d'icônes [Lucide](https://lucide.dev) | Lucide Contributors | ISC |
 | Police du logotype : [Outfit](https://github.com/Outfitio/Outfit-Fonts) (SemiBold, convertie en tracés) | The Outfit Project Authors | SIL OFL 1.1 |

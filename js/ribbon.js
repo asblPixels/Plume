@@ -23,7 +23,8 @@ function registerCommands() {
   cmd('saveAs', 'Enregistrer sous…', 'download', () => App.save(true), { kbd: 'F12' });
   cmd('new', 'Nouveau document', 'file-plus', () => App.newDoc(), { kbd: 'Ctrl+N' });
   cmd('open', 'Ouvrir…', 'folder-open', () => App.openPicker(), { kbd: 'Ctrl+O' });
-  cmd('print', 'Imprimer / Exporter en PDF', 'printer', () => App.print(), { kbd: 'Ctrl+P' });
+  cmd('print', 'Imprimer', 'printer', () => App.print(), { kbd: 'Ctrl+P' });
+  cmd('exportPdf', 'Exporter en PDF', 'file-down', () => App.saveAs('pdf'), { kbd: 'Ctrl+Maj+P' });
   cmd('paste', 'Coller', 'clipboard-paste', async () => {
     try { const t = await navigator.clipboard.readText(); E.insertText(t); }
     catch { toast('Utilisez <b>Ctrl+V</b> pour coller (le navigateur bloque l’accès au presse-papiers).'); }
@@ -229,7 +230,7 @@ const Ribbon = {
     $('#ribbonToggle .ic').style.transform = 'rotate(180deg)';
     // Barre d'accès rapide
     const qat = $('#qat');
-    for (const id of ['save', 'undo', 'redo']) qat.append(el('button', { title: `${CMD[id].label} (${CMD[id].kbd})`, 'data-cmd': id, onmousedown: e => e.preventDefault(), onclick: () => CMD[id].run() }, [icon(CMD[id].icon)]));
+    for (const id of ['save', 'exportPdf', 'undo', 'redo']) qat.append(el('button', { title: `${CMD[id].label} (${CMD[id].kbd})`, 'data-cmd': id, onmousedown: e => e.preventDefault(), onclick: () => CMD[id].run() }, [icon(CMD[id].icon)]));
     this.select('accueil');
     // Garder la sélection du document lors des clics dans le ruban
     rib.addEventListener('mousedown', e => { if (!e.target.closest('input,select')) e.preventDefault(); });
