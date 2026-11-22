@@ -15,7 +15,7 @@ ManifestDPIAware true
   !define SEP "\"
 !endif
 !ifndef VERSION
-  !define VERSION "1.2.0"
+  !define VERSION "1.4.0"
 !endif
 !define APPNAME "Plume"
 !define COMPANY "Pixel's ASBL"

@@ -4,7 +4,7 @@
 'use strict';
 
 const App = {
-  VERSION: '1.3.0',
+  VERSION: '1.4.0',
   docId: null, fileHandle: null, dirty: false,
 
   async init() {
@@ -48,7 +48,8 @@ const App = {
     if ('launchQueue' in window) {
       launchQueue.setConsumer(async p => { if (p.files && p.files.length) { this._launched = true; const h = p.files[0]; this.openFile(await h.getFile(), h); } });
     }
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
+    if ('serviceWorker' in navigator && location.protocol !== 'file:' && !window.plumeDesktop && !(window.Native && Native.on)) navigator.serviceWorker.register('sw.js').catch(() => { });
+    this.initUpdates();
     window.addEventListener('beforeunload', e => { if (this.dirty && !(this.savedLocally && this.keepLocal())) { e.preventDefault(); e.returnValue = ''; } });
     Ed.editor.focus();
     if (!localStorage.getItem('plume-guide-vu') && !navigator.webdriver) { localStorage.setItem('plume-guide-vu', '1'); setTimeout(() => Guide.open(), 600); }
@@ -72,6 +73,45 @@ const App = {
       if (Math.abs(z - z0) > 0.002) { t.style.zoom = z === 1 ? '' : String(z); changed = true; }
     }
     if (changed && Ed.relayout) Ed.relayout();
+  },
+
+  /* ---------- Mises à jour : toutes les versions de Plume restent à jour ---------- */
+  RELEASES: 'https://github.com/asblPixels/Plume/releases/latest',
+  ONLINE: 'https://asblpixels.github.io/Plume/',
+  updateBar(html, actions) {
+    $('#updateBar') && $('#updateBar').remove();
+    const bar = el('div', { id: 'updateBar', role: 'status' }, [el('span', { html })]);
+    for (const [label, fn, primary] of actions) bar.append(el('button', { class: primary ? 'primary' : '', onclick: fn }, [label]));
+    bar.append(el('button', { class: 'x', title: 'Plus tard', onclick: () => bar.remove() }, ['×']));
+    document.body.append(bar);
+  },
+  initUpdates() {
+    const newer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+    // application de bureau : la mise à jour est téléchargée en arrière-plan, appliquée au redémarrage
+    if (window.plumeDesktop && window.plumeDesktop.update) {
+      const ready = v => this.updateBar(`<b>Plume ${htmlEsc(v)}</b> est prêt : redémarrez pour profiter des nouveautés.`, [['Redémarrer', async () => { if (this.dirty) { const ok = await new Promise(r => dialog({ title: 'Redémarrer Plume', body: '<p>Le document n’est pas enregistré. Redémarrer quand même ?</p>', buttons: [{ label: 'Annuler', onClick: () => r(false) }, { label: 'Redémarrer', primary: true, onClick: () => r(true) }] })); if (!ok) return; } this.dirty = false; window.plumeDesktop.update.restart(); }, true]]);
+      window.plumeDesktop.update.onReady(ready);
+      window.plumeDesktop.update.state().then(st => { if (st && st.ready) ready(st.available); }).catch(() => { });
+      return;
+    }
+    // téléphone / tablette (APK, iPhone) : la version en ligne est toujours la plus récente
+    if (window.Native && Native.on) {
+      fetch(this.ONLINE + 'version.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(v => {
+        if (v && newer(v.version, this.VERSION)) this.updateBar(`Nouvelle version <b>Plume ${htmlEsc(v.version)}</b> disponible.`, [['Télécharger', () => window.open(this.RELEASES, '_blank'), true]]);
+      }).catch(() => { });
+      return;
+    }
+    // navigateur / application installée depuis le navigateur : le service worker se met à jour seul
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      let shown = false, had = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!had) { had = true; return; }   // première installation : rien de nouveau
+        if (shown) return; shown = true;
+        if (!this.dirty && $('#backstage').classList.contains('open')) { location.reload(); return; }
+        this.updateBar('Une nouvelle version de <b>Plume</b> est disponible.', [['Recharger', () => { if (this.dirty) { dialog({ title: 'Recharger Plume', body: '<p>Enregistrez d’abord votre document : il serait perdu au rechargement.</p>', buttons: [{ label: 'OK', primary: true }] }); return; } location.reload(); }, true]]);
+      });
+      navigator.serviceWorker.getRegistration().then(r => r && setInterval(() => r.update().catch(() => { }), 30 * 60 * 1000)).catch(() => { });
+    }
   },
 
   name() { return ($('#docTitle').value || 'Document').trim(); },

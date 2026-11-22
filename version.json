@@ -1,0 +1,426 @@
+{
+ "app": "Plume",
+ "version": "1.4.0",
+ "files": [
+  {
+   "path": "index.html",
+   "size": 5710,
+   "sha256": "ea46a04945944025c48e45eeb9f154850189e284ced48de3fe45b339b80461ba"
+  },
+  {
+   "path": "manifest.webmanifest",
+   "size": 2973,
+   "sha256": "8dc262386138d4dc4f19de740ec5e1eb0b98b99c8dcb76e0b36b79c3443b6ee2"
+  },
+  {
+   "path": "css/fonts.css",
+   "size": 4686,
+   "sha256": "e66431c2d7b32fd3954e44921fd028bb223fc66e899467e9475b0bfee8b396ca"
+  },
+  {
+   "path": "css/plume.css",
+   "size": 51304,
+   "sha256": "75ef4392429b17ff219e20bfc4c2e8b4e62486017f3eba4dcc960756b5726193"
+  },
+  {
+   "path": "js/app.js",
+   "size": 59825,
+   "sha256": "eb8853d4b1ad43ba13a4302865d60a0abb11721f2775663a21488e118e874dc6"
+  },
+  {
+   "path": "js/backstage.js",
+   "size": 28366,
+   "sha256": "0edd09471155e0e407760245128e52044a1d68b24908eb947b7385531e9bb22c"
+  },
+  {
+   "path": "js/docx-export.js",
+   "size": 74037,
+   "sha256": "8810e740a11fde4d998b978ab7b1c1386125ea6f1487873b49ac6898deef7d2b"
+  },
+  {
+   "path": "js/docx-import.js",
+   "size": 70465,
+   "sha256": "2ed614621bf459e345881b7b28dbee6dc32e6d8db6e59c9f30c8d7b98171d133"
+  },
+  {
+   "path": "js/editor.js",
+   "size": 86582,
+   "sha256": "2afd5c71a245aaafed6046ea924d69f4e7d0868c6e46d1149bd17f1a79f8127a"
+  },
+  {
+   "path": "js/embed-fonts.js",
+   "size": 13150,
+   "sha256": "5ab334e16c53c39f93c661ecb10ddd4253a288a195f4d7e387efd9e0486b3187"
+  },
+  {
+   "path": "js/formats.js",
+   "size": 21619,
+   "sha256": "9966201b2a8b6046459cf78112510f081ac6bd7f7539eafcf792b5c2475cce2f"
+  },
+  {
+   "path": "js/icons.js",
+   "size": 15698,
+   "sha256": "afc60c98fadc2c4a2dc2d1b4bc225b811c3603468a867f32468ffdde9fd55092"
+  },
+  {
+   "path": "js/ilots.js",
+   "size": 99364,
+   "sha256": "dd615d9342076a1ae672c5751f5750b1fa3b2ac4d2f024d486c3a33e0b85cf6a"
+  },
+  {
+   "path": "js/legacy.js",
+   "size": 30754,
+   "sha256": "8aceae2ef08691e66b2cb098092d6c0e7d240d18ec1e0f1996101233b7145c31"
+  },
+  {
+   "path": "js/markdown.js",
+   "size": 9696,
+   "sha256": "5c49eef67b0a72c3c7f188cc1a9bc09748470ad9c2f6dd6c23b9c2b640e54a3e"
+  },
+  {
+   "path": "js/native.js",
+   "size": 3272,
+   "sha256": "f756b9b05427a43ed41fc86a128e4cbd1a96eb8cef067c7b7c0efd2bac3f7aeb"
+  },
+  {
+   "path": "js/odt.js",
+   "size": 61004,
+   "sha256": "1a82bcc20d439838be1bb0e4f5ce8b788bf650e232d516dae52ca2e17e251ecb"
+  },
+  {
+   "path": "js/ribbon.js",
+   "size": 46302,
+   "sha256": "10b8d15e5d3984de628f8a9f0dc826c325e3f9cc90f67a4c87711ed7a32858d7"
+  },
+  {
+   "path": "js/rtf.js",
+   "size": 29469,
+   "sha256": "85e2c200d1917fc348d39de4615a11a02096b4bf6524789bdd1b674b0c0c1999"
+  },
+  {
+   "path": "js/table-styles.js",
+   "size": 19916,
+   "sha256": "123e899a51c7cf870bae84aa2e658d21fdc6400bf95817ebf50dda0d8576b130"
+  },
+  {
+   "path": "js/tools.js",
+   "size": 38848,
+   "sha256": "6d34779fa3f18baa8faaa8f96868f55e950c4aa005c9a6c98980f1a284824327"
+  },
+  {
+   "path": "js/util.js",
+   "size": 8350,
+   "sha256": "3e4bc86b9abf2906d5e06d0b6bdbd85905cd12339ebf28869ef921e26fd5af39"
+  },
+  {
+   "path": "vendor/fonts/andika-latin-400-italic.woff2",
+   "size": 20896,
+   "sha256": "4a57d92a37d664cdd3ea93a117e18b12153534feae9e73cd3083b285eeaf73ef"
+  },
+  {
+   "path": "vendor/fonts/andika-latin-400-normal.woff2",
+   "size": 19208,
+   "sha256": "dd6bb7266c94cd2fc5d797886050e4bb17bf2375c26b3f28c8474018d8c81b73"
+  },
+  {
+   "path": "vendor/fonts/andika-latin-700-italic.woff2",
+   "size": 20944,
+   "sha256": "4725766c14fbac24dfdca64300477048ce1659a748d6d9dd64a6276fb19f97df"
+  },
+  {
+   "path": "vendor/fonts/andika-latin-700-normal.woff2",
+   "size": 19472,
+   "sha256": "61c90acb5f966627a0970d5742df8d9a212c2528f88caeed3cb7832234c7ee99"
+  },
+  {
+   "path": "vendor/fonts/atkinson-hyperlegible-latin-400-italic.woff2",
+   "size": 18292,
+   "sha256": "bc8825fd435d4aa8e31449937826d583a7daaae15a83832c91b38375131ebf08"
+  },
+  {
+   "path": "vendor/fonts/atkinson-hyperlegible-latin-400-normal.woff2",
+   "size": 17208,
+   "sha256": "d64ba838ef5472bba248620ec4fd8b5aa7cf0db2908e0bb230600caf279ba7bc"
+  },
+  {
+   "path": "vendor/fonts/atkinson-hyperlegible-latin-700-italic.woff2",
+   "size": 18484,
+   "sha256": "73e0c9e1e284128dda599558f7c15bd5f3c056442c31dfae950528a16b3835cf"
+  },
+  {
+   "path": "vendor/fonts/atkinson-hyperlegible-latin-700-normal.woff2",
+   "size": 17524,
+   "sha256": "140e2bd25a7315c8a062508391426b0d8c3297400c947b8d847be28f73a199f0"
+  },
+  {
+   "path": "vendor/fonts/borel-latin-400-normal.woff2",
+   "size": 39544,
+   "sha256": "1db622888380e5288596c743dff79ee041570359d78d7e5d1d24a016413746db"
+  },
+  {
+   "path": "vendor/fonts/borel-latin-ext-400-normal.woff2",
+   "size": 15788,
+   "sha256": "8b6b084c36b5d01cd69ec8b21c5d7ecd2e1df57c844dfd44a9e175153c7394bd"
+  },
+  {
+   "path": "vendor/fonts/comic-neue-latin-400-italic.woff2",
+   "size": 19564,
+   "sha256": "5d9b0135e0088ef23caea9f0d33d2364492b469d470957d43d5ce6d205b99120"
+  },
+  {
+   "path": "vendor/fonts/comic-neue-latin-400-normal.woff2",
+   "size": 19572,
+   "sha256": "b7753f30f8bd4925cf48a2ffe936c52ff1f16fe441f8c0245acf046296ac590f"
+  },
+  {
+   "path": "vendor/fonts/comic-neue-latin-700-italic.woff2",
+   "size": 19828,
+   "sha256": "ee8888e80e0763f8d5646e0a9cf01768bce3443a9edcde52e205fc105cac4d3f"
+  },
+  {
+   "path": "vendor/fonts/comic-neue-latin-700-normal.woff2",
+   "size": 19244,
+   "sha256": "13e9f12e3a0239dcf740e1c7ff37be1cce9b87ead0ad9bce838da1202ac9f91c"
+  },
+  {
+   "path": "vendor/fonts/lexend-latin-400-normal.woff2",
+   "size": 14476,
+   "sha256": "0601e0a909219a542cdd581e3f8f1ff8fb208978cbc9bca1c90df02fd8062bb1"
+  },
+  {
+   "path": "vendor/fonts/lexend-latin-700-normal.woff2",
+   "size": 14808,
+   "sha256": "52dcdaa127bac4a5ea4c39ee17a3f454ceacc18d9f2a45cc453eeab68d378588"
+  },
+  {
+   "path": "vendor/fonts/licences/andika-OFL.txt",
+   "size": 4529,
+   "sha256": "cd7558bbc2e44500d3262b80bd30e6d3b02bb5bac469ec595809a606f61f2f8a"
+  },
+  {
+   "path": "vendor/fonts/licences/atkinson-hyperlegible-OFL.txt",
+   "size": 4603,
+   "sha256": "e137caeef2ff7c04fbf87078ad09cf3dcba8a3a58a4aa4e2f399d42c50bc4b18"
+  },
+  {
+   "path": "vendor/fonts/licences/borel-OFL.txt",
+   "size": 4381,
+   "sha256": "ca84b2089f434881866ed01ea93f840d74942ec91f2eb01e139489b5620b4e32"
+  },
+  {
+   "path": "vendor/fonts/licences/comic-neue-OFL.txt",
+   "size": 4942,
+   "sha256": "b726facc10345ba22b2e4531984186f2334f55540aacef3e7e1c785e19f581fd"
+  },
+  {
+   "path": "vendor/fonts/licences/lexend-OFL.txt",
+   "size": 4384,
+   "sha256": "cdfed8f91b0660b004befb744757918b7c7d40dc2201b6c6d0a86b2fab9408f8"
+  },
+  {
+   "path": "vendor/fonts/licences/marelle-OFL.txt",
+   "size": 4555,
+   "sha256": "0bc1d141728d92e1e63735457d0907fb21d4d92a60dc93a53bd747b17997038f"
+  },
+  {
+   "path": "vendor/fonts/licences/opendyslexic-OFL.txt",
+   "size": 4452,
+   "sha256": "797cb441b593b3326a69fcf83d84264301d89e8871a75b38bae1d101e922e10c"
+  },
+  {
+   "path": "vendor/fonts/licences/playwrite-fr-moderne-OFL.txt",
+   "size": 4314,
+   "sha256": "18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3"
+  },
+  {
+   "path": "vendor/fonts/licences/playwrite-fr-trad-OFL.txt",
+   "size": 4314,
+   "sha256": "18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3"
+  },
+  {
+   "path": "vendor/fonts/marelle-regular.woff2",
+   "size": 93344,
+   "sha256": "8fc913ad7d19767e8b2d7701c25702d3007a617d329eea7ef6ee732628fbd80b"
+  },
+  {
+   "path": "vendor/fonts/opendyslexic-latin-400-italic.woff2",
+   "size": 112360,
+   "sha256": "eb6a1bacf7e7c87a08116af4cd00a82064fbe61647b9a0d4d70a339890268f88"
+  },
+  {
+   "path": "vendor/fonts/opendyslexic-latin-400-normal.woff2",
+   "size": 115280,
+   "sha256": "f007004af3cda5d8076e57c943f8cc8d00a0da25988b1ae1048683d60e7cac1a"
+  },
+  {
+   "path": "vendor/fonts/opendyslexic-latin-700-italic.woff2",
+   "size": 115992,
+   "sha256": "a20d82c2a1a0a6ab74796529aca31bfbae93e3e58f5a7360cba854dd98a15214"
+  },
+  {
+   "path": "vendor/fonts/opendyslexic-latin-700-normal.woff2",
+   "size": 120356,
+   "sha256": "dd9fa9c7991113b0dddefe9506a30ad26b48e302b7a8fb91719a4726e8fde85b"
+  },
+  {
+   "path": "vendor/fonts/playwrite-fr-moderne-latin-400-normal.woff2",
+   "size": 27352,
+   "sha256": "e8ac5863e52e0c3c9b6d562a218a492fefb8b832157bd3c4df30cc511f9148aa"
+  },
+  {
+   "path": "vendor/fonts/playwrite-fr-trad-latin-400-normal.woff2",
+   "size": 43180,
+   "sha256": "c280edaaf1d6c4b71d2e33fe245fe8ee17333ab8a7245144805499c079586caf"
+  },
+  {
+   "path": "vendor/fonts/ttf/Andika-Bold.ttf",
+   "size": 40960,
+   "sha256": "4431fe52fdd8d68befb513de45c7701656fea42019e10ada48755684f9092bf6"
+  },
+  {
+   "path": "vendor/fonts/ttf/Andika-BoldItalic.ttf",
+   "size": 42896,
+   "sha256": "89a5b49fb49f771e11e3758b0b53757e54c3c8ffe92fd2bae5b3cfaf5627a647"
+  },
+  {
+   "path": "vendor/fonts/ttf/Andika-Italic.ttf",
+   "size": 42044,
+   "sha256": "11cdd32fcfe421ae1bf2669c8f4d63f9b77085b5bf6ccbfc53df111726f51fb9"
+  },
+  {
+   "path": "vendor/fonts/ttf/Andika-Regular.ttf",
+   "size": 39612,
+   "sha256": "860fc40d7fe937ad5d077994bda5611b06583277b37e2af6b37959dbcfd60b5d"
+  },
+  {
+   "path": "vendor/fonts/ttf/AtkinsonHyperlegible-Bold.ttf",
+   "size": 38704,
+   "sha256": "1db37b53c850767de92fde7400d9d4eb4bbef4f113a480910bd88b9b0d5c8af7"
+  },
+  {
+   "path": "vendor/fonts/ttf/AtkinsonHyperlegible-Regular.ttf",
+   "size": 37880,
+   "sha256": "ec0088785a4044a0edca55fcdd30f5302af2d6532e126feb8378f552be86aa34"
+  },
+  {
+   "path": "vendor/fonts/ttf/Borel-Regular.ttf",
+   "size": 137036,
+   "sha256": "84978928af8914c2e606838614ce8462091a7710ca1b4c158e475fdc565d5ef9"
+  },
+  {
+   "path": "vendor/fonts/ttf/ComicNeue-Bold.ttf",
+   "size": 42344,
+   "sha256": "f92146beca7edf25a182522419124f36ac6955a2f50aaf1b621f63bd2a2a1c98"
+  },
+  {
+   "path": "vendor/fonts/ttf/ComicNeue-Regular.ttf",
+   "size": 43304,
+   "sha256": "196604ae2a2764b1217efd91f5d7e1e6884702c18f1843657ec03c20dc74f2b5"
+  },
+  {
+   "path": "vendor/fonts/ttf/Lexend-Bold.ttf",
+   "size": 32384,
+   "sha256": "7c5b0a67b7d049be10e75018208a6531fdb0bd58b676bc7ec826c3156164d81b"
+  },
+  {
+   "path": "vendor/fonts/ttf/Lexend-Regular.ttf",
+   "size": 32360,
+   "sha256": "9b5674b667f0aae46c4f16856121be4770ab0939b3883a3a813988644dfe267f"
+  },
+  {
+   "path": "vendor/fonts/ttf/Marelle-Regular.ttf",
+   "size": 348760,
+   "sha256": "e494604046091efbcdb31431267ef88ab3df95e76826b3507b4efeeb3afbfc1a"
+  },
+  {
+   "path": "vendor/fonts/ttf/PlaywriteFRModerne-Regular.ttf",
+   "size": 84632,
+   "sha256": "07995f67643b12cf4e029b031712d53820b703008faf5ff3de8b08e769759bc0"
+  },
+  {
+   "path": "vendor/fonts/ttf/PlaywriteFRTrad-Regular.ttf",
+   "size": 130500,
+   "sha256": "aceee9bdba23338a2533b34dbd758b78b569d8e070de5f183bdaf546bdfc48b7"
+  },
+  {
+   "path": "vendor/html2canvas.min.js",
+   "size": 198689,
+   "sha256": "e87e550794322e574a1fda0c1549a3c70dae5a93d9113417a429016838eab8cb"
+  },
+  {
+   "path": "vendor/jspdf.umd.min.js",
+   "size": 365730,
+   "sha256": "85ba2cc3ff858a20fa49fe6e457bec863ea40b55a9f3725e58a940e62f6f61a4"
+  },
+  {
+   "path": "vendor/jszip.min.js",
+   "size": 97781,
+   "sha256": "7f839b2d4688b845c105ebf5d2f9803075f91ea0fe72bdaac176c3a04dd3d2c1"
+  },
+  {
+   "path": "vendor/pdfjs/LICENSE",
+   "size": 10174,
+   "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+  },
+  {
+   "path": "vendor/pdfjs/pdf.min.mjs",
+   "size": 398237,
+   "sha256": "44ec6f011027ee77791386b66c14876a5fc29e20bf0433c07c6726fff7212b72"
+  },
+  {
+   "path": "vendor/pdfjs/pdf.worker.min.mjs",
+   "size": 1417586,
+   "sha256": "bd88805178a26c729db8c0107a5b630cb900ec070f4d8c7529a3e45530afd41d"
+  },
+  {
+   "path": "icons/apple-touch-icon.png",
+   "size": 3152,
+   "sha256": "64cee72532eb8ec7979f4a869dc0a7f38b79b124e3e0e03a7f451767fc90de29"
+  },
+  {
+   "path": "icons/favicon-32.png",
+   "size": 809,
+   "sha256": "433e5c20d522a3426acdbb084a3534b76297e00e435ff8422626614937551e2b"
+  },
+  {
+   "path": "icons/favicon.svg",
+   "size": 727,
+   "sha256": "f0b890c1a347bb2ebd466a368565bb9cb14e7c4358d0057afb0c9d9ff26dae13"
+  },
+  {
+   "path": "icons/icon-192.png",
+   "size": 6774,
+   "sha256": "1c230c70a45451a3f9b420ff46b4dd2ded8dda9a10fa43ae43f09fc6633f0126"
+  },
+  {
+   "path": "icons/icon-512.png",
+   "size": 27940,
+   "sha256": "99da98aa011f229949b85662fe430a1d62bab48fe158620a0effd7ab1fc3ea09"
+  },
+  {
+   "path": "icons/maskable-192.png",
+   "size": 3356,
+   "sha256": "da15ba6f16035374f432c65e494f52c6dfb2f9d888c06ce899f21ef12c37c235"
+  },
+  {
+   "path": "icons/maskable-512.png",
+   "size": 15238,
+   "sha256": "96ed196ff0199c7a01d819950d747a244986b710db27c1faf00bb8e37263d37c"
+  },
+  {
+   "path": "icons/maskable.svg",
+   "size": 704,
+   "sha256": "a41a8de30fd85c5ba6da75c47f00882f371312f10d84bc8302e5f9c4de8806cb"
+  },
+  {
+   "path": "icons/plume-wordmark-dark.svg",
+   "size": 2014,
+   "sha256": "06b254c613836112f17cec0aa336d7fc64d9717711141552f6c206f623453946"
+  },
+  {
+   "path": "icons/plume-wordmark-light.svg",
+   "size": 2015,
+   "sha256": "3d21cdc11c5cd283f942aafd596be1325d350a9a608e2d45e9ffc421dd306a23"
+  }
+ ]
+}

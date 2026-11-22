@@ -7,6 +7,11 @@ contextBridge.exposeInMainWorld('plumeDesktop', {
   writeFile: (path, data) => ipcRenderer.invoke('plume:write-file', { path, data }),
   saveDialog: (name, ext, label) => ipcRenderer.invoke('plume:save-dialog', { name, ext, label }),
   printToPdf: () => ipcRenderer.invoke('plume:print-pdf'),
+  update: {
+    state: () => ipcRenderer.invoke('plume:update-state'),
+    onReady: cb => ipcRenderer.on('plume:update-ready', (e, v) => cb(v)),
+    restart: () => ipcRenderer.invoke('plume:update-restart')
+  },
   converter: {
     available: () => ipcRenderer.invoke('plume:converter-available'),
     convert: (data, from, to) => ipcRenderer.invoke('plume:convert', { data, from, to })

@@ -13,7 +13,61 @@ const os = require('os');
 const { execFile } = require('child_process');
 const { pathToFileURL } = require('url');
 
-const APP_DIR = path.join(__dirname, 'app');
+const BUNDLED_DIR = path.join(__dirname, 'app');
+
+/* ---------- Mises à jour automatiques de l'application ----------
+   La version en ligne (GitHub Pages) publie version.json : liste des fichiers avec empreintes.
+   Si elle est plus récente, ses fichiers sont téléchargés et vérifiés dans le dossier de
+   l'utilisateur, puis utilisés au lancement suivant. L'installation d'origine n'est jamais modifiée. */
+const UPDATE_URL = (process.env.PLUME_UPDATE_URL || 'https://asblpixels.github.io/Plume/').replace(/\/?$/, '/');
+const UPDATE_DIR = path.join(app.getPath('userData'), 'mise-a-jour');
+const crypto = require('crypto');
+const cmpVer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); } return 0; };
+const readVer = dir => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'version.json'), 'utf8')).version; } catch { return '0'; } };
+const BUNDLED_VERSION = readVer(BUNDLED_DIR);
+// dossier servi : la mise à jour téléchargée si elle est complète et plus récente que l'installation
+const APP_DIR = (() => {
+  const live = path.join(UPDATE_DIR, 'actuelle');
+  if (fs.existsSync(path.join(live, 'index.html')) && cmpVer(readVer(live), BUNDLED_VERSION) > 0) return live;
+  return BUNDLED_DIR;
+})();
+let updateState = { current: readVer(APP_DIR), available: null, ready: false };
+
+async function checkUpdate() {
+  try {
+    const res = await net.fetch(UPDATE_URL + 'version.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const remote = await res.json();
+    if (!remote || !remote.version || !Array.isArray(remote.files) || cmpVer(remote.version, updateState.current) <= 0) return;
+    updateState.available = remote.version;
+    const tmp = path.join(UPDATE_DIR, 'telechargement');
+    fs.rmSync(tmp, { recursive: true, force: true });
+    for (const f of remote.files) {
+      if (!/^[\w./-]+$/.test(f.path) || f.path.includes('..')) throw new Error('chemin refusé : ' + f.path);
+      const r = await net.fetch(UPDATE_URL + f.path.split('/').map(encodeURIComponent).join('/') + '?v=' + remote.version, { cache: 'no-store' });
+      if (!r.ok) throw new Error(f.path + ' : HTTP ' + r.status);
+      const data = Buffer.from(await r.arrayBuffer());
+      if (data.length !== f.size || crypto.createHash('sha256').update(data).digest('hex') !== f.sha256) throw new Error(f.path + ' : fichier incomplet');
+      const dest = path.join(tmp, f.path);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, data);
+    }
+    fs.writeFileSync(path.join(tmp, 'version.json'), JSON.stringify(remote));
+    // bascule atomique : l'ancienne mise à jour est remplacée seulement quand tout est vérifié
+    const live = path.join(UPDATE_DIR, 'actuelle');
+    fs.rmSync(live + '-ancienne', { recursive: true, force: true });
+    if (fs.existsSync(live)) fs.renameSync(live, live + '-ancienne');
+    fs.renameSync(tmp, live);
+    fs.rmSync(live + '-ancienne', { recursive: true, force: true });
+    updateState.ready = true;
+    if (win) win.webContents.send('plume:update-ready', remote.version);
+  } catch (e) {
+    console.error('Mise à jour impossible :', e.message || e);
+    fs.rmSync(path.join(UPDATE_DIR, 'telechargement'), { recursive: true, force: true });
+  }
+}
+ipcMain.handle('plume:update-state', () => updateState);
+ipcMain.handle('plume:update-restart', () => { app.relaunch(); app.exit(0); });
 const OPENABLE = /\.(docx|docm|dotx|dotm|doc|dot|odt|ott|fodt|rtf|pdf|html?|xhtml|md|markdown|txt|csv|wpd|wps|pages|sxw|stw|abw|zabw|lwp|hwp|wri|xml|epub|cwk|sdw|uot|602|gdoc)$/i;
 
 let win = null;
@@ -75,6 +129,7 @@ else {
     });
     createWindow();
     filesFromArgv(process.argv).forEach(sendFile);
+    if (!process.env.PLUME_NO_UPDATE) setTimeout(checkUpdate, 4000);
   });
   app.on('window-all-closed', () => app.quit());
 }

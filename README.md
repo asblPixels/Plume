@@ -7,11 +7,11 @@
 
 **Le traitement de texte de Pixel's ASBL : libre d'usage, hors ligne et compatible Word (.docx)**
 
-![Version](https://img.shields.io/badge/version-1.3.0-26EFC5?style=flat-square&labelColor=0D1013)
+![Version](https://img.shields.io/badge/version-1.4.0-26EFC5?style=flat-square&labelColor=0D1013)
 ![Plateformes](https://img.shields.io/badge/plateformes-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-26EFC5?style=flat-square&labelColor=0D1013)
 ![Format](https://img.shields.io/badge/format-.docx%20(OOXML)-26EFC5?style=flat-square&labelColor=0D1013)
 ![Hors ligne](https://img.shields.io/badge/hors%20ligne-oui-26EFC5?style=flat-square&labelColor=0D1013)
-![Dépendances](https://img.shields.io/badge/d%C3%A9pendances-2%20(JSZip%2C%20PDF.js)-26EFC5?style=flat-square&labelColor=0D1013)
+![Dépendances](https://img.shields.io/badge/d%C3%A9pendances-4%20(JSZip%2C%20PDF.js%2C%20jsPDF%2C%20html2canvas)-26EFC5?style=flat-square&labelColor=0D1013)
 
 ### [▶ Ouvrir Plume : **asblpixels.github.io/Plume**](https://asblpixels.github.io/Plume/)
 
@@ -27,12 +27,14 @@
 | Plateforme | Version | Comment l'obtenir |
 |---|---|---|
 | 🌐 **Navigateur** (tous systèmes) | En ligne | **https://asblpixels.github.io/Plume/** : rien à installer |
-| 🪟 **Windows 10 / 11** | Installateur | `Plume-Setup-1.3.0-x64.exe` (page *Releases*) |
-| 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.3.0-x64.zip` (page *Releases*) : décompresser, lancer `Plume.exe` |
-| 🐧 **Linux** | AppImage, .deb, .rpm | `Plume-1.3.0.AppImage`, `plume_1.3.0_amd64.deb`, `plume-1.3.0.x86_64.rpm` |
+| 🪟 **Windows 10 / 11** | Installateur | `Plume-Setup-1.4.0-x64.exe` (page *Releases*) |
+| 🪟 **Windows** (sans installation) | Portable | `Plume-Portable-1.4.0-x64.zip` (page *Releases*) : décompresser, lancer `Plume.exe` |
+| 🐧 **Linux** | AppImage, .deb, .rpm | `Plume-1.4.0.AppImage`, `plume_1.4.0_amd64.deb`, `plume-1.4.0.x86_64.rpm` |
 | 🐧 **Linux** (Flatpak, Snap) | `Plume.flatpak`, `plume_*.snap` | `flatpak install Plume.flatpak` · `sudo snap install --dangerous plume_*.snap` |
 | 🤖 **Android** | APK | `Plume-*-android.apk` : ouvrir le fichier sur le téléphone, autoriser « sources inconnues » ; ou application web : Chrome → ⋮ → **Installer l'application** |
 | 🍎 **iPhone / iPad** | Application d'écran d'accueil | Ouvrir l'adresse en ligne dans Safari → Partager → **Sur l'écran d'accueil** (recommandé). Un `.ipa` non signé est aussi fourni pour AltStore / Sideloadly. |
+
+> **Toujours à jour, sur toutes les versions.** La version en ligne et l'application installée depuis le navigateur se mettent à jour seules. L'application **Windows / Linux** télécharge elle-même chaque nouvelle version (fichiers vérifiés un par un) et propose **« Redémarrer »** pour l'appliquer. Les applications **Android / iPhone** signalent chaque nouvelle version avec un lien de téléchargement. Une seule adresse à retenir : **asblpixels.github.io/Plume** (avec un **P** majuscule).
 
 ---
 
@@ -71,9 +73,9 @@ Plume est un traitement de texte complet qui s'exécute entièrement dans le nav
 | **Familiarité** | Menu Fichier, ruban à onglets, galerie de styles, règle, barre d'état et raccourcis standards : un habitué s'y retrouve immédiatement. |
 | **Compatibilité** | Lecture et écriture natives du format Office Open XML (`.docx`), sans conversion par un service tiers. |
 | **Autonomie** | Aucun serveur applicatif, aucune base de données. Fonctionne hors ligne après la première visite. |
-| **Confidentialité** | Les documents ne quittent jamais l'appareil. |
+| **Confidentialité** | Les documents ne quittent jamais l'appareil, et **rien n'est gardé sur l'appareil** par défaut (ordinateurs partagés, écoles). |
 | **Accessibilité matérielle** | Tourne sur de vieux PC comme sur les téléphones, sous tous les systèmes d'exploitation. |
-| **Sobriété** | Deux bibliothèques libres seulement (JSZip, PDF.js). Pas de framework, pas de compilation. |
+| **Sobriété** | Quatre bibliothèques libres seulement (JSZip, PDF.js, jsPDF, html2canvas). Pas de framework, pas de compilation. |
 
 > Plume est un logiciel indépendant, sans aucun lien avec Microsoft Corporation. « Microsoft Word » et « Office 365 » sont des marques de Microsoft Corporation. L'identité visuelle de Plume (nom, logo, couleurs, icônes) lui est propre.
 
@@ -97,10 +99,12 @@ Plume est un traitement de texte complet qui s'exécute entièrement dans le nav
 | Fonction | Détail |
 |---|---|
 | Nouveau | Document vierge ou modèle : **Lettre**, **Curriculum vitae**, **Rapport**, **Compte rendu de réunion** |
-| Ouvrir | `.docx`, `.html`, `.txt`, `.md` ; glisser-déposer d'un fichier dans la fenêtre ; documents récents |
+| Démarrage | Plume s'ouvre sur l'**accueil** : **Document vierge** ou **Ouvrir un fichier…** (ordinateur, **clé USB**, disque). Le dernier document n'est **jamais** rouvert automatiquement. |
+| Ouvrir | Tous les formats (voir [Formats de fichiers](#formats-de-fichiers)) ; glisser-déposer d'un fichier dans la fenêtre ; ouverture d'un autre document à tout moment |
 | Enregistrer | `.docx`. Sous Chrome et Edge, **Ctrl+S réécrit directement le fichier d'origine** (File System Access API). Ailleurs, le fichier est téléchargé. |
-| Enregistrement automatique | Chaque modification est sauvegardée dans le navigateur (IndexedDB). Le dernier document est rouvert au démarrage. |
-| Exporter | PDF (via l'impression), page web `.html` autonome (images incluses), texte brut `.txt` |
+| Mode confidentiel (par défaut) | **Aucune copie n'est gardée sur l'appareil** : on enregistre son document sur l'ordinateur ou une clé USB. Idéal à l'école et sur un ordinateur partagé. |
+| Copie de secours (option) | Case à cocher sur l'accueil : « Garder une copie de secours de mes documents sur cet appareil ». La décocher efface toutes les copies. |
+| Exporter | **PDF direct**, Word, OpenDocument, RTF, Word 97-2003 (bureau), page web `.html`, Markdown, texte brut |
 | Imprimer | Respect du format, des marges, de l'en-tête et du pied de page |
 | Informations | Titre, auteur, nombre de pages, de mots et de caractères, format de page |
 
@@ -114,25 +118,25 @@ Plume est un traitement de texte complet qui s'exécute entièrement dans le nav
 | Modification | Rechercher (surlignage de tous les résultats), Remplacer / Remplacer tout (casse, mot entier), Sélectionner tout |
 
 ### Insertion
-Page de garde · Page vierge · Saut de page · **Tableau** (grille 10 × 8 ou dialogue) · **Images** (fichier, glisser-déposer, coller ; redimensionnement à la souris) · Lien · Signet · **En-tête** et **pied de page** répétés sur chaque page · **Numéro de page** (« X » ou « Page X sur Y ») · Zone de texte · Ligne horizontale · Date et heure (6 formats) · Symboles (€, ©, flèches, lettres grecques…).
+Page de garde · Page vierge · Saut de page · **Tableau** · **Graphique** (colonnes, barres, courbes, aires, secteurs) · **Équation** (en ligne ou centrée) (grille 10 × 8 ou dialogue) · **Images** (fichier, glisser-déposer, coller ; redimensionnement à la souris) · Lien · Signet · **En-tête** et **pied de page** répétés sur chaque page · **Numéro de page** (« X » ou « Page X sur Y ») · Zone de texte · Ligne horizontale · Date et heure (6 formats) · Symboles (€, ©, flèches, lettres grecques…).
 
 ### Création
 Police du document · Espacement des paragraphes (Compact, Normal, Aéré, Ouvert, Double) · Couleur des titres · Page sombre (affichage uniquement).
 
 ### Mise en page
-Marges (Normales 2,5 cm, Étroites, Modérées, Larges, ou personnalisées) · Orientation portrait ou paysage · Taille (A4, A5, A3, Lettre, Légal, B5 ou personnalisée) · Retraits et espacements chiffrés du paragraphe · **Marges ajustables à la souris sur la règle**.
+Marges (Normales 2,5 cm, Étroites, Modérées, Larges, ou personnalisées) · Orientation portrait ou paysage · Taille (A4, A5, A3, Lettre, Légal, B5 ou personnalisée), **appliquées à la section du curseur ou à tout le document** · **Colonnes** (une, deux, trois, gauche, droite, ligne séparatrice) · **Sauts** : page, colonne (`Ctrl+Maj+Entrée`), section page suivante, continue, page paire ou impaire · **Sections** avec chacune leur format (une page paysage au milieu d'un document portrait) · Enchaînements : lignes solidaires, paragraphes solidaires, saut de page avant, veuves et orphelines · Retraits et espacements chiffrés du paragraphe · **Marges ajustables à la souris sur la règle**.
 
 ### Références
 **Table des matières** générée à partir des titres, avec numéros de page. Elle est exportée comme un vrai champ TOC, que Word met à jour à l'ouverture. **Notes de bas de page** : numérotation automatique, affichage en bas de page, modification au clic.
 
 ### Révision
-**Commentaires** (nouveau, modifier, supprimer, volet Commentaires, surlignage du passage commenté) · **Suivi des modifications** (affichage des insertions et suppressions, accepter tout, refuser tout, affichage « Final ») · Vérification orthographique (dictionnaire du navigateur ou du système) · Langue du document (FR-BE, FR-FR, NL-BE, EN-GB, EN-US, DE, ES, IT, AR) · Statistiques · **Lecture à voix haute** du document ou de la sélection.
+**Commentaires en fils de discussion** (nouveau, **répondre**, **résoudre / rouvrir**, supprimer le fil, précédent / suivant, volet Commentaires, impression avec ou sans marques) · **Suivi des modifications** (`Ctrl+Maj+E` : saisie, suppression, Entrée, gras, italique, souligné et barré enregistrés avec l'auteur et la date ; accepter ou refuser la modification, la suivante ou toutes ; affichages **Marques simples**, **Toutes les marques**, **Aucune marque**, **Original** ; une couleur par auteur ; nom d'utilisateur réglable) · Vérification orthographique (dictionnaire du navigateur ou du système) · Langue du document (FR-BE, FR-FR, NL-BE, EN-GB, EN-US, DE, ES, IT, AR) · Statistiques · **Lecture à voix haute** du document ou de la sélection.
 
 ### Affichage
 Mode Lecture · Plein écran · Règle · **Volet de navigation** (plan des titres cliquable et résultats de recherche avec extraits) · Zoom de 25 à 300 % (100 %, Une page, Largeur de la page, Ctrl+molette) · Thème clair ou sombre (le choix du système est suivi par défaut).
 
 ### Tableau (onglet contextuel)
-Il apparaît dès que le curseur entre dans un tableau : insérer une ligne au-dessus ou en dessous, une colonne à gauche ou à droite · supprimer une ligne, une colonne ou le tableau · fusionner, fractionner · bordures · trame de fond · ligne d'en-tête répétée · uniformiser les colonnes. **Tab** passe à la cellule suivante et crée une ligne à la fin du tableau.
+Il apparaît dès que le curseur entre dans un tableau. **Création de tableau** : galerie de **11 styles** (en-tête coloré, lignes à bandes…) et options **Ligne d'en-tête, Ligne des totaux, Lignes à bandes, Première colonne, Dernière colonne, Colonnes à bandes**, comme dans Word. **Disposition** : insérer une ligne au-dessus ou en dessous, une colonne à gauche ou à droite · supprimer une ligne, une colonne ou le tableau · fusionner, fractionner · bordures · trame de fond · ligne d'en-tête répétée · uniformiser les colonnes. **Tab** passe à la cellule suivante et crée une ligne à la fin du tableau.
 
 ### Publipostage
 Lettres et documents personnalisés à partir d'un fichier **CSV** (export de tableur) : choix des destinataires, insertion de champs « Nom », « Adresse »…, aperçu destinataire par destinataire, puis fusion en un document unique (un exemplaire par destinataire, séparés par des sauts de page), prêt à imprimer ou à exporter.
@@ -142,6 +146,8 @@ Plume intègre des polices libres pensées pour l'école et l'accessibilité :
 
 | Police | Usage |
 |---|---|
+| **Marelle** | Cursive scolaire du ministère de l'Éducation nationale (France), [marelle.forge.apps.education.fr](https://marelle.forge.apps.education.fr) |
+| **Borel** | Cursive scolaire arrondie |
 | **Playwrite FR Moderne** | Cursive scolaire française (écriture attachée) |
 | **Playwrite FR Trad** | Cursive française traditionnelle |
 | **Andika** | Apprentissage de la lecture (lettres sans ambiguïté) |
@@ -150,9 +156,9 @@ Plume intègre des polices libres pensées pour l'école et l'accessibilité :
 | **Atkinson Hyperlegible** | Personnes malvoyantes |
 | **Lexend** | Lisibilité, fatigue visuelle |
 
-**Ajouter une police** (par exemple **Marelle**, ou toute police d'école) : liste des polices → **« Ajouter une police… »**, ou onglet **Création → Ajouter une police**. Tout fichier `.ttf`, `.otf`, `.woff` ou `.woff2` est accepté. La police reste disponible à chaque ouverture de Plume sur cet appareil. **Création → Mes polices** permet de les retirer.
+**Ajouter une autre police** (toute police d'école) : liste des polices → **« Ajouter une police… »**, ou onglet **Création → Ajouter une police**. Tout fichier `.ttf`, `.otf`, `.woff` ou `.woff2` est accepté. La police reste disponible à chaque ouverture de Plume sur cet appareil. **Création → Mes polices** permet de les retirer.
 
-> Vérifiez la licence d'une police avant de la diffuser. Un document envoyé au **format PDF** contient toujours la police ; au format Word, l'ordinateur du destinataire doit avoir la police installée.
+> **Les polices voyagent avec le document.** Quand un document utilise une police scolaire de Plume (Marelle, Borel, Playwrite, Andika, Comic Neue, Atkinson Hyperlegible, Lexend), elle est **jointe au fichier** `.docx` et `.odt` (comme l'option « Incorporer les polices » de Word) : le document s'affiche correctement dans Word ou LibreOffice **même si la police n'est pas installée** sur l'ordinateur. Dans l'autre sens, Plume affiche les polices jointes par Word à un document. Un PDF contient toujours ses polices. Vérifiez la licence d'une police personnelle avant de diffuser un document qui la contient.
 
 ### Outils d'écriture
 - **Suivi des modifications en direct** (`Ctrl+Maj+E`) : chaque ajout et chaque suppression est marqué avec l'auteur et la date, puis exporté comme vraies révisions Word.
@@ -165,7 +171,7 @@ Plume intègre des polices libres pensées pour l'école et l'accessibilité :
 ### Ergonomie
 - **Recherche de commandes** (`Alt+Q`) : tapez « marge », « puce » ou « pdf » pour lancer la commande sans chercher dans le ruban.
 - **Mini barre flottante** au-dessus d'une sélection de texte.
-- **Pagination visuelle** en pages A4 réelles, avec numéro de page courante dans la barre d'état.
+- **Pagination fidèle** en pages réelles (coupe à la ligne, sections de formats différents, colonnes), avec numéro de page courante dans la barre d'état.
 - **Annuler / Rétablir** sur 300 niveaux, y compris pour les opérations sur les tableaux, la mise en page et les en-têtes.
 - Ruban repliable (`Ctrl+F1`) et interface adaptée aux écrans tactiles et aux petits écrans.
 
@@ -226,51 +232,60 @@ Résultat : un document ouvert puis réenregistré par Plume se rouvre dans Word
 | Surlignage et trame de caractère | ✅ | ✅ | |
 | Exposant, indice, majuscules, petites majuscules, espacement des caractères | ✅ | ✅ | |
 | Polices et couleurs du thème Office | ✅ | — | Résolues en valeurs explicites |
+| **Polices incorporées** (`.odttf`) | ✅ chargées | ✅ polices scolaires jointes | Affichage identique sans installer la police |
+| Interligne « multiple » calculé sur la hauteur réelle de la police | ✅ | — | Même nombre de lignes par page que Word / LibreOffice |
 | Alignement, retraits, première ligne, retrait suspendu | ✅ | ✅ | |
 | Espacement avant/après, interligne (multiple ou exact) | ✅ | ✅ | |
 | Bordures et trame de paragraphe | ✅ | ✅ | |
 | Listes à puces et numérotées, 9 niveaux, reprise de numérotation | ✅ | ✅ | |
-| Tableaux, largeurs de colonnes, fusions horizontales et verticales | ✅ | ✅ | |
+| Tableaux, largeurs de colonnes, fusions horizontales et verticales | ✅ | ✅ | Coupés entre deux lignes en fin de page |
+| **Styles de tableau** (en-tête, totaux, bandes, première / dernière colonne, coins) | ✅ | ✅ | Ordre de priorité de Word, couleurs du thème ; `tblStyle` / `tblLook` réécrits sans figer la mise en forme |
 | Trame et alignement vertical des cellules, ligne d'en-tête répétée | ✅ | ✅ | |
 | Images en ligne PNG, JPEG, GIF | ✅ | ✅ | WebP, SVG et BMP convertis en PNG à l'export |
 | Liens hypertextes (externes et internes) et signets | ✅ | ✅ | |
 | En-tête et pied de page, champs PAGE / NUMPAGES | ✅ | ✅ | |
 | Notes de bas de page et de fin | ✅ | ✅ | Les notes de fin deviennent des notes de bas de page |
 | Table des matières (champ TOC) | ✅ | ✅ | Mise à jour automatique à l'ouverture dans Word |
-| Sauts de page, sauts de section | ✅ | ✅ | |
+| Sauts de page, de colonne et de section | ✅ | ✅ | |
+| **Sections multiples** (format, orientation, marges, colonnes propres) | ✅ affichées | ✅ | Page paysage au milieu d'un document, etc. |
+| **Colonnes** (égales ou non, séparateur) | ✅ affichées | ✅ | |
+| Enchaînements (lignes / paragraphes solidaires, veuves et orphelines, saut de page avant) | ✅ | ✅ | |
 | Format, orientation, marges de page | ✅ | ✅ | |
 | Propriétés (titre, auteur, dates) | ✅ | ✅ | |
-| **Graphiques** (barres, lignes, secteurs…) | ✅ aperçu | ✅ à l'identique | Données et classeur incorporé conservés |
-| **SmartArt** | ✅ aperçu | ✅ à l'identique | |
-| **Formes, zones de texte, groupes** | ✅ aperçu | ✅ à l'identique | |
-| **Images flottantes** (habillage) | ✅ flottantes à l'écran | ✅ position et habillage d'origine | |
-| **Équations** (OMML) | ✅ aperçu (exposants, indices, fractions, racines) | ✅ à l'identique | |
+| **Graphiques** (colonnes, barres, courbes, aires, secteurs) | ✅ **modifiables** | ✅ | Données, titre et type modifiables ; classeur Excel incorporé régénéré |
+| **SmartArt** | ✅ **texte modifiable** | ✅ | Ajout / suppression d'éléments |
+| **Formes, zones de texte, groupes** | ✅ **modifiables** | ✅ | Texte, remplissage, contour |
+| **Images flottantes** (habillage) | ✅ flottantes à l'écran | ✅ | Taille, habillage, position ; remplacer l'image |
+| **Équations** (OMML) | ✅ **modifiables** | ✅ | Éditeur en notation linéaire (a/b, x^2, \\sqrt, \\sum, \\int, lettres grecques…) avec aperçu |
 | Objets OLE, images EMF/WMF | ✅ aperçu ou repère | ✅ à l'identique | |
-| **Commentaires** | ✅ | ✅ | Ajout, modification, suppression, volet dédié |
-| **Suivi des modifications** (insertions, suppressions) | ✅ | ✅ | Accepter / refuser tout, affichage « Final » |
+| **Commentaires**, **réponses** et état **résolu** | ✅ | ✅ | `commentsExtended`, `commentsIds`, `commentsExtensible` |
+| **Suivi des modifications** (insertions, suppressions, marques de paragraphe, mise en forme) | ✅ | ✅ | Enregistrement en direct, accepter / refuser |
+| **Macros** (`.docm`, `.dotm`) | ✅ jamais exécutées | ✅ conservées | `vbaProject.bin` gardé octet pour octet ; retrait proposé en `.docx` |
+| Modèles (`.dotx`, `.dotm`) | ✅ | ✅ | |
 | Styles personnalisés du document | ✅ | ✅ | `styles.xml` d'origine conservé |
 | Numérotations personnalisées | ✅ | ✅ | `numbering.xml` d'origine conservé |
 | Thème, table des polices, réglages de compatibilité | — | ✅ | Repris depuis le fichier d'origine |
 | En-tête/pied de **première page**, pages paires | ✅ (1re page affichée) | ✅ à l'identique | |
-| Colonnes, bordures de page, numérotation des lignes | — | ✅ à l'identique | Affichage sur une colonne dans Plume |
+| Bordures de page, numérotation des lignes | — | ✅ à l'identique | |
 | Contrôles de contenu, champs complexes | ✅ | — | Le contenu est conservé |
 
 ### Limites connues
 
-Aucun logiciel tiers n'atteint 100 % de compatibilité avec Word. Voici ce qui reste perfectible dans Plume :
+Aucun logiciel tiers n'atteint 100 % de compatibilité avec Word. Voici ce qui reste perfectible dans Plume 1.4 :
 
 | Élément | Comportement actuel |
 |---|---|
-| Contenu des îlots (graphiques, SmartArt, formes, équations) | Conservé et réécrit à l'identique, mais **non modifiable dans Plume** (déplacement et suppression possibles) |
-| Nouvelles modifications | Le suivi des modifications existantes est géré ; l'**enregistrement de nouvelles révisions** n'est pas encore disponible |
-| Réponses aux commentaires, commentaires « résolus » | Importés comme commentaires simples |
-| Colonnes multiples | Conservées dans le fichier, affichées sur une colonne |
-| Plusieurs sections avec des mises en page différentes | La mise en page de la dernière section s'applique à l'affichage ; les sauts de section sont convertis en sauts de page |
-| Styles de tableau conditionnels (bandes, première colonne) | Seules les bordures et trames explicites sont reprises |
-| Macros (`.docm`) | Ouvertes sans les macros, qui ne sont jamais exécutées |
-| Ancien format `.doc` (Word 97-2003) | Non pris en charge : convertir d'abord en `.docx` |
+| Graphiques combinés, 3D, bulles, boursiers, cascade (Office 2016) | Conservés à l'identique, non modifiables |
+| Classeur Excel d'un graphique modifié | Régénéré à partir des données : mise en forme et autres feuilles du classeur perdues |
+| Matrices et systèmes d'équations | Simplifiés dans l'éditeur d'équations (un avertissement s'affiche) |
+| Suivi de la mise en forme | Gras, italique, souligné, barré suivis ; police, taille, couleur et styles non suivis. Collage suivi en texte brut |
+| En-têtes et pieds de page par section | Un en-tête / pied pour tout le document (plus la première page) ; ceux des autres sections sont conservés dans le fichier mais pas affichés |
+| Colonnes | Un paragraphe passe entier dans la colonne suivante (pas de coupe entre deux colonnes) |
+| Ligne d'en-tête de tableau | Conservée mais pas répétée à l'écran sur la page suivante |
+| `.doc` (Word 97-2003) dans le navigateur | Texte, titres, listes, tableaux, mise en forme ; sans images, en-têtes ni notes (complet dans l'application de bureau avec LibreOffice) |
+| Révisions dans un `.odt` | Le texte final est importé et exporté, sans les marques de révision |
 
-> **Pagination.** Plume découpe les pages paragraphe par paragraphe : un paragraphe n'est jamais coupé entre deux pages. L'affichage peut donc différer de quelques lignes de celui de Word, qui coupe à la ligne. Le fichier `.docx` exporté est repaginé normalement par Word.
+> **Pagination.** Depuis la version 1.4, Plume coupe les paragraphes **à la ligne** comme Word, respecte les veuves et orphelines et calcule l'interligne sur la hauteur réelle de chaque police. Le nombre de lignes par page est identique à LibreOffice sur nos documents de test ; de légers écarts restent possibles avec Word selon les polices installées.
 
 ---
 
@@ -330,8 +345,8 @@ Pour les postes sans connexion ou les utilisateurs qui préfèrent un programme 
 
 | Fichier | Usage |
 |---|---|
-| `Plume-Setup-1.3.0-x64.exe` | Installateur Windows 10/11 **sans droits administrateur** : raccourcis Bureau et menu Démarrer, Plume proposé dans « Ouvrir avec » pour `.docx`, `.doc`, `.odt`, `.rtf`, `.pdf`…, désinstallation depuis *Paramètres → Applications* |
-| `Plume-Portable-1.3.0-x64.zip` | Version portable : décompresser puis lancer `Plume.exe`, aucun droit administrateur, fonctionne depuis une clé USB |
+| `Plume-Setup-1.4.0-x64.exe` | Installateur Windows 10/11 **sans droits administrateur** : raccourcis Bureau et menu Démarrer, Plume proposé dans « Ouvrir avec » pour `.docx`, `.doc`, `.odt`, `.rtf`, `.pdf`…, désinstallation depuis *Paramètres → Applications* |
+| `Plume-Portable-1.4.0-x64.zip` | Version portable : décompresser puis lancer `Plume.exe`, aucun droit administrateur, fonctionne depuis une clé USB |
 
 Dans l'application de bureau :
 - un double-clic sur un `.docx` dans l'Explorateur l'ouvre dans Plume (une seule fenêtre, même pour plusieurs fichiers) ;
@@ -350,7 +365,7 @@ npm install
 npm run dist:win      # sous Windows : installateur et version portable
 # sous Linux, sans Wine : application Windows + installateur NSIS natif
 npx electron-builder --win dir --x64
-makensis -DSEP=/ -DVERSION=1.3.0 -DSRC=$PWD/dist/win-unpacked -DOUT=$PWD/dist/Plume-Setup-1.3.0-x64.exe -DICON=$PWD/build/icon.ico installer/plume.nsi
+makensis -DSEP=/ -DVERSION=1.4.0 -DSRC=$PWD/dist/win-unpacked -DOUT=$PWD/dist/Plume-Setup-1.4.0-x64.exe -DICON=$PWD/build/icon.ico installer/plume.nsi
 npm run dist:linux    # → AppImage et paquet .rpm pour Fedora
 npm start             # lancer l'application en mode développement
 ```
@@ -419,7 +434,15 @@ AddType application/manifest+json .webmanifest
 
 ### Mise à jour des postes
 
-À chaque nouvelle version, incrémentez la constante `CACHE` dans `sw.js` (par exemple `plume-v2`). Les applications installées récupèrent la mise à jour au lancement suivant.
+Rien à faire sur les postes : toutes les versions de Plume suivent la version publiée sur GitHub Pages.
+
+| Version | Mécanisme |
+|---|---|
+| En ligne / application installée depuis le navigateur | Le service worker charge toujours la version la plus récente (réseau d'abord, sans cache HTTP périmé) ; un bandeau propose **« Recharger »** si un document est ouvert |
+| Windows, Linux (Electron) | Au lancement, Plume lit `version.json` en ligne, télécharge les fichiers de la nouvelle version, **vérifie la taille et l'empreinte SHA-256 de chacun**, puis propose **« Redémarrer »**. L'installation d'origine n'est jamais modifiée ; en cas d'échec, l'ancienne version reste utilisée |
+| Android, iPhone | Un bandeau signale la nouvelle version, avec un lien vers la page de téléchargement |
+
+**Avant chaque publication** (développeurs) : changer `VERSION` dans `js/app.js`, puis lancer `node outils/version.js`. Le script régénère `version.json` (liste des fichiers et empreintes) et le nom du cache de `sw.js`. La compilation automatique refuse un `version.json` qui n'est pas à jour.
 
 ---
 
@@ -578,6 +601,12 @@ Les tests de bout en bout pilotent Chromium en mode sans interface (Playwright) 
 | Validation XML | Toutes les parties du paquet sont des XML bien formés |
 | Ré-import dans Plume du fichier exporté | Aller-retour sans perte sur les éléments pris en charge |
 | Captures mobile (390 × 844) et bureau (1440 × 900) | Mise à l'échelle automatique, thèmes clair et sombre |
+| `tests/mise_en_page.py` | Coupe à la ligne, veuves et orphelines, 3 sections portrait / paysage / colonnes, comparaison avec LibreOffice, temps de calcul (46 pages en ~10 ms) |
+| `tests/commentaires_revisions.py` | 127 vérifications : fils de commentaires, état résolu, suivi des modifications, allers-retours DOCX / ODT / LibreOffice |
+| `tests/tableaux_docm_doc.py` | 60 vérifications : styles de tableau conditionnels, macros conservées, `.doc` Word 97-2003 |
+| `tests/ilots.py` | Modification des graphiques, SmartArt, formes et équations, export, contrôle XML, rendu LibreOffice, réimport |
+| `tests/polices.py` | Polices Marelle et Borel, incorporation `.odttf` dans le `.docx`, rendu LibreOffice sans police installée |
+| `tests/demarrage.py` | Accueil au lancement, pas de réouverture du dernier document, mode confidentiel, ouverture successive de documents |
 
 Avant chaque version, nous recommandons aussi une vérification manuelle dans **Microsoft Word (Microsoft 365)** : ouverture sans message de réparation et mise à jour de la table des matières.
 
@@ -585,10 +614,11 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 
 ## Sécurité, vie privée et RGPD
 
-- **Aucune donnée transmise.** Plume ne fait aucune requête réseau en dehors du chargement de ses propres fichiers. Aucun compte, aucun traceur, aucune statistique d'usage, aucun service tiers.
-- **Stockage local uniquement.** Les documents restent dans le navigateur de l'utilisateur (IndexedDB) ou dans les fichiers qu'il enregistre lui-même. Pour les effacer : *Fichier → Ouvrir → Documents récents → corbeille*, ou vider les données du site dans le navigateur.
+- **Aucune donnée transmise.** Plume ne fait aucune requête réseau en dehors du chargement de ses propres fichiers et de la vérification des mises à jour. Aucun compte, aucun traceur, aucune statistique d'usage, aucun service tiers.
+- **Rien n'est gardé sur l'appareil (par défaut).** Les documents existent seulement dans les fichiers que l'utilisateur enregistre lui-même (ordinateur, clé USB). Au lancement, Plume affiche toujours l'accueil et ne rouvre jamais le document précédent. Une **copie de secours** sur l'appareil peut être activée sur l'accueil ; la désactiver efface toutes les copies.
+- **Seule requête réseau ajoutée :** la vérification des mises à jour (`version.json` sur GitHub Pages), sans aucune donnée envoyée.
 - **Contenu non fiable neutralisé.** Les scripts, gestionnaires d'événements, liens `javascript:`, objets incorporés et iframes sont supprimés à l'ouverture et au collage. Les macros des documents ne sont jamais lues.
-- **Postes partagés** (espace public numérique, formation) : rappelez aux utilisateurs de supprimer leurs documents récents en fin de séance, ou utilisez une fenêtre de navigation privée.
+- **Postes partagés** (écoles, espace public numérique, formation) : laissez le mode confidentiel par défaut ; chaque élève enregistre son travail sur sa clé USB.
 - Pixel's ASBL n'ayant accès à aucun document, l'usage de Plume ne crée **aucun traitement de données personnelles** pour l'ASBL au sens du RGPD.
 
 ---
@@ -597,6 +627,15 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 
 | Priorité | Évolution |
 |---|---|
+| Haute | En-têtes et pieds de page différents par section |
+| Haute | Répétition des lignes d'en-tête de tableau sur chaque page |
+| Moyenne | Coupe d'un paragraphe entre deux colonnes |
+| Moyenne | Suivi des changements de police, taille et couleur |
+| Moyenne | Correcteur grammatical local (LanguageTool auto-hébergé, en option) |
+| Basse | Graphiques combinés et 3D modifiables |
+| Basse | Images et en-têtes dans l'import `.doc` du navigateur |
+
+---|---|
 | Haute | Enregistrement de nouvelles révisions (mode « Suivi » actif) |
 | Haute | Coupure des paragraphes entre deux pages (pagination à la ligne) |
 | Haute | Modification des données des graphiques |
@@ -612,6 +651,17 @@ Avant chaque version, nous recommandons aussi une vérification manuelle dans **
 ---
 
 ## Historique des versions
+
+### 1.4.0 — 22 novembre 2026
+- **Polices Marelle et Borel** intégrées ; les polices scolaires sont **jointes aux fichiers** `.docx` et `.odt` (affichage identique sans installation) ; les polices jointes par Word sont affichées
+- **Pagination comme Word** : coupe à la ligne, veuves et orphelines, enchaînements, interligne calculé sur la hauteur réelle des polices, tableaux coupés entre deux lignes
+- **Sections** avec chacune leur format, orientation, marges et **colonnes** ; sauts de section et de colonne
+- **Graphiques, SmartArt, formes et équations modifiables** ; Insertion → Graphique et Équation
+- **Commentaires en fils** (réponses, résolu) ; **suivi des modifications** enregistré en direct, fiabilisé, avec 4 affichages
+- **Styles de tableau** conditionnels et galerie de 11 styles ; **macros conservées** (`.docm`, `.dotm`) ; **import `.doc`** avec mise en forme et tableaux
+- **Démarrage sur l'accueil** (document vierge ou ouverture d'un fichier, par exemple sur clé USB), **jamais de réouverture automatique** ; **mode confidentiel** par défaut
+- **Mises à jour automatiques** de toutes les versions (en ligne, Windows, Linux) et signalement sur Android / iPhone
+- Corrections : tableaux qui dépassaient du cadre de la page, contenu dupliqué des zones de texte à l'export, export ODT d'une liste invalide, partie vidée dans l'export DOCX
 
 ### 1.3.0 — 20 novembre 2026
 - **Export PDF direct** dans le navigateur, sur tablette et sur téléphone (bouton dans la barre du haut, `Ctrl+Maj+P`)

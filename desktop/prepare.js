@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..'), dest = path.join(__dirname, 'app');
 fs.rmSync(dest, { recursive: true, force: true });
-for (const item of ['index.html', 'manifest.webmanifest', 'css', 'js', 'vendor', 'icons']) {
+for (const item of ['index.html', 'manifest.webmanifest', 'version.json', 'css', 'js', 'vendor', 'icons']) {
   fs.cpSync(path.join(root, item), path.join(dest, item), { recursive: true });
 }
 fs.mkdirSync(path.join(__dirname, 'build'), { recursive: true });

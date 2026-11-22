@@ -550,7 +550,7 @@ const Odt = (() => {
       if (me.ti !== b.ti) pa.push(`fo:text-indent="${me.ti}"`);
       if (e.style.lineHeight) pa.push(`fo:line-height="${/^[\d.]+$/.test(e.style.lineHeight) ? Math.round(parseFloat(e.style.lineHeight) * 100) + '%' : pt(U.cssToPx(e.style.lineHeight))}"`);
       if (me.bg && me.bg !== b.bg) pa.push(`fo:background-color="${me.bg}"`);
-      if (extra) pa.push(extra);
+      if (extra && extra !== 'x') pa.push(extra);   // 'x' : simple marqueur « élément de liste »
       const ta = textProps({ ...me, u: false, s: false, hl: null, pos: null }, b);
       fontsUsed.add(me.font);
       if (!pa.length && !ta && !master) return named;
