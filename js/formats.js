@@ -31,13 +31,18 @@ const Formats = (() => {
     odt: { label: 'OpenDocument (.odt)', desc: 'LibreOffice, OpenOffice, Google Docs, Word.', mime: 'application/vnd.oasis.opendocument.text' },
     pdf: { label: 'PDF (.pdf)', desc: 'Fichier PDF direct, prêt à envoyer ou imprimer. Polices, images et mise en page incluses.', mime: 'application/pdf' },
     rtf: { label: 'Texte enrichi (.rtf)', desc: 'Lisible partout, même par WordPad et TextEdit.', mime: 'application/rtf' },
+    docm: { label: 'Word avec macros (.docm)', desc: 'Conserve les macros du document d’origine (jamais exécutées par Plume).', mime: 'application/vnd.ms-word.document.macroEnabled.12', macros: true },
+    dotx: { label: 'Modèle Word (.dotx)', desc: 'Modèle réutilisable : Word crée un nouveau document à chaque ouverture.', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.template' },
+    dotm: { label: 'Modèle Word avec macros (.dotm)', desc: 'Modèle qui conserve les macros d’origine (jamais exécutées par Plume).', mime: 'application/vnd.ms-word.template.macroEnabled.12', macros: true },
     doc: { label: 'Word 97-2003 (.doc)', desc: 'Pour les très anciennes versions de Word (application de bureau + LibreOffice).', mime: 'application/msword', desktop: true },
     html: { label: 'Page web (.html)', desc: 'Un fichier unique, images incluses.', mime: 'text/html' },
     md: { label: 'Markdown (.md)', desc: 'Texte structuré pour le web et les wikis.', mime: 'text/markdown' },
     txt: { label: 'Texte brut (.txt)', desc: 'Uniquement le texte, sans mise en forme.', mime: 'text/plain' }
   };
   /** Formats que Ctrl+S peut réécrire tels quels */
-  const SAVABLE = new Set(['docx', 'odt', 'rtf', 'md', 'txt', 'html']);
+  const SAVABLE = new Set(['docx', 'docm', 'dotx', 'dotm', 'odt', 'rtf', 'md', 'txt', 'html']);
+  /** Paquets Word (Office Open XML) */
+  const WORD_XML = new Set(['docx', 'docm', 'dotx', 'dotm']);
 
   const extOf = name => (String(name).split('.').pop() || '').toLowerCase();
 
@@ -52,7 +57,12 @@ const Formats = (() => {
         const z = await JSZip.loadAsync(buf);
         const mt = z.file('mimetype') ? (await z.file('mimetype').async('string')).trim() : '';
         if (/opendocument\.text/.test(mt)) return /template/.test(mt) ? 'ott' : 'odt';
-        if (z.file('word/document.xml') || z.file('[Content_Types].xml')) return ['docm', 'dotx', 'dotm'].includes(ext) ? ext : 'docx';
+        if (z.file('word/document.xml') || z.file('[Content_Types].xml')) {
+          if (['docx', 'docm', 'dotx', 'dotm'].includes(ext)) return ext;
+          // extension inconnue : le type du document principal fait foi
+          const ct = z.file('[Content_Types].xml') ? await z.file('[Content_Types].xml').async('string') : '';
+          return /macroEnabledTemplate\.main/.test(ct) ? 'dotm' : /macroEnabled\.main/.test(ct) ? 'docm' : /wordprocessingml\.template\.main/.test(ct) ? 'dotx' : 'docx';
+        }
         if (z.file('index.xml') && ext === 'pages') return 'pages';
         if (/sun\.xml\.writer/.test(mt)) return 'sxw';
         if (mt === 'application/epub+zip') return 'epub';
@@ -169,7 +179,9 @@ const Formats = (() => {
     switch (ext) {
       case 'docx': case 'docm': case 'dotx': case 'dotm': {
         const r = await DocxImport.importDocx(buf, { registerImage: reg });
-        return { ...r, format: 'docx', bytes: new Uint8Array(buf), notice: ext === 'docm' || ext === 'dotm' ? 'Les macros de ce document ne sont jamais exécutées par Plume.' : null };
+        // macros : jamais exécutées ; conservées à l'enregistrement en .docm / .dotm
+        const macros = DocxExport.hasMacros(r.source);
+        return { ...r, format: ext, macros, bytes: new Uint8Array(buf) };
       }
       case 'odt': case 'ott': case 'fodt': return { ...(await Odt.importOdt(buf, { registerImage: reg })), format: ext === 'odt' ? 'odt' : 'odt' };
       case 'rtf': return { ...Rtf.importRtf(buf, { registerImage: reg }), format: 'rtf' };
@@ -185,7 +197,8 @@ const Formats = (() => {
         const conv = await convertWithOffice(buf, ext, 'docx');
         if (conv) { const r = await DocxImport.importDocx(conv, { registerImage: reg }); return { ...r, format: 'doc', bytes: new Uint8Array(conv) }; }
         const r = LegacyDoc.importDoc(buf);
-        return { ...r, format: 'doc', notice: 'Document Word 97-2003 ouvert en mode texte : le texte, les paragraphes et les tableaux sont récupérés. Pour garder toute la mise en forme, utilisez l’application de bureau Plume avec LibreOffice installé.' };
+        const miss = r.missing.length ? ` <b>Non repris :</b> ${r.missing.join(', ')}.` : '';
+        return { ...r, format: 'doc', partial: true, notice: `<b>Word 97-2003</b> — Ouverture dans le navigateur : texte, titres, listes, tableaux et mise en forme simple récupérés.${miss} Pour une conversion complète, utilisez l’application de bureau Plume avec LibreOffice installé (conversion automatique).` };
       }
       case 'txt': case 'text': case '': default: {
         if (CONVERT[ext]) {
@@ -228,7 +241,7 @@ const Formats = (() => {
   }
   async function buildFormat(format, ctx) {
     switch (format) {
-      case 'docx': return DocxExport.exportDocx(ctx);
+      case 'docx': case 'docm': case 'dotx': case 'dotm': return DocxExport.exportDocx(ctx, { kind: format });
       case 'odt': return Odt.exportOdt(ctx);
       case 'rtf': return Rtf.exportRtf(ctx);
       case 'md': return new Blob([Markdown.fromEditor(ctx.editor)], { type: 'text/markdown;charset=utf-8' });
@@ -309,5 +322,5 @@ const Formats = (() => {
     return pdf.output('blob');
   }
 
-  return { rasterPdf, OPEN, CONVERT, EXPORT, SAVABLE, ACCEPT, ALL_EXT, extOf, open, build, converterAvailable, importPdf };
+  return { rasterPdf, OPEN, CONVERT, EXPORT, SAVABLE, WORD_XML, ACCEPT, ALL_EXT, extOf, open, build, converterAvailable, importPdf };
 })();

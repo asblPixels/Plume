@@ -23,7 +23,7 @@ const Ed = {
     return { w: cm(21), h: cm(29.7), mt: cm(2.5), mr: cm(2.5), mb: cm(2.5), ml: cm(2.5), mh: cm(1.25), mf: cm(1.25) };
   },
   defaultSettings() {
-    return { fontCss: 'Calibri, Carlito, "Liberation Sans", Arial, sans-serif', size: 11, lineHeight: 1.15, after: 8, before: 0, color: '#000000', heading: '#0B5E4E' };
+    return { fontCss: 'Calibri, Carlito, "Liberation Sans", Arial, sans-serif', size: 11, lineHeight: 1.15, after: 8, before: 0, color: '#000000', heading: '#0B5E4E', tableStyles: {}, normalDefs: TableStyles.PLUME_NORMAL_DEFS.slice() };
   },
 
   init() {
@@ -83,6 +83,7 @@ const Ed = {
     this.props = Object.assign({ title: '', author: '', created: null }, props || {});
     this.editor.innerHTML = this.sanitizeStored(html || '<p><br></p>');
     if (!this.editor.firstChild) this.editor.innerHTML = '<p><br></p>';
+    this.applySettingsTables();
     this.headerHTML = header || '';
     this.footerHTML = footer || '';
     this.applySettings();
@@ -91,6 +92,12 @@ const Ed = {
     this.relayout();
     this.commit();
     this.placeCaretStart();
+  },
+
+  /** Styles de tableau : recalcul de la mise en forme déduite (registre du document + galerie) */
+  applySettingsTables() {
+    if (!this.settings.tableStyles) this.settings.tableStyles = {};
+    TableStyles.applyAll(this.editor);
   },
 
   /** Contenu stocké : on retire les éventuels résidus d'interface */
@@ -766,11 +773,12 @@ const Ed = {
         if ((td.colSpan || 1) > 1) { const n = td.colSpan; td.colSpan = 1; for (let i = 1; i < n; i++) td.after(newCell()); }
         break;
       }
-      case 'borders': table.dataset.borders = table.dataset.borders === 'none' ? 'all' : 'none'; break;
+      case 'borders': table.dataset.borders = table.dataset.borders === 'none' ? (table.dataset.tblstyle ? 'style' : 'all') : 'none'; delete table.dataset.tbdr; break;
       case 'header': tr.dataset.header ? delete tr.dataset.header : (tr.dataset.header = '1'); break;
       case 'distribute': this.redistribute(table, true); break;
       case 'vtop': case 'vmiddle': case 'vbottom': td.style.verticalAlign = op.slice(1) === 'top' ? '' : op.slice(1); break;
     }
+    if (table.isConnected) TableStyles.apply(table);   // bandes, ligne des totaux… suivent la nouvelle structure
     this.changed(false);
     this.onSelection && this.onSelection();
   },
@@ -782,6 +790,37 @@ const Ed = {
     if (!cg) { cg = el('colgroup'); table.prepend(cg); }
     cg.innerHTML = `<col style="width:${w}px">`.repeat(cols);
     table.style.width = w * cols + 'px';
+  },
+  /** Applique un style de tableau de la galerie ('' : aucun style) */
+  setTableStyle(id) {
+    const c = this.cellCtx();
+    if (!c) return;
+    const T = c.table;
+    if (id) {
+      T.dataset.tblstyle = id;
+      if (T.dataset.look == null) T.dataset.look = TableStyles.DEFAULT_LOOK;
+      T.dataset.borders = 'style';
+      delete T.dataset.tbdr;
+    } else {
+      delete T.dataset.tblstyle;
+      T.dataset.borders = 'all';
+      delete T.dataset.tbdr;
+    }
+    TableStyles.apply(T);
+    this.changed(false);
+    this.onSelection && this.onSelection();
+  },
+  /** Coche / décoche une option de style (ligne d'en-tête, bandes…) */
+  setTableLook(key, on) {
+    const c = this.cellCtx();
+    if (!c) return;
+    const T = c.table;
+    const look = TableStyles.parseLook(T.dataset.look);
+    look[key] = on === undefined ? !look[key] : !!on;
+    T.dataset.look = TableStyles.lookString(look);
+    TableStyles.apply(T);
+    this.changed(false);
+    this.onSelection && this.onSelection();
   },
   cellShade(color) {
     const c = this.cellCtx();
@@ -879,6 +918,7 @@ const Ed = {
       e.preventDefault();
       const clean = Sanitize.html(html);
       document.execCommand('insertHTML', false, clean);
+      if (/data-tblstyle/.test(clean)) TableStyles.applyAll(this.editor);
       this.afterCmd();
     }
   },
@@ -1006,7 +1046,7 @@ const Sanitize = {
             if (!/^(data:image\/|blob:|https?:)/i.test(a.value)) c.remove();
           } else if (['colspan', 'rowspan', 'start', 'alt', 'width', 'height'].includes(n)) { /* conservé */ }
           else if (n === 'class' && /^(pl-|title$|subtitle$)/.test(a.value)) { /* classes Plume */ }
-          else if (/^data-(borders|field|note|x|kind|part|cid|author|date|text|initials|pstyle|numid)$/.test(n) || n === 'contenteditable' || n === 'id') { /* conservé */ }
+          else if (/^data-(borders|field|note|x|kind|part|cid|author|date|text|initials|pstyle|numid|tblstyle|look|tbdr|band)$/.test(n) || n === 'contenteditable' || n === 'id') { /* conservé */ }
           else c.removeAttribute(a.name);
         }
         if (tag === 'FONT') {

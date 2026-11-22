@@ -80,6 +80,7 @@ const App = {
     if (!silent && this.dirty) await this.flushAutosave();
     const t = TEMPLATES[tpl] || TEMPLATES.blank;
     this.docId = uid(); this.fileHandle = null; this.desktopPath = null; this.format = 'docx'; Ed.source = null;
+    this.infoBar(null);
     $('#docTitle').value = tpl === 'blank' ? this.nextDocName() : t.name;
     Ed.load({ html: t.html, props: { author: await this.user(), created: new Date().toISOString() } });
     this.afterOpen();
@@ -98,6 +99,7 @@ const App = {
     if (!d) return false;
     this.docId = d.id; this.fileHandle = null; this.desktopPath = null; this.format = d.format || 'docx';
     Ed.source = d.source ? { zip: await JSZip.loadAsync(d.source), bytes: d.source } : null;
+    this.macroBar();
     $('#docTitle').value = d.name;
     Ed.load({ html: await Ed.hydrateImages(d.html), header: await Ed.hydrateImages(d.header || ''), footer: await Ed.hydrateImages(d.footer || ''), page: d.page, settings: d.settings, props: d.props });
     this.afterOpen();
@@ -135,13 +137,15 @@ const App = {
       const s = r.settings || {};
       Ed.load({
         html: r.html, header: r.header || '', footer: r.footer || '', page: r.page, props: r.props,
-        settings: { fontCss: s.fontCss, size: s.size, lineHeight: s.lineHeight, after: s.after, before: s.before, color: s.color, heading: '#0B5E4E' }
+        settings: { fontCss: s.fontCss, size: s.size, lineHeight: s.lineHeight, after: s.after, before: s.before, color: s.color, heading: '#0B5E4E', tableStyles: s.tableStyles || {}, normalDefs: s.normalDefs || TableStyles.PLUME_NORMAL_DEFS.slice() }
       });
       this.afterOpen();
       this.dirty = false;
       await this.flushAutosave(true);
       toast(`<b>${htmlEsc(file.name)}</b> ouvert`);
-      if (r.notice) setTimeout(() => toast(r.notice, 7000), 2700);
+      // bandeau d'information permanent (macros, contenu partiel d'un ancien .doc…)
+      if (!this.macroBar()) this.infoBar(r.partial ? { icon: 'info', html: r.notice } : null);
+      if (r.notice && !r.partial) setTimeout(() => toast(r.notice, 7000), 2700);
     } catch (e) {
       console.error(e);
       this.setSaveState('');
@@ -156,12 +160,40 @@ const App = {
   },
   async buildDocx() { return DocxExport.exportDocx(this.exportCtx()); },
   fileName(ext) { return this.name().replace(/[\\/:*?"<>|]/g, '_') + '.' + ext; },
+  /** Le document ouvert contient-il des macros VBA (conservées, jamais exécutées) ? */
+  hasMacros() { return !!(Ed.source && DocxExport.hasMacros(Ed.source.zip)); },
+  /** Bandeau d'information sous le ruban (null : masqué) */
+  infoBar(info) {
+    const bar = $('#infoBar');
+    if (!bar) return;
+    if (!info) { bar.hidden = true; bar.innerHTML = ''; return; }
+    bar.innerHTML = '';
+    bar.append(icon(info.icon || 'info'), el('span', { class: 'ib-text', html: info.html }), el('button', { class: 'ib-close', title: 'Fermer', onclick: () => this.infoBar(null) }, [icon('x')]));
+    bar.hidden = false;
+  },
+  macroBar() {
+    const on = this.hasMacros();
+    if (on) this.infoBar({ icon: 'lock', html: '<b>Macros</b> — Ce document contient des macros : elles sont conservées mais jamais exécutées. Enregistrez-le en <b>.docm</b> (ou <b>.dotm</b> pour un modèle) pour les garder.' });
+    else this.infoBar(null);
+    return on;
+  },
   /** Ctrl+S : même format que le fichier ouvert s'il est réinscriptible, sinon .docx */
   async save(asNew = false) {
     const fmt = (!asNew && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop))) ? this.format : 'docx';
     return this.saveAs(fmt, asNew);
   },
   async saveAs(fmt = 'docx', asNew = true) {
+    // macros : un .docx ou .dotx ne peut pas les contenir → avertissement et choix
+    if ((fmt === 'docx' || fmt === 'dotx') && this.hasMacros()) {
+      const keep = fmt === 'dotx' ? 'dotm' : 'docm';
+      const r = await dialog({
+        title: 'Ce document contient des macros',
+        body: `<p style="line-height:1.55">Le format <b>.${fmt}</b> ne peut pas contenir de macros : elles seront <b>retirées</b> du fichier enregistré (le document d’origine n’est pas modifié).</p><p style="line-height:1.55;color:var(--ui-fg-2)">Pour les conserver, enregistrez en <b>.${keep}</b>. Plume n’exécute jamais les macros.</p>`,
+        buttons: [{ label: 'Annuler', value: null }, { label: `Enregistrer en .${keep}`, value: keep }, { label: `Enregistrer en .${fmt} sans macros`, primary: true, value: fmt }]
+      });
+      if (!r) return;
+      if (r !== fmt) { fmt = r; asNew = true; }
+    }
     const info = Formats.EXPORT[fmt];
     try {
       this.setSaveState('Enregistrement…');

@@ -92,7 +92,21 @@ const DocxExport = (() => {
   /* =====================================================================
      Export principal
      ===================================================================== */
-  async function exportDocx({ editor, headerEl, footerEl, page, props, source }) {
+  /** Types de paquet Word : document, document avec macros, modèle, modèle avec macros */
+  const KINDS = {
+    docx: { main: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    docm: { main: 'application/vnd.ms-word.document.macroEnabled.main+xml', mime: 'application/vnd.ms-word.document.macroEnabled.12', macros: true },
+    dotx: { main: 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.template' },
+    dotm: { main: 'application/vnd.ms-word.template.macroEnabledTemplate.main+xml', mime: 'application/vnd.ms-word.template.macroEnabled.12', macros: true }
+  };
+  /** Relations propres aux macros (projet VBA, raccourcis clavier, barres d'outils) */
+  const MACRO_RELS = ['vbaProject', 'keyMapCustomizations', 'attachedToolbars'];
+  /** Le paquet d'origine contient-il un projet VBA ? */
+  const hasMacros = zip => !!(zip && zip.file(/(^|\/)vbaProject\.bin$/i).length);
+
+  async function exportDocx({ editor, headerEl, footerEl, page, props, source }, opts = {}) {
+    const kind = KINDS[opts.kind] ? opts.kind : 'docx';
+    const K = KINDS[kind];
     /* ---------- Parties d'origine (document ouvert depuis un .docx) ---------- */
     const src = source || null;
     const srcRead = async p => { const f = src && src.file(p); return f ? f.async('string') : null; };
@@ -199,6 +213,7 @@ const DocxExport = (() => {
     const srcNumXml = src ? await srcRead('word/numbering.xml') : null;
     const srcNumIds = new Set(srcNumXml ? Array.from(srcNumXml.matchAll(/<w:num\b[^>]*w:numId="(\d+)"/g), m => m[1]) : []);
     const footnotes = [];
+    const usedTableStyles = new Set();
     let docPrId = 1, bookmarkId = 0;
 
     /** Contexte de sérialisation propre à une partie (document, en-tête…) */
@@ -529,12 +544,22 @@ const DocxExport = (() => {
         widths = widths.map(w => w || Math.max(20, rest));
       }
       const tw = widths.map(twip);
-      const borders = T.dataset.borders !== 'none';
-      const bdr = borders
+      // style de tableau : seuls w:tblStyle et w:tblLook sont écrits, Word recalcule la mise en forme conditionnelle
+      const tsId = T.dataset.tblstyle && TableStyles.get(T.dataset.tblstyle) ? T.dataset.tblstyle : null;
+      if (tsId) usedTableStyles.add(tsId);
+      let bdr;
+      if (tsId && T.dataset.borders === 'style') {
+        let direct = null;
+        try { direct = T.dataset.tbdr ? JSON.parse(T.dataset.tbdr) : null; } catch { }
+        bdr = direct ? TableStyles.bordersXml('tblBorders', direct) : '';
+      } else bdr = T.dataset.borders !== 'none'
         ? '<w:tblBorders>' + ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`).join('') + '</w:tblBorders>'
         : '<w:tblBorders>' + ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(s => `<w:${s} w:val="nil"/>`).join('') + '</w:tblBorders>';
       const center = T.style.marginLeft === 'auto' ? '<w:jc w:val="center"/>' : '';
-      let x = `<w:tbl><w:tblPr><w:tblW w:w="${tw.reduce((a, b) => a + b, 0)}" w:type="dxa"/>${center}${bdr}<w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>`;
+      let bands = '';
+      if (tsId && T.dataset.band) { const [rb, cb] = T.dataset.band.split(','); if (+rb) bands += `<w:tblStyleRowBandSize w:val="${+rb}"/>`; if (+cb) bands += `<w:tblStyleColBandSize w:val="${+cb}"/>`; }
+      const look = tsId ? TableStyles.lookXml(T.dataset.look) : '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>';
+      let x = `<w:tbl><w:tblPr>${tsId ? `<w:tblStyle w:val="${xmlEsc(tsId)}"/>` : ''}${bands}<w:tblW w:w="${tw.reduce((a, b) => a + b, 0)}" w:type="dxa"/>${center}${bdr}<w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar>${look}</w:tblPr>`;
       x += '<w:tblGrid>' + tw.map(w => `<w:gridCol w:w="${w}"/>`).join('') + '</w:tblGrid>';
       grid.forEach((row, r) => {
         const tr = rows[r];
@@ -557,7 +582,7 @@ const DocxExport = (() => {
             const cs = getComputedStyle(td);
             const bg = rgbToHex(cs.backgroundColor);
             const va = { middle: 'center', bottom: 'bottom' }[cs.verticalAlign];
-            const tcPr = `<w:tcW w:w="${w}" w:type="dxa"/>${span}${cell.rs > 1 ? '<w:vMerge w:val="restart"/>' : ''}${bg ? `<w:shd w:val="clear" w:color="auto" w:fill="${bg.slice(1)}"/>` : ''}${va ? `<w:vAlign w:val="${va}"/>` : ''}`;
+            const tcPr = `<w:tcW w:w="${w}" w:type="dxa"/>${span}${cell.rs > 1 ? '<w:vMerge w:val="restart"/>' : ''}${cellBorders(td)}${bg ? `<w:shd w:val="clear" w:color="auto" w:fill="${bg.slice(1)}"/>` : ''}${va ? `<w:vAlign w:val="${va}"/>` : ''}`;
             let content = blocks(td, part, {});
             if (!/<w:p[ >\/]/.test(content) || /<\/w:tbl>$/.test(content)) content += '<w:p/>';
             x += `<w:tc><w:tcPr>${tcPr}</w:tcPr>${content}</w:tc>`;
@@ -567,6 +592,23 @@ const DocxExport = (() => {
         x += '</w:tr>';
       });
       return x + '</w:tbl>';
+    }
+
+    /** Bordures directes d'une cellule (style en ligne) → w:tcBorders */
+    function cellBorders(td) {
+      const st = td.style;
+      let x = '';
+      for (const side of ['top', 'left', 'bottom', 'right']) {
+        const style = st.getPropertyValue('border-' + side + '-style');
+        if (!style) continue;
+        if (style === 'none' || style === 'hidden') { x += `<w:${side} w:val="nil"/>`; continue; }
+        const wpx = U.cssToPx(st.getPropertyValue('border-' + side + '-width') || '1px');
+        const val = { solid: 'single', double: 'double', dotted: 'dotted', dashed: 'dashed', ridge: 'threeDEmboss', groove: 'threeDEngrave', inset: 'inset', outset: 'outset' }[style] || 'single';
+        const sz = Math.max(2, Math.min(96, Math.round(pxPt(wpx) * 8 / (val === 'double' ? 3 : 1))));
+        const c = rgbToHex(st.getPropertyValue('border-' + side + '-color')) || '#000000';
+        x += `<w:${side} w:val="${val}" w:sz="${sz}" w:space="0" w:color="${c.slice(1)}"/>`;
+      }
+      return x ? `<w:tcBorders>${x}</w:tcBorders>` : '';
     }
 
     /** Table des matières → vrai champ TOC (Word peut la mettre à jour) */
@@ -645,6 +687,8 @@ const DocxExport = (() => {
     stylesXml += `<w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:basedOn w:val="TableNormal"/><w:uiPriority w:val="39"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr></w:style>`;
     stylesXml += `<w:style w:type="character" w:styleId="CommentReference"><w:name w:val="annotation reference"/><w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/><w:rPr><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr></w:style>`;
     stylesXml += `<w:style w:type="paragraph" w:styleId="CommentText"><w:name w:val="annotation text"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:pPr><w:spacing w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>`;
+    // styles de tableau utilisés (galerie Plume ou repris du document) : définitions w:style complètes
+    for (const id of usedTableStyles) if (id !== 'TableGrid') stylesXml += TableStyles.toXml(TableStyles.get(id));   // TableGrid : déjà généré ci-dessus
     stylesXml += '</w:styles>';
     // Document d'origine : on garde ses styles et on ajoute seulement ceux qui manquent
     if (srcStylesXml) {
@@ -757,16 +801,25 @@ const DocxExport = (() => {
 
     // Parties d'origine reprises telles quelles : réglages, thème, polices, objets des îlots
     let useSrcSettings = false;
+    const rootExtra = [];
     if (src) {
       const mr = await srcRels('word/document.xml');
       let k = 10;
       for (const r of Object.values(mr)) {
-        const kind = r.type.split('/').pop();
-        if (!['theme', 'fontTable', 'webSettings', 'settings'].includes(kind)) continue;
+        const rk = r.type.split('/').pop();
+        // macros : conservées (jamais exécutées) dans un .docm / .dotm, retirées sinon
+        if (!['theme', 'fontTable', 'webSettings', 'settings'].includes(rk) && !(K.macros && MACRO_RELS.includes(rk))) continue;
         const path = resolve('word/document.xml', r.target);
-        if (kind === 'settings') { if (path !== 'word/settings.xml') continue; useSrcSettings = true; }
+        if (rk === 'settings') { if (path !== 'word/settings.xml') continue; useSrcSettings = true; }
         await copyPart(path);
-        if (kind !== 'settings') docRels.push({ id: 'rId' + (k++), type: r.type, target: relTarget('word/document.xml', path) });
+        if (rk !== 'settings') docRels.push({ id: 'rId' + (k++), type: r.type, target: relTarget('word/document.xml', path) });
+      }
+      // interface personnalisée (customUI) des documents à macros
+      if (K.macros) for (const r of Object.values(parseRels(await srcRead('_rels/.rels')))) {
+        if (!/ui\/extensibility|customUI/i.test(r.type) || r.mode === 'External') continue;
+        const path = r.target.replace(/^\//, '');
+        await copyPart(path);
+        rootExtra.push({ id: 'rIdUi' + rootExtra.length, type: r.type, target: path });
       }
       for (const p of pendingCopies) await copyPart(p);
     }
@@ -792,7 +845,7 @@ const DocxExport = (() => {
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
       '<Default Extension="xml" ContentType="application/xml"/>',
       '<Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="jpg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/>',
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+      `<Override PartName="/word/document.xml" ContentType="${K.main}"/>`,
       '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
       '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>',
       numberingXml ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' : '',
@@ -814,6 +867,7 @@ const DocxExport = (() => {
       let extra = '';
       for (const d of srcCT.getElementsByTagName('Default')) {
         const e = d.getAttribute('Extension');
+        if (!K.macros && /vbaProject/i.test(d.getAttribute('ContentType') || '')) continue;
         if (!have.has(e.toLowerCase())) { extra += `<Default Extension="${xmlEsc(e)}" ContentType="${xmlEsc(d.getAttribute('ContentType'))}"/>`; have.add(e.toLowerCase()); }
       }
       for (const o of srcCT.getElementsByTagName('Override')) {
@@ -828,7 +882,7 @@ const DocxExport = (() => {
     zip.file('_rels/.rels', relsXml([
       { id: 'rId1', type: REL + '/officeDocument', target: 'word/document.xml' },
       { id: 'rId2', type: 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties', target: 'docProps/core.xml' },
-      { id: 'rId3', type: REL + '/extended-properties', target: 'docProps/app.xml' }]));
+      { id: 'rId3', type: REL + '/extended-properties', target: 'docProps/app.xml' }, ...rootExtra]));
     zip.file('word/document.xml', fixNum(documentXml));
     zip.file('word/_rels/document.xml.rels', relsXml(docRels));
     zip.file('word/styles.xml', stylesXml);
@@ -862,7 +916,7 @@ const DocxExport = (() => {
 
     // polices scolaires jointes au fichier : affichage identique dans Word sans installation
     if (typeof EmbedFonts !== 'undefined') await EmbedFonts.apply(zip);
-    return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', compression: 'DEFLATE' });
+    return zip.generateAsync({ type: 'blob', mimeType: K.mime, compression: 'DEFLATE' });
   }
 
   /** Convertit une image (webp, svg…) en PNG via un canvas */
@@ -876,5 +930,5 @@ const DocxExport = (() => {
     } catch { return null; }
   }
 
-  return { exportDocx };
+  return { exportDocx, hasMacros, KINDS };
 })();

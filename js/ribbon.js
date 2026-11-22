@@ -217,6 +217,11 @@ const Ribbon = {
         G('Apparence', [{ big: 'dark' }, { col: ['pageDark'] }])
       ]),
       T('aide', 'Aide', [G('Aide', [{ big: 'guide' }, { big: 'shortcuts' }, { big: 'about' }])]),
+      T('tcreation', 'Création de tableau', [
+        G('Options de style de tableau', [{ custom: 'tableLook' }]),
+        G('Styles de tableau', [{ custom: 'tableStyles' }]),
+        G('Bordures et trame', [{ big: 'tBorders' }, { bigMenu: 'shade', menu: 'shades' }])
+      ], { contextual: true }),
       T('tableau', 'Tableau', [
         G('Lignes et colonnes', [{ col: ['rowAbove', 'rowBelow'] }, { col: ['colLeft', 'colRight'] }, { col: ['delRow', 'delCol', 'delTable'] }]),
         G('Fusionner', [{ col: ['merge', 'split', 'distribute'] }]),
@@ -276,6 +281,8 @@ const Ribbon = {
     if (it.row) return el('div', { class: 'rrow' }, it.row.map(x => this.item(x)));
     if (it.custom === 'gallery') return this.gallery();
     if (it.custom === 'paraFields') return this.paraFields();
+    if (it.custom === 'tableLook') return this.tableLook();
+    if (it.custom === 'tableStyles') return this.tableStyleGallery();
   },
 
   special(name) {
@@ -320,6 +327,31 @@ const Ribbon = {
         el('span', { class: 'gs', style: preview[k] }, ['AaBbCc']), el('span', { class: 'gl' }, [l])]));
     }
     return g;
+  },
+
+  /** Cases « Ligne d'en-tête », « Ligne des totaux »… (w:tblLook) */
+  tableLook() {
+    const L = [['firstRow', 'Ligne d’en-tête'], ['firstColumn', 'Première colonne'], ['lastRow', 'Ligne des totaux'], ['lastColumn', 'Dernière colonne'], ['hBand', 'Lignes à bandes'], ['vBand', 'Colonnes à bandes']];
+    const wrap = el('div', { class: 'tlook' });
+    for (const [k, label] of L) {
+      wrap.append(el('button', { class: 'rchk', role: 'checkbox', 'aria-checked': 'false', 'data-look': k, title: label, onclick: () => Ed.setTableLook(k) }, [el('span', { class: 'box' }), el('span', {}, [label])]));
+    }
+    return wrap;
+  },
+  /** Galerie des styles de tableau (aperçus calculés avec les options du tableau courant) */
+  tableStyleGallery() {
+    const g = el('div', { class: 'gallery tsgallery', id: 'tsGallery' });
+    this.renderTableStyles(g, TableStyles.DEFAULT_LOOK);
+    return g;
+  },
+  renderTableStyles(g, look) {
+    g = g || $('#tsGallery');
+    if (!g || g.dataset.look === look) return;
+    g.dataset.look = look;
+    g.innerHTML = '';
+    const item = (id, label, def) => el('button', { class: 'gitem tsitem', 'data-ts': id, title: label, onclick: () => Ed.setTableStyle(id) }, [TableStyles.preview(def, look), el('span', { class: 'gl' }, [label])]);
+    g.append(item('', 'Aucun style', null));
+    for (const d of TableStyles.GALLERY) g.append(item(d.id, d.label || d.name, d));
   },
 
   paraFields() {
@@ -378,9 +410,16 @@ const Ribbon = {
     $$('#styleGallery .gitem').forEach(g => g.classList.toggle('on', g.dataset.style === key));
     // onglet contextuel Tableau
     const inTable = !!Ed.cellCtx();
-    const tt = $('#tabbar [data-tab="tableau"]');
-    tt.style.display = inTable ? '' : 'none';
-    if (!inTable && this.current === 'tableau') this.select('accueil');
+    for (const id of ['tcreation', 'tableau']) $('#tabbar [data-tab="' + id + '"]').style.display = inTable ? '' : 'none';
+    if (!inTable && (this.current === 'tableau' || this.current === 'tcreation')) this.select('accueil');
+    if (inTable) {
+      const T = Ed.cellCtx().table;
+      const look = TableStyles.parseLook(T.dataset.look);
+      $$('#ribbon .rchk[data-look]').forEach(b => b.setAttribute('aria-checked', look[b.dataset.look] ? 'true' : 'false'));
+      this.renderTableStyles(null, TableStyles.lookString(look));
+      const cur = T.dataset.tblstyle || '';
+      $$('#tsGallery .tsitem').forEach(b => b.classList.toggle('on', b.dataset.ts === cur));
+    }
     // champs Paragraphe (Mise en page)
     const bl = Ed.selectedBlocks()[0];
     if (bl && document.activeElement && !document.activeElement.id.startsWith('pf-')) {
