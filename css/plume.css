@@ -324,7 +324,12 @@ html.page-dark #editor { color: #e8e8e8; caret-color: #fff; }
 #editor a { color: #0563C1; text-decoration: underline; }
 #editor img { max-width: 100%; height: auto; vertical-align: bottom; }
 #editor img.sel-img { outline: 2px solid var(--brand-ink); outline-offset: 1px; }
-#editor table { border-collapse: collapse; margin: 0 0 var(--doc-pafter); table-layout: fixed; }
+#editor table { border-collapse: collapse; margin: 0 0 var(--doc-pafter); table-layout: fixed; max-width: 100%; }
+/* rien ne dépasse du cadre de la page : tableaux, objets, images, mots très longs */
+#editor > *, #editor td > *, #editor li > * { max-width: 100%; }
+#editor td, #editor th { overflow-wrap: anywhere; }
+#editor td img, #editor th img { max-width: 100%; height: auto; }
+#editor pre { white-space: pre-wrap; }
 #editor td, #editor th { border: 1px solid #000; padding: 0 5.4pt; vertical-align: top; min-width: 20px; }
 #editor table[data-borders="none"] td, #editor table[data-borders="none"] th { border: 1px dashed #c9d3db; }
 #editor td > p:last-child, #editor th > p:last-child { margin-bottom: 0; }

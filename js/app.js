@@ -25,7 +25,7 @@ const App = {
     Ed.onSelection = debounce(() => { Ribbon.refresh(); this.updateStatus(); }, 60);
     Ed.onChange = () => { this.dirty = true; this.setSaveState('Modifié'); this.autosave(); this.navRefresh(); };
     Ed.onHistory = () => Ribbon.refresh();
-    Ed.onLayout = () => { Watermark.render(); Captions.renumber(); this.updateStatus(); Ed.placeHandle && Ed.placeHandle(); this.drawRuler(); Comments.highlight(); Revisions.colorize(); };
+    Ed.onLayout = () => { this.fitWide(); Watermark.render(); Captions.renumber(); this.updateStatus(); Ed.placeHandle && Ed.placeHandle(); this.drawRuler(); Comments.highlight(); Revisions.colorize(); };
     Ed.onOpenFile = f => this.openFile(f);
     $('#docTitle').addEventListener('change', () => { this.dirty = true; this.autosave(); document.title = this.name() + ' — Plume'; });
     $('#fileInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) this.fileInputCb(f); });
@@ -55,6 +55,22 @@ const App = {
     if (!localStorage.getItem('plume-guide-vu') && !navigator.webdriver) { localStorage.setItem('plume-guide-vu', '1'); setTimeout(() => Guide.open(), 600); }
     // petits écrans : la page s'adapte à la largeur
     if ($('#canvas').clientWidth < Ed.page.w + 40) this.fitWidth();
+  },
+
+  /** Tableaux plus larges que la page : réduits à l'affichage seulement (le fichier garde ses largeurs) */
+  fitWide() {
+    const cs = getComputedStyle(Ed.editor), er = Ed.editor.getBoundingClientRect();
+    const right = er.right - (parseFloat(cs.paddingRight) || 0) - (parseFloat(cs.borderRightWidth) || 0);
+    let changed = false;
+    for (const t of Ed.editor.querySelectorAll('table')) {
+      if (t.parentElement.closest('table')) continue;
+      const z0 = parseFloat(t.style.zoom) || 1;
+      const r = t.getBoundingClientRect();
+      const natural = r.width / z0, avail = right - r.left;
+      const z = natural > avail + 1 && avail > 50 ? Math.max(0.3, Math.floor(avail / natural * 1000) / 1000) : 1;
+      if (Math.abs(z - z0) > 0.002) { t.style.zoom = z === 1 ? '' : String(z); changed = true; }
+    }
+    if (changed && Ed.relayout) Ed.relayout();
   },
 
   name() { return ($('#docTitle').value || 'Document').trim(); },
