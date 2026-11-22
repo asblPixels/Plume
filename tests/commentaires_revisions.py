@@ -1,12 +1,12 @@
 """Tests : fils de commentaires (réponses, résolu), suivi des modifications, aller-retour DOCX / ODT.
-Usage : python3 tests/commentaires_revisions.py   (serveur Plume sur PLUME_URL, par défaut http://localhost:8772)
+Usage : python3 tests/commentaires_revisions.py   (serveur Plume sur PLUME_URL, par défaut http://localhost:8765)
 Nécessite Playwright + Chrome, python-docx, lxml et LibreOffice (soffice) pour les vérifications croisées.
 """
 import asyncio, base64, io, os, re, subprocess, sys, tempfile, zipfile, json
 from lxml import etree
 from playwright.async_api import async_playwright
 
-URL = os.environ.get('PLUME_URL', 'http://localhost:8772') + '/?new=1'
+URL = os.environ.get('PLUME_URL', 'http://localhost:8765') + '/?new=1'
 ICI = os.path.dirname(os.path.abspath(__file__))
 TMP = tempfile.mkdtemp(prefix='plume-comm-')
 W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
