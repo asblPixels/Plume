@@ -118,6 +118,9 @@ const DocxImport = (() => {
         }
         case 'w:shd': { const f = c.getAttribute('w:fill'); if (f && f !== 'auto') o.shd = '#' + f.toUpperCase(); break; }
         case 'w:pageBreakBefore': o.pbb = onOff(c); break;
+        case 'w:keepNext': o.keepNext = onOff(c); break;
+        case 'w:keepLines': o.keepLines = onOff(c); break;
+        case 'w:widowControl': o.widow = onOff(c); break;
         case 'w:numPr': {
           const id = kid(c, 'w:numId'), lv = kid(c, 'w:ilvl');
           if (id) o.numId = val(id);
@@ -387,6 +390,7 @@ const DocxImport = (() => {
       let pending = [];            // blocs à insérer après le paragraphe courant (zones de texte)
 
       const closeLists = () => { listStack.length = 0; };
+      const breakEl = t => { const h = document.createElement('hr'); h.className = t === 'column' ? 'pl-colbreak' : 'pl-pagebreak'; h.contentEditable = 'false'; return h; };
 
       convertInline = async (container, target) => { const saved = listStack.splice(0); await blocks(container, target); listStack.length = 0; listStack.push(...saved); };
       async function blocks(container, target) {
@@ -422,13 +426,20 @@ const DocxImport = (() => {
         // Contenu en ligne (découpé aux sauts de page)
         const segs = await inline(p, styleR, part);
 
-        if (eff.pbb) { closeLists(); target.append(pageBreak()); }
-
         const isList = eff.numId && eff.numId !== '0' && numbering.nums[eff.numId] && tag === 'p';
         const css = blockCss(eff, styleR, tag, cls, !!isList);
 
+        // enchaînements : saut de page avant, paragraphes / lignes solidaires, veuves et orphelines
+        const isHeading = /^h\d$/.test(tag);
+        const flow = b => {
+          if (eff.keepNext && !isHeading) b.dataset.keepnext = '1';
+          else if (isHeading && eff.keepNext === false) b.dataset.keepnext = '0';
+          if (eff.keepLines) b.dataset.keeplines = '1';
+          if (eff.widow === false) b.dataset.widow = '0';
+        };
+        let firstBlock = true;
         segs.forEach((html, i) => {
-          if (i > 0) { closeLists(); target.append(pageBreak()); }
+          if (i > 0) { closeLists(); target.append(breakEl(segs.breaks[i - 1])); }
           const empty = !html.replace(/<span class="pl-anchor"[^>]*><\/span>/g, '').trim();
           if (segs.length > 1 && empty) return; // paragraphe ne contenant que le saut de page
           if (isList && i === 0) {
@@ -436,6 +447,9 @@ const DocxImport = (() => {
             li.innerHTML = html || '<br>';
             if (css) li.setAttribute('style', css);
             if (direct.pStyle && direct.pStyle !== st.normalId) li.dataset.pstyle = direct.pStyle;
+            flow(li);
+            if (eff.pbb && firstBlock) li.dataset.pbb = '1';
+            firstBlock = false;
           } else {
             if (!isList) closeLists();
             const b = document.createElement(tag);
@@ -443,6 +457,9 @@ const DocxImport = (() => {
             if (css) b.setAttribute('style', css);
             if (styleId !== st.normalId) b.dataset.pstyle = styleId;
             b.innerHTML = html || '<br>';
+            flow(b);
+            if (eff.pbb && firstBlock) b.dataset.pbb = '1';
+            firstBlock = false;
             target.append(b);
           }
         });
@@ -450,10 +467,13 @@ const DocxImport = (() => {
 
         if (pending.length) { closeLists(); for (const b of pending) target.append(b); pending = []; }
 
-        // Saut de section (page suivante) porté par le paragraphe
-        if (direct.sectPr) {
-          const t = val(kid(direct.sectPr, 'w:type'));
-          if (!t || t === 'nextPage' || t === 'oddPage' || t === 'evenPage') { closeLists(); target.append(pageBreak()); }
+        // Fin de section portée par le paragraphe : marqueur avec les propriétés de la section
+        if (direct.sectPr && part === mainPart) {
+          closeLists();
+          const hr = document.createElement('hr');
+          hr.className = 'pl-section'; hr.contentEditable = 'false';
+          hr.dataset.sect = JSON.stringify(parseSect(direct.sectPr));
+          target.append(hr);
         }
 
         function listItem(eff) {
@@ -501,6 +521,7 @@ const DocxImport = (() => {
       /** Contenu en ligne d'un paragraphe : renvoie des segments HTML séparés par les sauts de page */
       async function inline(p, styleR, part) {
         const segs = [''];
+        segs.breaks = [];
         let link = null;          // {href}
         let buf = null;           // texte en attente {open, close, text}
         let rev = null;           // révision en cours {type, author, date}
@@ -644,7 +665,7 @@ const DocxImport = (() => {
               }
               case 'w:br': case 'w:cr': {
                 const t = c.getAttribute('w:type');
-                if (t === 'page' || t === 'column') { flush(); segs.push(''); }
+                if (t === 'page' || t === 'column') { flush(); segs.push(''); segs.breaks.push(t); }
                 else pushRaw('<br>');
                 break;
               }
@@ -1002,24 +1023,37 @@ const DocxImport = (() => {
     }
     const pageBreak = () => { const h = document.createElement('hr'); h.className = 'pl-pagebreak'; h.contentEditable = 'false'; return h; };
 
-    /* ---------- Corps, section, en-têtes ---------- */
-    const docEl = parseXml(docXml).documentElement;
-    const body = kid(docEl, 'w:body');
-    const html = await convertStory(mainPart, body);
-
-    const sect = kid(body, 'w:sectPr');
-    const page = { w: 794, h: 1123, mt: 94.5, mr: 94.5, mb: 94.5, ml: 94.5, mh: 47, mf: 47 };
-    let headerHtml = '', footerHtml = '';
-    if (sect) {
+    /* ---------- Sections ---------- */
+    /** Propriétés d'une section Word (w:sectPr) → objet page de Plume (px) */
+    function parseSect(sect) {
+      const page = { w: 794, h: 1123, mt: 94.5, mr: 94.5, mb: 94.5, ml: 94.5, mh: 47, mf: 47 };
+      if (!sect) return page;
       const sz = kid(sect, 'w:pgSz');
-      if (sz) { page.w = U.twipToPx(+sz.getAttribute('w:w')); page.h = U.twipToPx(+sz.getAttribute('w:h')); }
+      if (sz) {
+        page.w = U.twipToPx(+sz.getAttribute('w:w') || 11906); page.h = U.twipToPx(+sz.getAttribute('w:h') || 16838);
+        // orientation déclarée sans dimensions cohérentes : on permute
+        if (sz.getAttribute('w:orient') === 'landscape' && page.w < page.h) [page.w, page.h] = [page.h, page.w];
+      }
       const mg = kid(sect, 'w:pgMar');
       if (mg) {
         const g = a => Math.abs(U.twipToPx(+(mg.getAttribute(a) || 0)));
         Object.assign(page, { mt: g('w:top'), mr: g('w:right'), mb: g('w:bottom'), ml: g('w:left'), mh: g('w:header'), mf: g('w:footer') });
       }
-      // éléments de section conservés tels quels (colonnes, bordures, titlePg, numérotation…)
-      page.sectExtra = kids(sect).filter(c => !['w:pgSz', 'w:pgMar', 'w:headerReference', 'w:footerReference'].includes(c.nodeName)).map(c => new XMLSerializer().serializeToString(c));
+      const ty = val(kid(sect, 'w:type'));
+      page.type = ['continuous', 'evenPage', 'oddPage', 'nextColumn'].includes(ty) ? (ty === 'nextColumn' ? 'nextPage' : ty) : 'nextPage';
+      const cl = kid(sect, 'w:cols');
+      if (cl) {
+        const n = Math.max(1, parseInt(cl.getAttribute('w:num') || '1', 10) || 1);
+        const sp = cl.getAttribute('w:space');
+        const sepA = cl.getAttribute('w:sep');
+        const list = kids(cl, 'w:col').map(c => ({ w: U.twipToPx(+(c.getAttribute('w:w') || 0)), space: U.twipToPx(+(c.getAttribute('w:space') || 0)) }));
+        const eqA = cl.getAttribute('w:equalWidth');
+        page.cols = { n, space: sp != null ? U.twipToPx(+sp) : U.cmToPx(1.25), sep: sepA === '1' || sepA === 'true' || sepA === 'on' };
+        if (list.length >= n && n > 1 && (eqA === '0' || eqA === 'false' || eqA === 'off')) { page.cols.eq = false; page.cols.list = list; }
+        else page.cols.eq = true;
+      }
+      // éléments de section conservés tels quels (bordures, titlePg, numérotation…)
+      page.sectExtra = kids(sect).filter(c => !['w:pgSz', 'w:pgMar', 'w:headerReference', 'w:footerReference', 'w:type', 'w:cols'].includes(c.nodeName)).map(c => new XMLSerializer().serializeToString(c));
       page.hfExtra = [];
       for (const tag of ['w:headerReference', 'w:footerReference']) for (const ref of kids(sect, tag)) {
         const type = ref.getAttribute('w:type') || 'default';
@@ -1028,6 +1062,18 @@ const DocxImport = (() => {
         if (rel) page.hfExtra.push({ tag, type, part: resolveTarget(mainPart, rel.target) });
       }
       page.titlePg = !!kid(sect, 'w:titlePg') && val(kid(sect, 'w:titlePg')) !== '0';
+      return page;
+    }
+
+    /* ---------- Corps, section, en-têtes ---------- */
+    const docEl = parseXml(docXml).documentElement;
+    const body = kid(docEl, 'w:body');
+    const html = await convertStory(mainPart, body);
+
+    const sect = kid(body, 'w:sectPr');
+    const page = parseSect(sect);
+    let headerHtml = '', footerHtml = '';
+    if (sect) {
       page.first = { header: '', footer: '' };
       if (page.titlePg) for (const x of page.hfExtra.filter(h => h.type === 'first')) {
         const xml = await read(x.part);

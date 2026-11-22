@@ -338,6 +338,27 @@ html.page-dark #editor { color: #e8e8e8; caret-color: #fff; }
   content: "Saut de page"; position: absolute; left: 50%; top: 0; transform: translateX(-50%);
   background: #fff; color: #7a8790; font: 11px var(--ui-font); padding: 0 8px;
 }
+#editor hr.pl-section, #editor hr.pl-colbreak {
+  border: 0; height: 14px; margin: 0; position: relative; cursor: default; overflow: visible;
+  background: repeating-linear-gradient(90deg, #9aa7b0 0 4px, transparent 4px 7px) center/100% 1px no-repeat;
+}
+#editor hr.pl-section::after, #editor hr.pl-colbreak::after {
+  content: "Saut de section"; position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+  background: #fff; color: #7a8790; font: 11px var(--ui-font); padding: 0 8px; white-space: nowrap;
+}
+#editor hr.pl-colbreak::after { content: "Saut de colonne"; }
+html.page-dark #editor .pl-pagebreak::after, html.page-dark #editor hr.pl-section::after, html.page-dark #editor hr.pl-colbreak::after { background: #1c1f22; }
+/* Artefacts de pagination (jamais enregistrés) */
+#editor .pl-pgjump { display: block; margin: 0; padding: 0; border: 0; user-select: none; pointer-events: none; }
+#editor tr.pl-pgjump td { pointer-events: none; }
+.pl-colsep { position: absolute; width: 0; border-left: 1px solid #000; pointer-events: none; }
+html.page-dark .pl-colsep { border-color: #bbb; }
+/* Interligne façon Word : multiplicateur × hauteur naturelle de la police (affichage seulement) */
+#editor.pl-wlh { --pl-lh: var(--doc-lh); --pl-fr: var(--doc-fr, 1.2); }
+#editor.pl-wlh :is(h1, h2, h3, h4, h5, h6) { --pl-lh: 1.15; }
+#editor.pl-wlh pre { --pl-fr: 1.17; }
+#editor.pl-wlh, #editor.pl-wlh * { line-height: var(--pl-lhx, calc(var(--pl-lh) * var(--pl-fr))) !important; }
+#editor.pl-wlh .pl-fn { --pl-lhx: 0; }
 #editor .pl-tab { white-space: pre; }
 #editor .pl-field { background: #eef1f3; border-radius: 2px; }
 #editor .pl-fn, .hf .pl-fn { color: var(--brand-ink); cursor: pointer; font-size: .75em; vertical-align: super; line-height: 0; padding: 0 1px; }
@@ -505,6 +526,9 @@ body.reading #exitReading { display: inline-flex; }
   #editor { padding: 0 !important; height: auto !important; min-height: 0 !important; }
   #editor .pl-pagebreak { break-after: page; background: none; height: 0; }
   #editor .pl-pagebreak::after { display: none; }
+  #editor hr.pl-section { break-after: page; background: none; height: 0; }
+  #editor hr.pl-colbreak { background: none; height: 0; }
+  #editor hr.pl-section::after, #editor hr.pl-colbreak::after { display: none; }
   #editor table[data-borders="none"] td { border: 0; }
   #editor .pl-toc .toc-upd { display: none !important; }
   .print-hf { position: fixed; left: 0; right: 0; font-family: var(--doc-font); font-size: 10pt; color: #444; }
@@ -562,7 +586,8 @@ body.dictating #saveState::after { content: " • 🎙 Dictée"; color: var(--br
 /* Export PDF direct : page sans décorations d'écran */
 body.pdf-export .page-card { box-shadow: none; border-radius: 0; }
 body.pdf-export .hf:empty::before { content: none; }
-body.pdf-export #editor .pl-pagebreak { background: none; }
+body.pdf-export #editor .pl-pagebreak, body.pdf-export #editor hr.pl-section, body.pdf-export #editor hr.pl-colbreak { background: none; }
+body.pdf-export #editor hr.pl-section::after, body.pdf-export #editor hr.pl-colbreak::after,
 body.pdf-export #editor .pl-pagebreak::after, body.pdf-export .toc-upd { display: none; }
 body.pdf-export #editor table[data-borders="none"] td { border-color: transparent; }
 body.pdf-export #editor .pl-merge, body.pdf-export #editor .pl-field { background: none; }
