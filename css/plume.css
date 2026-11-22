@@ -212,6 +212,32 @@ html[data-theme="dark"] .gitem { color: var(--ui-fg); }
 .gitem .gs { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
 .gitem .gl { font-size: 10px; color: var(--ui-fg-2); margin-top: 4px; }
 
+/* Bandeau d'information (macros, contenu partiel) */
+#infoBar { flex: none; display: flex; align-items: center; gap: 10px; padding: 7px 14px; background: #FFF6D6; color: #4A3B00; border-bottom: 1px solid #F0DC8C; font-size: 13px; line-height: 1.4; }
+#infoBar[hidden] { display: none; }
+#infoBar .ic { width: 18px; height: 18px; flex: none; }
+#infoBar .ib-text { flex: 1; }
+#infoBar .ib-close { border: 0; background: transparent; color: inherit; width: 26px; height: 26px; border-radius: 5px; display: grid; place-items: center; }
+#infoBar .ib-close:hover { background: rgba(0,0,0,.07); }
+html[data-theme="dark"] #infoBar { background: #3A3214; color: #F4E6B0; border-color: #5A4C1C; }
+@media print { #infoBar { display: none !important; } }
+
+/* Création de tableau : options et galerie de styles */
+.tlook { display: grid; grid-template-columns: auto auto; gap: 1px 10px; padding-top: 2px; }
+.rchk { border: 0; background: transparent; height: 24px; padding: 0 4px; display: inline-flex; align-items: center; gap: 6px; border-radius: 5px; color: var(--ui-fg); white-space: nowrap; }
+.rchk:hover { background: var(--ui-hover); }
+.rchk .box { width: 14px; height: 14px; border: 1.5px solid var(--ui-fg-2); border-radius: 3px; display: grid; place-items: center; background: var(--ui-bg); }
+.rchk[aria-checked="true"] .box { background: var(--brand-ink); border-color: var(--brand-ink); }
+.rchk[aria-checked="true"] .box::after { content: ""; width: 7px; height: 4px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
+.tsgallery { max-width: 720px; overflow-x: auto; overflow-y: hidden; }
+.tsitem { width: 64px; flex: none; padding: 4px; align-items: center; }
+.tsitem .gl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 56px; margin-top: 3px; }
+.ts-prev { border-collapse: collapse; width: 52px; height: 38px; table-layout: fixed; background: #fff; }
+.ts-prev td { padding: 0; height: 7px; border: 1px solid transparent; }
+.ts-prev td i { display: block; height: 2px; margin: 2px 2px; background: currentColor; opacity: .55; }
+.ts-prev td.b i { opacity: 1; height: 2.5px; }
+.ts-prev.ts-none td { border: 1px dashed #c9d3db; }
+
 /* ---------- Menus déroulants ---------- */
 .menu {
   position: fixed; z-index: 80; background: var(--ui-bg); color: var(--ui-fg);
@@ -329,6 +355,26 @@ html.page-dark #editor { color: #e8e8e8; caret-color: #fff; }
 #editor table[data-borders="none"] td, #editor table[data-borders="none"] th { border: 1px dashed #c9d3db; }
 #editor td > p:last-child, #editor th > p:last-child { margin-bottom: 0; }
 #editor td > p, #editor th > p { margin-top: 0; }
+/* Styles de tableau (Word) : mise en forme déduite posée en variables --ts-* par js/table-styles.js */
+#editor { --ts-guide: 1px dashed #c9d3db; }
+#editor table[data-tblstyle] td, #editor table[data-tblstyle] th {
+  background-color: var(--ts-bg); color: var(--ts-color); font-weight: var(--ts-fw); font-style: var(--ts-fst);
+  font-family: var(--ts-ff); font-size: var(--ts-fz); text-transform: var(--ts-tt); text-align: var(--ts-ta);
+  vertical-align: var(--ts-va, top); line-height: var(--ts-lh);
+}
+#editor table[data-borders="style"] td, #editor table[data-borders="style"] th {
+  border-top: var(--ts-bt, var(--ts-guide)); border-bottom: var(--ts-bb, var(--ts-guide));
+  border-left: var(--ts-bl, var(--ts-guide)); border-right: var(--ts-br, var(--ts-guide));
+}
+#editor table[data-tblstyle] td > p, #editor table[data-tblstyle] th > p { margin-top: var(--ts-pb, var(--doc-pbefore)); margin-bottom: var(--ts-pa, var(--doc-pafter)); }
+/* export .docx : la mise en forme déduite n'est pas écrite (Word la recalcule depuis w:tblStyle) */
+#editor[data-exporting] table[data-tblstyle] td, #editor[data-exporting] table[data-tblstyle] th {
+  --ts-bg: initial !important; --ts-color: initial !important; --ts-fw: initial !important; --ts-fst: initial !important;
+  --ts-ff: initial !important; --ts-fz: initial !important; --ts-tt: initial !important; --ts-ta: initial !important;
+  --ts-va: initial !important; --ts-lh: initial !important; --ts-pa: initial !important; --ts-pb: initial !important;
+  --ts-bt: initial !important; --ts-bb: initial !important; --ts-bl: initial !important; --ts-br: initial !important;
+}
+body.pdf-export #editor { --ts-guide: 0 none; }
 #editor hr.pl-line { border: 0; border-top: 1px solid #000; margin: 6pt 0; }
 #editor .pl-pagebreak {
   border: 0; height: 14px; margin: 0; position: relative; cursor: default; overflow: visible;
@@ -506,6 +552,7 @@ body.reading #exitReading { display: inline-flex; }
   #editor .pl-pagebreak { break-after: page; background: none; height: 0; }
   #editor .pl-pagebreak::after { display: none; }
   #editor table[data-borders="none"] td { border: 0; }
+  #editor { --ts-guide: 0 none; }
   #editor .pl-toc .toc-upd { display: none !important; }
   .print-hf { position: fixed; left: 0; right: 0; font-family: var(--doc-font); font-size: 10pt; color: #444; }
   .print-hf p { margin: 0; }

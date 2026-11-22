@@ -109,10 +109,11 @@ const Backstage = {
         break;
       }
       case 'export': {
-        const icons = { docx: 'file-text', odt: 'file-text', pdf: 'printer', rtf: 'file', doc: 'file', html: 'file-down', md: 'file-down', txt: 'file' };
+        const icons = { docm: 'file-text', dotx: 'file-text', dotm: 'file-text', docx: 'file-text', odt: 'file-text', pdf: 'printer', rtf: 'file', doc: 'file', html: 'file-down', md: 'file-down', txt: 'file' };
         const grid = el('div', { class: 'bs-actions' });
         for (const [k, f] of Object.entries(Formats.EXPORT)) {
           if (f.desktop && !window.plumeDesktop) continue;
+          if (f.macros && !App.hasMacros()) continue;   // .docm / .dotm : seulement si le document d'origine a des macros
           grid.append(el('button', { class: 'bs-card', onclick: () => { this.close(); App.saveAs(k); } }, [icon(icons[k] || 'file', 'lg'), el('b', {}, [f.label]), el('span', {}, [f.desc])]));
         }
         main.append(el('h1', {}, ['Exporter / Télécharger']), grid);

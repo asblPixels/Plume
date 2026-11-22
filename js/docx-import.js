@@ -49,6 +49,43 @@ const DocxImport = (() => {
   const num = v => (v == null || v === '' ? null : parseFloat(v));
   const tw2pt = v => (v == null ? null : Math.round(v / 20 * 10) / 10);
 
+  /* ---------- Couleurs de thème (themeColor + themeTint / themeShade) ---------- */
+  /** Applique une teinte (tint) ou une ombre (shade) Word à une couleur, en TSL comme Word */
+  function tintShade(hex6, tint, shade) {
+    let r = parseInt(hex6.slice(0, 2), 16) / 255, g = parseInt(hex6.slice(2, 4), 16) / 255, b = parseInt(hex6.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h /= 6;
+    }
+    if (tint != null) l = l * tint + (1 - tint);
+    if (shade != null) l = l * shade;
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    const f = t => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    const to = v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
+    return s === 0 ? (to(l) + to(l) + to(l)).toUpperCase() : (to(f(h + 1 / 3)) + to(f(h)) + to(f(h - 1 / 3))).toUpperCase();
+  }
+  /**
+   * Couleur d'un élément Word : valeur explicite, sinon couleur de thème (avec teinte / ombre)
+   * kind = 'color' (w:color, w:val / w:themeColor) ou 'fill' (w:shd, w:fill / w:themeFill)
+   */
+  function colorOf(el, ctx, kind = 'color') {
+    if (!el) return undefined;
+    const A = kind === 'fill' ? ['w:fill', 'w:themeFill', 'w:themeFillTint', 'w:themeFillShade'] : [kind === 'border' ? 'w:color' : 'w:val', 'w:themeColor', 'w:themeTint', 'w:themeShade'];
+    const v = el.getAttribute(A[0]);
+    if (v && v !== 'auto' && /^[0-9a-f]{6}$/i.test(v)) return '#' + v.toUpperCase();
+    const th = el.getAttribute(A[1]);
+    const base = th && ctx && ctx.theme && ctx.theme.colors[th];
+    if (base && /^[0-9a-f]{6}$/i.test(base)) {
+      const t = el.getAttribute(A[2]), sh = el.getAttribute(A[3]);
+      return '#' + tintShade(base, t ? parseInt(t, 16) / 255 : null, sh ? parseInt(sh, 16) / 255 : null);
+    }
+    return v === 'auto' ? 'auto' : undefined;
+  }
+
   /* ---------- Propriétés de texte (rPr) ---------- */
   function parseRPr(r, ctx) {
     const o = {};
@@ -65,15 +102,9 @@ const DocxImport = (() => {
         case 'w:vanish': o.vanish = onOff(c); break;
         case 'w:u': o.u = val(c) && val(c) !== 'none'; break;
         case 'w:sz': o.sz = num(val(c)) / 2; break;
-        case 'w:color': {
-          let v = val(c);
-          const th = c.getAttribute('w:themeColor');
-          if ((!v || v === 'auto') && th && ctx.theme.colors[th]) v = ctx.theme.colors[th];
-          o.color = v === 'auto' ? 'auto' : (v ? '#' + v.toUpperCase() : undefined);
-          break;
-        }
+        case 'w:color': o.color = colorOf(c, ctx); break;
         case 'w:highlight': if (val(c) && val(c) !== 'none') o.hl = HIGHLIGHT[val(c)] || null; else o.hl = null; break;
-        case 'w:shd': { const f = c.getAttribute('w:fill'); if (f && f !== 'auto') o.shd = '#' + f.toUpperCase(); break; }
+        case 'w:shd': { const f = colorOf(c, ctx, 'fill'); if (f && f !== 'auto') o.shd = f; break; }
         case 'w:vertAlign': o.vert = val(c) === 'superscript' ? 'sup' : val(c) === 'subscript' ? 'sub' : null; break;
         case 'w:spacing': o.spacing = tw2pt(num(val(c))); break;
         case 'w:rFonts': {
@@ -116,7 +147,7 @@ const DocxImport = (() => {
           }
           break;
         }
-        case 'w:shd': { const f = c.getAttribute('w:fill'); if (f && f !== 'auto') o.shd = '#' + f.toUpperCase(); break; }
+        case 'w:shd': { const f = colorOf(c, ctx, 'fill'); if (f && f !== 'auto') o.shd = f; break; }
         case 'w:pageBreakBefore': o.pbb = onOff(c); break;
         case 'w:numPr': {
           const id = kid(c, 'w:numId'), lv = kid(c, 'w:ilvl');
@@ -167,6 +198,7 @@ const DocxImport = (() => {
       if (type === 'table') {
         const tb = kid(kid(s, 'w:tblPr'), 'w:tblBorders');
         o.tblBorders = tb ? hasBorders(tb) : undefined;
+        o.el = s;
       }
       st.byId[id] = o;
       if (type === 'paragraph' && s.getAttribute('w:default') === '1') st.normalId = id;
@@ -186,6 +218,78 @@ const DocxImport = (() => {
     delete pPr.pStyle;
     s._chain = { pPr, rPr: Object.assign({}, base.rPr, s.rPr), names: [s.name, ...base.names], tblBorders: s.tblBorders ?? base.tblBorders };
     return s._chain;
+  }
+
+  /* ---------- Styles de tableau (définition complète pour TableStyles) ---------- */
+  /** Bordures Word (w:tblBorders / w:tcBorders) → { côté: { v, sz, c } } */
+  function parseBorders(el, ctx) {
+    if (!el) return undefined;
+    const o = {};
+    const alias = { start: 'left', end: 'right' };
+    for (const b of el.children) {
+      const side = b.nodeName.replace('w:', '');
+      const k = alias[side] || side;
+      if (!['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].includes(k)) continue;
+      const v = val(b);
+      if (!v || v === 'nil' || v === 'none') { o[k] = { v: 'nil' }; continue; }
+      const c = colorOf(b, ctx, 'border');
+      o[k] = { v, sz: num(b.getAttribute('w:sz')) || 4, c: c || 'auto' };
+    }
+    return Object.keys(o).length ? o : undefined;
+  }
+  /** Zone de style (racine du style ou w:tblStylePr) → propriétés utiles */
+  function parseTsPart(el, ctx) {
+    const o = {};
+    const r = parseRPr(kid(el, 'w:rPr'), ctx);
+    for (const k of ['b', 'i', 'caps', 'font', 'sz']) if (r[k] !== undefined) o[k] = r[k];
+    if (r.color !== undefined) o.color = r.color;
+    const pEl = kid(el, 'w:pPr');
+    if (pEl) {
+      const p = parsePPr(pEl, ctx);
+      if (p.jc) o.jc = p.jc;
+      if (p.before != null) o.before = p.before;
+      if (p.after != null) o.after = p.after;
+      if (p.line != null) { o.line = p.line; o.lineRule = p.lineRule; }
+    }
+    const tc = kid(el, 'w:tcPr');
+    if (tc) {
+      const f = colorOf(kid(tc, 'w:shd'), ctx, 'fill');
+      if (f && f !== 'auto') o.shd = f;
+      const b = parseBorders(kid(tc, 'w:tcBorders'), ctx);
+      if (b) o.borders = b;
+      const va = val(kid(tc, 'w:vAlign'));
+      if (va) o.va = va;
+    }
+    // w:tblPr/w:tblBorders dans une zone conditionnelle : traité comme des bordures de cellule
+    if (el.nodeName === 'w:tblStylePr') {
+      const b = parseBorders(kid(kid(el, 'w:tblPr'), 'w:tblBorders'), ctx);
+      if (b) o.borders = Object.assign(b, o.borders || {});
+    }
+    return o;
+  }
+  /** Définition résolue d'un style de tableau (chaîne basedOn comprise) */
+  function tableStyleDef(st, id, ctx, depth = 0) {
+    const s = st.byId[id];
+    if (!s || s.type !== 'table' || !s.el || depth > 20) return null;
+    if (s._tdef) return s._tdef;
+    const base = s.basedOn ? tableStyleDef(st, s.basedOn, ctx, depth + 1) : null;
+    const M = TableStyles.mergePart;
+    const def = { id, name: val(kid(s.el, 'w:name')) || id, rowBand: base ? base.rowBand : 1, colBand: base ? base.colBand : 1, tblBorders: Object.assign({}, base && base.tblBorders), whole: base ? base.whole : undefined, cond: Object.assign({}, base && base.cond) };
+    const tblPr = kid(s.el, 'w:tblPr');
+    const rb = val(kid(tblPr, 'w:tblStyleRowBandSize')), cb = val(kid(tblPr, 'w:tblStyleColBandSize'));
+    if (rb) def.rowBand = +rb || 1;
+    if (cb) def.colBand = +cb || 1;
+    Object.assign(def.tblBorders, parseBorders(kid(tblPr, 'w:tblBorders'), ctx) || {});
+    const root = parseTsPart(s.el, ctx);
+    if (Object.keys(root).length) def.whole = M(def.whole, root);
+    for (const c of kids(s.el, 'w:tblStylePr')) {
+      const t = c.getAttribute('w:type');
+      if (!TableStyles.CONDS.includes(t)) continue;
+      const part = parseTsPart(c, ctx);
+      if (t === 'wholeTable') def.whole = M(def.whole, part);
+      else def.cond[t] = M(def.cond[t], part);
+    }
+    return (s._tdef = JSON.parse(JSON.stringify(def)));
   }
 
   /* ---------- Thème ---------- */
@@ -344,7 +448,10 @@ const DocxImport = (() => {
     const normal = chain(st, st.normalId);
     const baseR = Object.assign({}, st.defaults.rPr, normal.rPr);
     const baseP = Object.assign({}, st.defaults.pPr, normal.pPr);
+    // propriétés fixées par le style Normal lui-même (elles l'emportent sur les styles de tableau)
+    const normalDefs = [...['after', 'before', 'line', 'jc'].filter(k => normal.pPr[k] != null), ...['b', 'i', 'caps', 'color', 'font', 'sz'].filter(k => normal.rPr[k] != null)];
     const settings = {
+      normalDefs,
       font: baseR.font || 'Calibri',
       size: baseR.sz || 11,
       color: baseR.color && baseR.color !== 'auto' ? baseR.color : '#000000',
@@ -353,6 +460,7 @@ const DocxImport = (() => {
       before: baseP.before ?? 0
     };
 
+    const usedTableStyles = {};   // styles de tableau utilisés → définitions résolues
     const images = [];
     const imgCache = {};
     async function imageUrl(part, rid) {
@@ -741,6 +849,18 @@ const DocxImport = (() => {
         if (borders === undefined && tStyle) borders = chain(st, tStyle).tblBorders;
         const T = document.createElement('table');
         T.dataset.borders = borders ? 'all' : 'none';
+        // style de tableau Word : mise en forme conditionnelle calculée par TableStyles
+        const tdef = tStyle ? tableStyleDef(st, tStyle, ctx) : null;
+        if (tdef) {
+          usedTableStyles[tStyle] = tdef;
+          T.dataset.tblstyle = tStyle;
+          T.dataset.look = TableStyles.lookFromXml(kid(tblPr, 'w:tblLook'));
+          T.dataset.borders = 'style';
+          const db = parseBorders(direct, ctx);
+          if (db) T.dataset.tbdr = JSON.stringify(db);
+          const rb = val(kid(tblPr, 'w:tblStyleRowBandSize')), cb = val(kid(tblPr, 'w:tblStyleColBandSize'));
+          if (rb || cb) T.dataset.band = `${rb || ''},${cb || ''}`;
+        }
         const jc = val(kid(tblPr, 'w:jc'));
         const cols = kids(kid(t, 'w:tblGrid'), 'w:gridCol').map(g => Math.max(8, Math.round(U.twipToPx(+g.getAttribute('w:w') || 0))));
         if (cols.length) {
@@ -779,9 +899,15 @@ const DocxImport = (() => {
             }
             const TD = document.createElement('td');
             if (span > 1) TD.colSpan = span;
-            const shd = kid(tcPr, 'w:shd');
-            const fill = shd && shd.getAttribute('w:fill');
-            if (fill && fill !== 'auto') TD.style.backgroundColor = '#' + fill;
+            const fill = colorOf(kid(tcPr, 'w:shd'), ctx, 'fill');
+            if (fill && fill !== 'auto') TD.style.backgroundColor = fill;
+            // bordures directes de la cellule (prioritaires sur le style de tableau)
+            const tcb = parseBorders(kid(tcPr, 'w:tcBorders'), ctx);
+            if (tcb) for (const side of ['top', 'bottom', 'left', 'right']) {
+              if (!tcb[side]) continue;
+              const css = TableStyles.borderCss(tcb[side]);
+              TD.style.setProperty('border-' + side, css || 'none');
+            }
             const va = val(kid(tcPr, 'w:vAlign'));
             if (va === 'center') TD.style.verticalAlign = 'middle'; else if (va === 'bottom') TD.style.verticalAlign = 'bottom';
             const saved = listStack.splice(0);
@@ -795,6 +921,7 @@ const DocxImport = (() => {
           tbody.append(TR);
           ri++;
         }
+        if (tdef) TableStyles.apply(T, tdef);
         return T;
       }
 
@@ -1063,7 +1190,7 @@ const DocxImport = (() => {
 
     return {
       html: html || '<p><br></p>', header: headerHtml, footer: footerHtml,
-      page, settings: { ...settings, fontCss: cssFont(settings.font) }, props: { title, author },
+      page, settings: { ...settings, fontCss: cssFont(settings.font), tableStyles: usedTableStyles }, props: { title, author },
       source: zip
     };
   }
