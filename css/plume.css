@@ -530,22 +530,88 @@ body.reading #exitReading { display: inline-flex; }
 .pl-math { font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", serif; font-style: italic; padding: 0 2px; }
 
 /* ---------- Suivi des modifications ---------- */
-#editor .pl-ins, .hf .pl-ins { color: #1F6F43; text-decoration: underline; text-decoration-color: #1F6F43; }
-#editor .pl-del, .hf .pl-del { color: #B42318; text-decoration: line-through; }
-body.final-view #editor .pl-del { display: none; }
-body.final-view #editor .pl-ins { color: inherit; text-decoration: none; }
+#editor .pl-ins, .hf .pl-ins { color: var(--rev, #1F6F43); text-decoration: underline; text-decoration-color: var(--rev, #1F6F43); }
+#editor .pl-del, .hf .pl-del { color: var(--rev, #B42318); text-decoration: line-through; }
+#editor .pl-fmt, .hf .pl-fmt { text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: var(--rev, #8E44AD); }
+#editor .pl-ins .pl-fmt { text-decoration-line: underline; text-decoration-style: solid; }
+/* couleur par auteur (data-rc posé par Revisions.colorize) */
+#editor [data-rc="0"], #editor [data-pins-rc="0"], #editor [data-pdel-rc="0"] { --rev: #C0392B; }
+#editor [data-rc="1"], #editor [data-pins-rc="1"], #editor [data-pdel-rc="1"] { --rev: #1E63B5; }
+#editor [data-rc="2"], #editor [data-pins-rc="2"], #editor [data-pdel-rc="2"] { --rev: #1F7A3E; }
+#editor [data-rc="3"], #editor [data-pins-rc="3"], #editor [data-pdel-rc="3"] { --rev: #8E44AD; }
+#editor [data-rc="4"], #editor [data-pins-rc="4"], #editor [data-pdel-rc="4"] { --rev: #B9770E; }
+#editor [data-rc="5"], #editor [data-pins-rc="5"], #editor [data-pdel-rc="5"] { --rev: #0E7C86; }
+#editor [data-rc="6"], #editor [data-pins-rc="6"], #editor [data-pdel-rc="6"] { --rev: #C2185B; }
+#editor [data-rc="7"], #editor [data-pins-rc="7"], #editor [data-pdel-rc="7"] { --rev: #5D4037; }
+/* marques de paragraphe insérées / supprimées */
+html body #editor [data-pins-author]::after { content: "¶"; color: var(--rev, #1F6F43); text-decoration: underline; font-weight: 400; font-style: normal; }
+html body #editor [data-pdel-author]::after { content: "¶"; color: var(--rev, #B42318); text-decoration: line-through; font-weight: 400; font-style: normal; }
+/* Aucune marque (= final) */
+body.rv-none #editor .pl-del, body.final-view #editor .pl-del { display: none; }
+body.rv-none #editor .pl-ins, body.rv-none #editor .pl-fmt, body.final-view #editor .pl-ins { color: inherit; text-decoration: none; }
+html body.rv-none #editor [data-pins-author]::after, html body.rv-none #editor [data-pdel-author]::after { content: none; }
+/* Marques simples : texte final et barre rouge dans la marge */
+body.rv-simple #editor .pl-del { display: none; }
+body.rv-simple #editor .pl-ins, body.rv-simple #editor .pl-fmt { color: inherit; text-decoration: none; }
+html body.rv-simple #editor [data-pins-author]::after, html body.rv-simple #editor [data-pdel-author]::after { content: none; }
+body.rv-simple #editor :is(p, h1, h2, h3, h4, h5, h6, li, blockquote, pre):is(:has(.pl-ins, .pl-del, .pl-fmt), [data-pins-author], [data-pdel-author])::before {
+  content: ""; position: absolute; width: 2px; height: 1.15em; margin-left: -12px; margin-top: .1em; background: #D32F2F; }
+/* Original : état avant toutes les modifications */
+body.rv-original #editor .pl-ins { display: none; }
+body.rv-original #editor .pl-del { color: inherit; text-decoration: none; }
+body.rv-original #editor .pl-fmt { text-decoration: none; }
+html body.rv-original #editor [data-pins-author]::after, html body.rv-original #editor [data-pdel-author]::after { content: none; }
+/* export : les couleurs d'affichage ne sont pas de la mise en forme */
+#editor[data-exporting] :is(.pl-ins, .pl-del, .pl-fmt), body.exporting-doc #editor :is(.pl-ins, .pl-del, .pl-fmt) { color: inherit !important; text-decoration: none !important; display: inline !important; }
 
 /* ---------- Commentaires ---------- */
 #editor .pl-cref, .hf .pl-cref { display: inline-block; width: 16px; height: 14px; margin: 0 1px; vertical-align: text-top; cursor: pointer; border-radius: 3px; background: #FFE58A; position: relative; }
 #editor .pl-cref::after { content: ""; position: absolute; left: 3px; top: 3px; width: 10px; height: 6px; border-radius: 1px; background: #8a6d00; clip-path: polygon(0 0, 100% 0, 100% 100%, 40% 100%, 15% 140%, 20% 100%, 0 100%); }
+#editor .pl-cref[data-parent], .hf .pl-cref[data-parent] { display: none; }   /* réponse : représentée par l'icône du fil */
+#editor .pl-cref[data-done="1"] { background: #E3E6E8; }
+#editor .pl-cref[data-done="1"]::after { background: #9AA5AD; }
 ::highlight(plume-comment) { background: rgba(255, 213, 79, .45); }
-.np-comment { border: 1px solid var(--ui-border); border-radius: 10px; padding: 10px; margin: 6px; background: var(--ui-bg); cursor: pointer; }
-.np-comment:hover { border-color: var(--brand-ink); }
-.np-comment .who { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+::highlight(plume-comment-done) { background: rgba(160, 170, 178, .18); }
+.np-cbar { display: flex; gap: 4px; padding: 6px; flex-wrap: wrap; }
+.np-cbar button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--ui-border); background: transparent; color: inherit; border-radius: 6px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+.np-cbar .ic { width: 14px; height: 14px; }
+.np-thread { border: 1px solid var(--ui-border); border-radius: 10px; margin: 6px; background: var(--ui-bg); cursor: pointer; padding-bottom: 8px; }
+.np-thread:hover, .np-thread.cur { border-color: var(--brand-ink); }
+.np-thread.cur { box-shadow: 0 0 0 1px var(--brand-ink); }
+.np-thread.done { opacity: .62; }
+.np-thread.done:hover { opacity: .9; }
+.np-thread.folded .np-comment .txt { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.np-thread.folded .np-replies, .np-thread.folded > .acts, .np-thread.folded .np-comment .acts { display: none; }
+.np-thread.folded { padding-bottom: 0; }
+.np-fold { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--ui-fg-2); padding: 6px 10px 0; text-transform: uppercase; letter-spacing: .03em; }
+.np-fold .ic { width: 14px; height: 14px; }
+.np-comment { padding: 10px 10px 0; }
+.np-comment .who { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.np-comment .who .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-comment .av { flex: none; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; }
 .np-comment .when { color: var(--ui-fg-2); font-size: 11px; font-weight: 400; }
 .np-comment .txt { margin-top: 6px; white-space: pre-wrap; line-height: 1.4; }
-.np-comment .acts { display: flex; gap: 6px; margin-top: 8px; }
-.np-comment .acts button { border: 1px solid var(--ui-border); background: transparent; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+.np-replies { margin-left: 18px; border-left: 2px solid var(--ui-border); }
+.np-replies .np-comment { padding-top: 8px; }
+.np-thread .acts { display: flex; gap: 6px; margin: 8px 10px 0; flex-wrap: wrap; }
+.np-comment .acts.small { margin: 4px 0 0; }
+.np-comment .acts.small button { padding: 1px 6px; font-size: 11px; opacity: .8; }
+.np-thread .acts button { border: 1px solid var(--ui-border); background: transparent; color: inherit; border-radius: 6px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+/* Impression : avec ou sans commentaires et marques */
+#printComments { display: none; }
+@media print {
+  body.print-clean #editor .pl-cref, body.print-clean #editor .pl-del { display: none !important; }
+  body.print-clean #editor .pl-ins, body.print-clean #editor .pl-fmt { color: inherit !important; text-decoration: none !important; }
+  html body.print-clean #editor [data-pins-author]::after, html body.print-clean #editor [data-pdel-author]::after, body.print-clean.rv-simple #editor :is(p, h1, h2, h3, h4, h5, h6, li, blockquote, pre)::before { content: none !important; }
+  body.print-markup #editor .pl-cref { background: none; width: auto; height: auto; vertical-align: super; font-size: 7pt; color: #8a6d00; }
+  body.print-markup #editor .pl-cref::after { content: "[" attr(data-n) "]"; position: static; background: none; clip-path: none; width: auto; height: auto; }
+  body.print-markup #printComments:not(:empty) { display: block; break-before: page; font-family: var(--doc-font); font-size: 10pt; }
+  #printComments h2 { font-size: 13pt; margin: 0 0 8pt; }
+  #printComments .pc { margin: 0 0 6pt; break-inside: avoid; }
+  #printComments .pc.reply { margin-left: 18pt; }
+  #printComments .pc b { margin-right: 4pt; }
+  #printComments .pc .st { color: #666; font-size: 8.5pt; }
+}
 
 /* ---------- Outils avancés ---------- */
 #editor .pl-merge { background: #E8F6F2; color: #0B5E4E; border-radius: 3px; padding: 0 2px; }

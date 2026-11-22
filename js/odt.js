@@ -261,13 +261,17 @@ const Odt = (() => {
           const author = (first(n, 'dc', 'creator') || {}).textContent || '';
           const date = (first(n, 'dc', 'date') || {}).textContent || '';
           const text = kids(n).filter(c => is(c, 'text', 'p') || is(c, 'text', 'list')).map(c => c.textContent).join('\n').trim();
-          const ref = `<span class="pl-cref" contenteditable="false" data-cid="${xmlEsc(cid)}" data-author="${xmlEsc(author)}" data-initials="" data-date="${xmlEsc(date)}" data-text="${xmlEsc(text)}"></span>`;
-          if (A(n, 'office', 'name')) { h += `<span class="pl-cstart" data-cid="${xmlEsc(cid)}"></span>`; commentOpen[A(n, 'office', 'name')] = ref; }
+          // LibreOffice : fil de discussion (loext:parent-name) et état résolu (loext:resolved)
+          const parent = A(n, 'loext', 'parent-name');
+          const done = A(n, 'loext', 'resolved') === 'true';
+          const ini = (first(n, 'meta', 'creator-initials') || {}).textContent || '';
+          const ref = `<span class="pl-cref" contenteditable="false" data-cid="${xmlEsc(cid)}" data-author="${xmlEsc(author)}" data-initials="${xmlEsc(ini)}" data-date="${xmlEsc(date)}" data-text="${xmlEsc(text)}"${parent ? ` data-parent="o${xmlEsc(parent)}"` : ''}${done && !parent ? ' data-done="1"' : ''}></span>`;
+          if (A(n, 'office', 'name')) { if (!parent) h += `<span class="pl-cstart" data-cid="${xmlEsc(cid)}"></span>`; commentOpen[A(n, 'office', 'name')] = { ref, reply: !!parent }; }
           else h += ref;
         } else if (is(n, 'office', 'annotation-end')) {
           const nm = A(n, 'office', 'name');
           const ref = commentOpen[nm];
-          if (ref) { const cid = 'o' + nm; h += `<span class="pl-cend" data-cid="${xmlEsc(cid)}"></span>` + ref; delete commentOpen[nm]; }
+          if (ref) { const cid = 'o' + nm; h += (ref.reply ? '' : `<span class="pl-cend" data-cid="${xmlEsc(cid)}"></span>`) + ref.ref; delete commentOpen[nm]; }
         } else if (is(n, 'draw', 'frame') || is(n, 'draw', 'a')) {
           h += await frame(is(n, 'draw', 'a') ? (first(n, 'draw', 'frame') || n) : n);
         } else if (is(n, 'text', 'soft-page-break') || is(n, 'text', 'sequence-ref') || is(n, 'text', 'bookmark-end') || is(n, 'text', 'reference-mark-end')) { /* ignoré */ }
@@ -635,9 +639,19 @@ const Odt = (() => {
           continue;
         }
         if (n.classList.contains('pl-anchor')) { if (n.id) out += `<text:bookmark text:name="${xmlEsc(n.id)}"/>`; continue; }
-        if (n.classList.contains('pl-cstart')) { const ref = editor.querySelector(`.pl-cref[data-cid="${CSS.escape(n.dataset.cid)}"]`); if (ref) out += annotation(ref, 'a' + n.dataset.cid); continue; }
-        if (n.classList.contains('pl-cend')) { out += `<office:annotation-end office:name="${xmlEsc('a' + n.dataset.cid)}"/>`; continue; }
-        if (n.classList.contains('pl-cref')) { if (!editor.querySelector(`.pl-cstart[data-cid="${CSS.escape(n.dataset.cid)}"]`)) out += annotation(n, null); continue; }
+        // les réponses suivent leur commentaire racine (même plage), avec loext:parent-name
+        if (n.classList.contains('pl-cstart')) {
+          const ref = editor.querySelector(`.pl-cref[data-cid="${CSS.escape(n.dataset.cid)}"]`);
+          if (ref) { out += annotation(ref, 'a' + n.dataset.cid); for (const r of repliesOf(n.dataset.cid)) out += annotation(r, 'a' + r.dataset.cid, 'a' + n.dataset.cid, ref); }
+          continue;
+        }
+        if (n.classList.contains('pl-cend')) { out += `<office:annotation-end office:name="${xmlEsc('a' + n.dataset.cid)}"/>`; for (const r of repliesOf(n.dataset.cid)) out += `<office:annotation-end office:name="${xmlEsc('a' + r.dataset.cid)}"/>`; continue; }
+        if (n.classList.contains('pl-cref')) {
+          const par = n.dataset.parent && editor.querySelector(`.pl-cref[data-cid="${CSS.escape(n.dataset.parent)}"]`);
+          if (par) { if (!editor.querySelector(`.pl-cstart[data-cid="${CSS.escape(n.dataset.parent)}"]`)) out += annotation(n, null, 'a' + n.dataset.parent, par); continue; }
+          if (!editor.querySelector(`.pl-cstart[data-cid="${CSS.escape(n.dataset.cid)}"]`)) out += annotation(n, repliesOf(n.dataset.cid).length ? 'a' + n.dataset.cid : null);
+          continue;
+        }
         if (n.classList.contains('pl-del')) continue;              // état actuel du texte : suppressions appliquées
         if (n.classList.contains('pl-tab')) { out += '<text:tab/>'; continue; }
         if (tag === 'A' && n.getAttribute('href')) {
@@ -649,9 +663,11 @@ const Odt = (() => {
       }
       return out;
     }
-    function annotation(ref, name) {
+    function repliesOf(cid) { return Array.from(editor.querySelectorAll(`.pl-cref[data-parent="${CSS.escape(cid)}"]`)); }
+    function annotation(ref, name, parentName, root) {
       annN++;
-      return `<office:annotation${name ? ` office:name="${xmlEsc(name)}"` : ''}><dc:creator>${xmlEsc(ref.dataset.author || '')}</dc:creator>${ref.dataset.date ? `<dc:date>${xmlEsc(ref.dataset.date.replace(/Z$/, ''))}</dc:date>` : ''}${String(ref.dataset.text || '').split('\n').map(l => `<text:p>${xmlEsc(l)}</text:p>`).join('')}</office:annotation>`;
+      const done = (root || ref).dataset.done === '1';
+      return `<office:annotation${name ? ` office:name="${xmlEsc(name)}"` : ''}${parentName ? ` loext:parent-name="${xmlEsc(parentName)}"` : ''} loext:resolved="${done}"><dc:creator>${xmlEsc(ref.dataset.author || '')}</dc:creator>${ref.dataset.date ? `<dc:date>${xmlEsc(ref.dataset.date.replace(/Z$/, ''))}</dc:date>` : ''}${String(ref.dataset.text || '').split('\n').map(l => `<text:p>${xmlEsc(l)}</text:p>`).join('')}</office:annotation>`;
     }
     const isBlock = n => n.nodeType === 1 && /^(P|H[1-6]|DIV|BLOCKQUOTE|PRE|UL|OL|LI|TABLE|HR)$/.test(n.tagName);
     function blocks(container) {

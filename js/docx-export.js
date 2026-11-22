@@ -173,6 +173,8 @@ const DocxExport = (() => {
     const commentMap = {}, commentData = {};
     let commentN = 0;
     const commentId = cid => (commentMap[cid] ??= String(commentN++));
+    const replies = cid => Array.from(editor.querySelectorAll(`.pl-cref[data-parent="${CSS.escape(cid)}"]`));
+    let fmtCtx = null;        // changement de mise en forme suivi en cours (span.pl-fmt)
     /** Réécrit un îlot (XML d'origine) en recréant ses relations dans la partie cible */
     function islandXml(n, part) {
       let xml;
@@ -334,8 +336,14 @@ const DocxExport = (() => {
         ppr.push(`<w:ind w:left="${me.ml}" w:right="${me.mr}" ${ti}/>`);
       }
       if (me.jc !== b.jc) ppr.push(`<w:jc w:val="${me.jc}"/>`);
-      // marque de paragraphe : taille de la police du bloc
-      const markR = rPrXml({ ...me, strike: false, u: false, hl: null, vert: null }, b);
+      // marque de paragraphe : taille de la police du bloc (+ marque insérée / supprimée avec suivi)
+      let markRev = '';
+      if (blockEl && /^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/.test(blockEl.tagName)) {
+        const d = blockEl.dataset;
+        if (d.pinsAuthor != null) markRev += `<w:ins w:id="${revId++}" w:author="${xmlEsc(d.pinsAuthor || 'Plume')}"${d.pinsDate ? ` w:date="${xmlEsc(d.pinsDate)}"` : ''}/>`;
+        if (d.pdelAuthor != null) markRev += `<w:del w:id="${revId++}" w:author="${xmlEsc(d.pdelAuthor || 'Plume')}"${d.pdelDate ? ` w:date="${xmlEsc(d.pdelDate)}"` : ''}/>`;
+      }
+      const markR = rPrXml({ ...me, strike: false, u: false, hl: null, vert: null }, b, markRev);
       if (markR) ppr.push(markR);
       return `<w:p>${ppr.length ? `<w:pPr>${ppr.join('')}</w:pPr>` : ''}${runs(nodes, blockEl, b, part)}</w:p>`;
     }
@@ -356,6 +364,14 @@ const DocxExport = (() => {
           else if (p) x += inDel ? `<w:delText xml:space="preserve">${xmlEsc(p)}</w:delText>` : `<w:t xml:space="preserve">${xmlEsc(p)}</w:t>`;
         }
         return x;
+      };
+      // propriétés du run, avec l'ancienne mise en forme (w:rPrChange) si elle a été modifiée avec suivi
+      const runPr = (p, b) => {
+        const x = rPrXml(p, b);
+        if (!fmtCtx) return x;
+        const old = rPrXml({ ...p, ...fmtCtx.old }, b).replace(/^<w:rPr>|<\/w:rPr>$/g, '');
+        const ch = `<w:rPrChange w:id="${revId++}" w:author="${xmlEsc(fmtCtx.author)}"${fmtCtx.date ? ` w:date="${xmlEsc(fmtCtx.date)}"` : ''}><w:rPr>${old}</w:rPr></w:rPrChange>`;
+        return x ? x.replace(/<\/w:rPr>$/, ch + '</w:rPr>') : `<w:rPr>${ch}</w:rPr>`;
       };
       const propsFor = node => {
         const pe = node.nodeType === 1 ? node : node.parentElement;
@@ -386,13 +402,29 @@ const DocxExport = (() => {
       const walk = (list) => {
         for (const n of list) {
           if (n.nodeType === 1 && n.classList.contains('pl-island')) { flush(); out += islandXml(n, part); continue; }
-          if (n.nodeType === 1 && n.classList.contains('pl-cstart')) { flush(); out += `<w:commentRangeStart w:id="${commentId(n.dataset.cid)}"/>`; continue; }
-          if (n.nodeType === 1 && n.classList.contains('pl-cend')) { flush(); out += `<w:commentRangeEnd w:id="${commentId(n.dataset.cid)}"/>`; continue; }
+          // les réponses partagent la plage du commentaire parent (comme Word)
+          if (n.nodeType === 1 && (n.classList.contains('pl-cstart') || n.classList.contains('pl-cend'))) {
+            flush();
+            const tagName = n.classList.contains('pl-cstart') ? 'w:commentRangeStart' : 'w:commentRangeEnd';
+            out += `<${tagName} w:id="${commentId(n.dataset.cid)}"/>`;
+            for (const rep of replies(n.dataset.cid)) out += `<${tagName} w:id="${commentId(rep.dataset.cid)}"/>`;
+            continue;
+          }
           if (n.nodeType === 1 && n.classList.contains('pl-cref')) {
             flush();
             const id = commentId(n.dataset.cid);
-            commentData[id] = { author: n.dataset.author || '', initials: n.dataset.initials || '', date: n.dataset.date || '', text: n.dataset.text || '' };
+            const par = n.dataset.parent != null && editor.querySelector(`.pl-cref[data-cid="${CSS.escape(n.dataset.parent)}"]`) ? n.dataset.parent : null;
+            commentData[id] = { author: n.dataset.author || '', initials: n.dataset.initials || '', date: n.dataset.date || '', text: n.dataset.text || '', parent: par, done: n.dataset.done === '1', durable: n.dataset.durable || '' };
             out += `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${id}"/></w:r>`;
+            continue;
+          }
+          if (n.nodeType === 1 && n.classList.contains('pl-fmt')) {
+            flush();
+            const prev = fmtCtx;
+            let old = {}; try { old = JSON.parse(n.dataset.old || '{}'); } catch { }
+            fmtCtx = { author: n.dataset.author || 'Plume', date: n.dataset.date || '', old };
+            walk(Array.from(n.childNodes)); flush();
+            fmtCtx = prev;
             continue;
           }
           if (n.nodeType === 1 && (n.classList.contains('pl-ins') || n.classList.contains('pl-del'))) {
@@ -410,7 +442,7 @@ const DocxExport = (() => {
             if (!t) continue;
             const text = /\S| /.test(t) || t.includes('\t') ? t : (t.includes('\n') ? '' : t);
             if (!text) continue;
-            emit(rPrXml(propsFor(n), b), textXml(text.replace(/\n/g, n.parentElement.closest('pre') ? '\n' : ' ')));
+            emit(runPr(propsFor(n), b), textXml(text.replace(/\n/g, n.parentElement.closest('pre') ? '\n' : ' ')));
             continue;
           }
           if (n.nodeType !== 1) continue;
@@ -666,16 +698,38 @@ const DocxExport = (() => {
       footnotesXml += '</w:footnotes>';
     }
 
-    /* ---------- comments.xml ---------- */
-    let commentsXml = null;
+    /* ---------- comments.xml (+ fils de discussion : commentsExtended, commentsIds, commentsExtensible, people) ---------- */
+    let commentsXml = null, commentsExXml = null, commentsIdsXml = null, commentsCexXml = null, peopleXml = null;
     const cids = Object.keys(commentData);
     if (cids.length) {
-      commentsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:comments ${NS}>` + cids.map(id => {
+      // identifiants hexadécimaux de 8 chiffres, uniques et < 0x80000000 (exigence de Word)
+      const usedHex = new Set(Array.from((documentXml + headerXml + footerXml).matchAll(/w14:(?:paraId|textId)="([0-9A-Fa-f]{8})"/g), m => m[1].toUpperCase()));
+      const hex = () => { let h; do { h = Math.floor(Math.random() * 0x7FFFFFFE + 1).toString(16).toUpperCase().padStart(8, '0'); } while (usedHex.has(h)); usedHex.add(h); return h; };
+      const okDurable = d => /^[0-9A-F]{8}$/.test(d) && parseInt(d, 16) < 0x80000000 && parseInt(d, 16) > 0 && !usedHex.has(d);
+      for (const id of cids) {
+        const c = commentData[id];
+        c.paraId = hex();
+        c.durableId = okDurable((c.durable || '').toUpperCase()) ? c.durable.toUpperCase() : hex();
+        usedHex.add(c.durableId);
+      }
+      const W15NS = 'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" mc:Ignorable="w15"';
+      commentsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:comments ${NS} ${IGNORABLE}>` + cids.map(id => {
         const c = commentData[id];
         const paras = String(c.text || '').split('\n');
         return `<w:comment w:id="${id}" w:author="${xmlEsc(c.author || 'Plume')}"${c.date ? ` w:date="${xmlEsc(c.date)}"` : ''} w:initials="${xmlEsc(c.initials || '')}">` +
-          paras.map((t, k) => `<w:p><w:pPr><w:pStyle w:val="CommentText"/></w:pPr>${k === 0 ? '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>' : ''}<w:r><w:t xml:space="preserve">${xmlEsc(t)}</w:t></w:r></w:p>`).join('') + '</w:comment>';
+          paras.map((t, k) => `<w:p w14:paraId="${k === paras.length - 1 ? c.paraId : hex()}" w14:textId="77777777"><w:pPr><w:pStyle w:val="CommentText"/></w:pPr>${k === 0 ? '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>' : ''}<w:r><w:t xml:space="preserve">${xmlEsc(t)}</w:t></w:r></w:p>`).join('') + '</w:comment>';
       }).join('') + '</w:comments>';
+      const parentOf = c => c.parent != null && commentMap[c.parent] != null && commentData[commentMap[c.parent]] ? commentData[commentMap[c.parent]] : null;
+      commentsExXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w15:commentsEx ${W15NS}>` + cids.map(id => {
+        const c = commentData[id], par = parentOf(c);
+        return `<w15:commentEx w15:paraId="${c.paraId}"${par ? ` w15:paraIdParent="${par.paraId}"` : ''} w15:done="${(par ? par.done : c.done) ? 1 : 0}"/>`;
+      }).join('') + '</w15:commentsEx>';
+      commentsIdsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w16cid:commentsIds xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" mc:Ignorable="w16cid">` +
+        cids.map(id => `<w16cid:commentId w16cid:paraId="${commentData[id].paraId}" w16cid:durableId="${commentData[id].durableId}"/>`).join('') + '</w16cid:commentsIds>';
+      commentsCexXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w16cex:commentsExtensible xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" mc:Ignorable="w16cex">` +
+        cids.map(id => { const c = commentData[id]; const d = Date.parse(c.date); return `<w16cex:commentExtensible w16cex:durableId="${c.durableId}"${isNaN(d) ? '' : ` w16cex:dateUtc="${new Date(d).toISOString().replace(/\.\d+Z$/, 'Z')}"`}/>`; }).join('') + '</w16cex:commentsExtensible>';
+      const authors = [...new Set(cids.map(id => commentData[id].author || 'Plume'))];
+      peopleXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w15:people ${W15NS}>` + authors.map(a => `<w15:person w15:author="${xmlEsc(a)}"><w15:presenceInfo w15:providerId="None" w15:userId="${xmlEsc(a)}"/></w15:person>`).join('') + '</w15:people>';
     }
 
     const hasToc = !!editor.querySelector('.pl-toc');
@@ -693,7 +747,13 @@ const DocxExport = (() => {
       { id: 'rId2', type: REL + '/settings', target: 'settings.xml' }];
     if (numberingXml) docRels.push({ id: 'rId3', type: REL + '/numbering', target: 'numbering.xml' });
     if (footnotesXml) docRels.push({ id: 'rId4', type: REL + '/footnotes', target: 'footnotes.xml' });
-    if (commentsXml) docRels.push({ id: 'rId5', type: REL + '/comments', target: 'comments.xml' });
+    if (commentsXml) {
+      docRels.push({ id: 'rId5', type: REL + '/comments', target: 'comments.xml' },
+        { id: 'rId7', type: 'http://schemas.microsoft.com/office/2011/relationships/commentsExtended', target: 'commentsExtended.xml' },
+        { id: 'rId8', type: 'http://schemas.microsoft.com/office/2016/09/relationships/commentsIds', target: 'commentsIds.xml' },
+        { id: 'rId9', type: 'http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible', target: 'commentsExtensible.xml' });
+      docRels.push({ id: 'rId20', type: 'http://schemas.microsoft.com/office/2011/relationships/people', target: 'people.xml' });
+    }
 
     // Parties d'origine reprises telles quelles : réglages, thème, polices, objets des îlots
     let useSrcSettings = false;
@@ -724,7 +784,7 @@ const DocxExport = (() => {
         docRels.push({ id: 'rId6', type: REL + '/endnotes', target: 'endnotes.xml' });
       }
     }
-    const GENERATED = new Set(['word/endnotes.xml', 'word/document.xml', 'word/styles.xml', 'word/numbering.xml', 'word/footnotes.xml', 'word/comments.xml', '[Content_Types].xml', '_rels/.rels', 'word/_rels/document.xml.rels', 'docProps/core.xml', 'docProps/app.xml']);
+    const GENERATED = new Set(['word/endnotes.xml', 'word/document.xml', 'word/styles.xml', 'word/numbering.xml', 'word/footnotes.xml', 'word/comments.xml', 'word/commentsExtended.xml', 'word/commentsIds.xml', 'word/commentsExtensible.xml', 'word/people.xml', '[Content_Types].xml', '_rels/.rels', 'word/_rels/document.xml.rels', 'docProps/core.xml', 'docProps/app.xml']);
     if (!useSrcSettings) copied.delete('word/settings.xml');
 
     const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -742,7 +802,11 @@ const DocxExport = (() => {
       '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
       '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>',
       '%%NOTES%%',
-      commentsXml ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' : '',
+      commentsXml ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+        '<Override PartName="/word/commentsExtended.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml"/>' +
+        '<Override PartName="/word/commentsIds.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml"/>' +
+        '<Override PartName="/word/commentsExtensible.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml"/>' +
+        '<Override PartName="/word/people.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml"/>' : '',
       '</Types>'].join('');
     let ctFinal = ct.replace('%%NOTES%%', (footnotesXml && !ct.includes('/word/footnotes.xml') ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : '') + (endnotesXml ? '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' : '')).replace('/word/header1.xml', '/word/plume-header.xml').replace('/word/footer1.xml', '/word/plume-footer.xml');
     if (srcCT) {
@@ -769,7 +833,13 @@ const DocxExport = (() => {
     zip.file('word/_rels/document.xml.rels', relsXml(docRels));
     zip.file('word/styles.xml', stylesXml);
     if (!useSrcSettings) zip.file('word/settings.xml', settingsXml);
-    if (commentsXml) zip.file('word/comments.xml', commentsXml);
+    if (commentsXml) {
+      zip.file('word/comments.xml', commentsXml);
+      zip.file('word/commentsExtended.xml', commentsExXml);
+      zip.file('word/commentsIds.xml', commentsIdsXml);
+      zip.file('word/commentsExtensible.xml', commentsCexXml);
+      zip.file('word/people.xml', peopleXml);
+    }
     if (endnotesXml) zip.file('word/endnotes.xml', endnotesXml);
     if (numberingXml) zip.file('word/numbering.xml', numberingXml);
     if (footnotesXml) zip.file('word/footnotes.xml', footnotesXml);

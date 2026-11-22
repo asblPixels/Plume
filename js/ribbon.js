@@ -91,8 +91,19 @@ function registerCommands() {
   cmd('wordCount', 'Statistiques', 'hash', () => Dialogs.stats());
   cmd('speak', 'Lecture à voix haute', 'volume-2', () => App.speak());
   cmd('comment', 'Nouveau commentaire', 'message-square-plus', () => Comments.add(), { kbd: 'Ctrl+Alt+M' });
-  cmd('showComments', 'Afficher les commentaires', 'messages-square', () => App.openNav('comments'));
-  cmd('delComments', 'Supprimer tous les commentaires', 'trash-2', () => Comments.removeAll());
+  cmd('showComments', 'Afficher les commentaires', 'messages-square', () => App.openNav('comments'), { short: 'Afficher' });
+  cmd('delComments', 'Supprimer tous les commentaires', 'trash-2', () => Comments.removeAll(), { short: 'Tout supprimer' });
+  cmd('prevComment', 'Commentaire précédent', 'chevron-left', () => Comments.move(-1), { short: 'Précédent' });
+  cmd('nextComment', 'Commentaire suivant', 'chevron-right', () => Comments.move(1), { short: 'Suivant' });
+  cmd('printMarkup', 'Imprimer les commentaires et les marques', 'printer', () => { App.printMarkup = !App.printMarkup; toast(App.printMarkup ? 'Impression <b>avec</b> les commentaires et les marques de révision' : 'Impression <b>sans</b> commentaires ni marques (document final)'); Ribbon.refresh(); }, { short: 'Imprimer les marques' });
+  cmd('acceptCur', 'Accepter et passer à la suivante', 'check', () => Revisions.current(true));
+  cmd('rejectCur', 'Refuser et passer à la suivante', 'x', () => Revisions.current(false));
+  cmd('prevRev', 'Modification précédente', 'chevron-left', () => Revisions.move(-1), { short: 'Précédente' });
+  cmd('nextRev', 'Modification suivante', 'chevron-right', () => Revisions.move(1), { short: 'Suivante' });
+  cmd('revView', 'Affichage des marques', 'eye', () => { });
+  cmd('acceptBtn', 'Accepter', 'check', () => Revisions.current(true));
+  cmd('rejectBtn', 'Refuser', 'x', () => Revisions.current(false));
+  cmd('userName', 'Nom d’utilisateur…', 'users', () => Track.setAuthor(), { short: 'Nom d’utilisateur' });
   cmd('acceptAll', 'Accepter toutes les modifications', 'check', () => Revisions.apply(true));
   cmd('rejectAll', 'Refuser toutes les modifications', 'x', () => Revisions.apply(false));
   cmd('track', 'Suivi des modifications', 'square-pen', () => Track.toggle(), { kbd: 'Ctrl+Maj+E' });
@@ -109,7 +120,7 @@ function registerCommands() {
   cmd('mergePrev', 'Destinataire précédent', 'chevron-left', () => Merge.move(-1));
   cmd('mergeNext', 'Destinataire suivant', 'chevron-right', () => Merge.move(1));
   cmd('mergeFinish', 'Fusionner', 'files', () => Merge.finish());
-  cmd('finalView', 'Affichage « Final » (masquer les marques)', 'eye', () => { document.body.classList.toggle('final-view'); Ribbon.refresh(); });
+  cmd('finalView', 'Affichage « Final » (masquer les marques)', 'eye', () => Revisions.setView(Revisions.view === 'none' ? 'all' : 'none'));
   // Affichage
   cmd('reading', 'Mode Lecture', 'book-open', () => App.setReading(true));
   cmd('ruler', 'Règle', 'ruler', () => { document.body.classList.toggle('no-ruler'); Ribbon.refresh(); App.drawRuler(); });
@@ -192,8 +203,9 @@ const Ribbon = {
       ]),
       T('revision', 'Révision', [
         G('Vérification', [{ big: 'spell' }, { col: ['wordCount', 'autocorrect'] }]),
-        G('Commentaires', [{ big: 'comment' }, { col: ['showComments', 'delComments'] }]),
-        G('Suivi', [{ big: 'track' }, { big: 'acceptAll' }, { col: ['rejectAll', 'finalView'] }]),
+        G('Commentaires', [{ big: 'comment' }, { col: ['prevComment', 'nextComment'] }, { col: ['showComments', 'delComments', 'printMarkup'] }]),
+        G('Suivi', [{ big: 'track' }, { bigMenu: 'revView', menu: 'revViews' }, { col: ['userName'] }]),
+        G('Modifications', [{ bigMenu: 'acceptBtn', menu: 'acceptMenu' }, { bigMenu: 'rejectBtn', menu: 'rejectMenu' }, { col: ['prevRev', 'nextRev'] }]),
         G('Protéger', [{ big: 'protect' }]),
         G('Voix', [{ big: 'speak' }]),
         G('Langue', [{ bigMenu: 'language', menu: 'langs' }])
@@ -246,8 +258,8 @@ const Ribbon = {
   btn(id, big) {
     const c = CMD[id];
     const b = el('button', { class: 'rbtn' + (big ? ' big' : ''), 'data-cmd': id, title: c.label + (c.kbd ? ` (${c.kbd})` : ''), onclick: () => c.run() }, [icon(c.icon), big ? el('span', {}, [c.label]) : null]);
-    if (!big && ['cut', 'copy', 'painter', 'find', 'replace', 'selectAll', 'cover', 'blankPage', 'pageBreak', 'header', 'footer', 'pageNum', 'textbox', 'hr', 'date', 'bookmark', 'wordCount', 'fullscreen', 'ruler', 'nav', 'onePage', 'pageWidth', 'rowAbove', 'rowBelow', 'colLeft', 'colRight', 'delRow', 'delCol', 'delTable', 'merge', 'split', 'distribute', 'tHeader', 'pageDark', 'showComments', 'delComments', 'rejectAll', 'finalView', 'autocorrect', 'mergePrev', 'mergeNext', 'myFonts'].includes(id)) {
-      b.append(el('span', {}, [c.label.replace(' avec la cellule de droite', '')]));
+    if (!big && ['cut', 'copy', 'painter', 'find', 'replace', 'selectAll', 'cover', 'blankPage', 'pageBreak', 'header', 'footer', 'pageNum', 'textbox', 'hr', 'date', 'bookmark', 'wordCount', 'fullscreen', 'ruler', 'nav', 'onePage', 'pageWidth', 'rowAbove', 'rowBelow', 'colLeft', 'colRight', 'delRow', 'delCol', 'delTable', 'merge', 'split', 'distribute', 'tHeader', 'pageDark', 'showComments', 'delComments', 'finalView', 'prevComment', 'nextComment', 'printMarkup', 'prevRev', 'nextRev', 'userName', 'autocorrect', 'mergePrev', 'mergeNext', 'myFonts'].includes(id)) {
+      b.append(el('span', {}, [c.short || c.label.replace(' avec la cellule de droite', '')]));
     }
     return b;
   },
@@ -347,6 +359,7 @@ const Ribbon = {
       if (b.dataset.cmd === 'dark') on = document.documentElement.dataset.theme === 'dark';
       if (b.dataset.cmd === 'pageDark') on = document.documentElement.classList.contains('page-dark');
       if (b.dataset.cmd === 'finalView') on = document.body.classList.contains('final-view');
+      if (b.dataset.cmd === 'printMarkup') on = !!App.printMarkup;
       if (b.dataset.cmd === 'track') on = Track.on;
       if (b.dataset.cmd === 'protect') on = Protect.on;
       if (b.dataset.cmd === 'autocorrect') on = AutoCorrect.on;
@@ -458,6 +471,15 @@ const Menus = {
         m.append(g);
         break;
       }
+      case 'revViews':
+        [['Marques simples', 'simple'], ['Toutes les marques', 'all'], ['Aucune marque', 'none'], ['Original', 'original']].forEach(([l, v]) => m.append(item(l, () => Revisions.setView(v), { on: Revisions.view === v })));
+        break;
+      case 'acceptMenu':
+        m.append(item('Accepter et passer à la suivante', () => Revisions.current(true), { icon: 'check' }), item('Accepter toutes les modifications', () => Revisions.apply(true), { icon: 'check' }));
+        break;
+      case 'rejectMenu':
+        m.append(item('Refuser et passer à la suivante', () => Revisions.current(false), { icon: 'x' }), item('Refuser toutes les modifications', () => Revisions.apply(false), { icon: 'x' }));
+        break;
       case 'mergeFields':
         if (!Merge.data) m.append(el('div', { class: 'mh' }, ['Choisissez d’abord les destinataires']), item('Sélectionner un fichier CSV…', () => Merge.pickRecipients(), { icon: 'users' }));
         else Merge.data.cols.forEach(c => m.append(item('«' + c + '»', () => Merge.insertField(c))));

@@ -444,8 +444,11 @@ const Ed = {
      ===================================================================== */
   exec(cmd, val = null) {
     this.focus();
+    // suivi des modifications : l'ancienne mise en forme est mémorisée (w:rPrChange)
+    const tracked = typeof Track !== 'undefined' && Track.on && /^(bold|italic|underline|strikeThrough)$/.test(cmd) ? Track.beforeFormat() : null;
     document.execCommand('styleWithCSS', false, true);
     document.execCommand(cmd, false, val);
+    if (tracked) Track.afterFormat(tracked);
     this.afterCmd();
   },
   afterCmd() {
