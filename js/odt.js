@@ -832,6 +832,7 @@ const Odt = (() => {
     zip.file('settings.xml', settingsXml, { createFolders: false });
     zip.file('META-INF/manifest.xml', manifest, { createFolders: false });
     for (const p of pics) zip.file(p.name, p.bytes, { createFolders: false });
+    if (typeof EmbedFonts !== 'undefined') await EmbedFonts.applyOdt(zip);
     return zip.generateAsync({ type: 'blob', mimeType: MIME_ODT, compression: 'DEFLATE' });
   }
 

@@ -28,7 +28,7 @@ const DocxImport = (() => {
     'verdana': '"DejaVu Sans", Verdana, sans-serif',
     'segoe ui': '"Segoe UI", "Open Sans", "Noto Sans", sans-serif',
     'consolas': '"DejaVu Sans Mono", "Liberation Mono", monospace',
-    'playwrite fr moderne': 'cursive', 'playwrite fr trad': 'cursive', 'marelle': 'cursive', 'belle allure': 'cursive',
+    'playwrite fr moderne': 'cursive', 'playwrite fr trad': 'cursive', 'marelle': 'cursive', 'borel': 'cursive', 'belle allure': 'cursive',
     'andika': '"Andika", sans-serif', 'opendyslexic': 'sans-serif', 'comic neue': '"Comic Sans MS", sans-serif',
     'atkinson hyperlegible': 'sans-serif', 'lexend': 'sans-serif'
   };
@@ -293,6 +293,8 @@ const DocxImport = (() => {
   async function importDocx(buffer, opts = {}) {
     const zip = await JSZip.loadAsync(buffer);
     const read = async p => { const f = zip.file(p); return f ? f.async('string') : null; };
+    // polices jointes au fichier par Word (« Incorporer les polices »)
+    if (typeof EmbedFonts !== 'undefined') await EmbedFonts.loadFrom(zip);
 
     // Trouver le document principal via _rels/.rels
     const rootRels = loadRels(await read('_rels/.rels'));

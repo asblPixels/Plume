@@ -684,7 +684,7 @@ const DocxExport = (() => {
     /* ---------- Assemblage du paquet ---------- */
     const zip = new JSZip();
     const _file = zip.file.bind(zip);
-    zip.file = (n, d) => _file(n, d, { createFolders: false });
+    zip.file = (n, ...a) => (a.length ? _file(n, a[0], { createFolders: false }) : _file(n)); // lecture seule si un seul argument
     const relsXml = rels => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
       rels.map(r => `<Relationship Id="${r.id}" Type="${r.type}" Target="${xmlEsc(r.target)}"${r.external ? ' TargetMode="External"' : ''}/>`).join('') + '</Relationships>';
 
@@ -790,6 +790,8 @@ const DocxExport = (() => {
     if (darkPage) document.documentElement.classList.add('page-dark');
     delete editor.dataset.exporting;
 
+    // polices scolaires jointes au fichier : affichage identique dans Word sans installation
+    if (typeof EmbedFonts !== 'undefined') await EmbedFonts.apply(zip);
     return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', compression: 'DEFLATE' });
   }
 

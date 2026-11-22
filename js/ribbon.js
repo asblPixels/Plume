@@ -3,7 +3,7 @@
    ===================================================================== */
 'use strict';
 
-const SCHOOL_FONTS = [['Playwrite FR Moderne', 'cursive scolaire'], ['Playwrite FR Trad', 'cursive traditionnelle'], ['Andika', 'lecture débutante'], ['OpenDyslexic', 'dyslexie'], ['Comic Neue', 'manuscrite simple'], ['Atkinson Hyperlegible', 'malvoyance'], ['Lexend', 'lisibilité']];
+const SCHOOL_FONTS = [['Marelle', 'cursive scolaire (Éducation nationale)'], ['Borel', 'cursive arrondie'], ['Playwrite FR Moderne', 'cursive scolaire'], ['Playwrite FR Trad', 'cursive traditionnelle'], ['Andika', 'lecture débutante'], ['OpenDyslexic', 'dyslexie'], ['Comic Neue', 'manuscrite simple'], ['Atkinson Hyperlegible', 'malvoyance'], ['Lexend', 'lisibilité']];
 const FONTS = ['Calibri', 'Aptos', 'Arial', 'Cambria', 'Georgia', 'Times New Roman', 'Verdana', 'Segoe UI', 'Trebuchet MS', 'Tahoma', 'Garamond', 'Courier New', 'Consolas', 'Comic Sans MS', 'Liberation Sans', 'Liberation Serif', 'DejaVu Sans', 'Noto Sans', 'Open Sans', 'Roboto'];
 const SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 const PALETTE = ['#000000', '#262626', '#595959', '#7F7F7F', '#A6A6A6', '#D9D9D9', '#FFFFFF', '#0B7A64', '#26EFC5', '#C7F9EC',
