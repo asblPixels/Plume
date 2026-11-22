@@ -747,3 +747,9 @@ body.pdf-export #editor hr.pl-section::after, body.pdf-export #editor hr.pl-colb
 body.pdf-export #editor .pl-pagebreak::after, body.pdf-export .toc-upd { display: none; }
 body.pdf-export #editor table[data-borders="none"] td { border-color: transparent; }
 body.pdf-export #editor .pl-merge, body.pdf-export #editor .pl-field { background: none; }
+
+/* Accueil : démarrage et mode confidentiel */
+.bs-start .bs-card { min-width: 240px; }
+.bs-privacy { display: flex; gap: 12px; align-items: flex-start; margin-top: 28px; padding: 14px 16px; border: 1px solid var(--ui-line, #d5dde3); border-radius: 10px; max-width: 720px; line-height: 1.45; cursor: pointer; }
+.bs-privacy input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--brand-ink); }
+.bs-privacy span span { color: var(--ui-fg-2); font-size: 13px; }

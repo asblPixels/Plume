@@ -15,7 +15,7 @@
 const LEAF_BLOCK = /^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/;
 const Track = {
   on: false,
-  author() { return localStorage.getItem('plume-user') || Ed.props.author || 'Utilisateur Plume'; },
+  author() { return localStorage.getItem('plume-user') || sessionStorage.getItem('plume-user') || Ed.props.author || 'Utilisateur Plume'; },
   stamp() { return new Date().toISOString().replace(/\.\d+Z$/, 'Z'); },
   toggle() {
     this.on = !this.on;

@@ -83,10 +83,30 @@ const Backstage = {
     return list;
   },
 
+  /** Mode confidentiel : réglage visible sur l'accueil */
+  privacyBox() {
+    const cb = el('input', { type: 'checkbox' });
+    cb.checked = App.keepLocal();
+    cb.addEventListener('change', async () => { await App.setKeepLocal(cb.checked); this.open('home'); });
+    return el('label', { class: 'bs-privacy' }, [cb, el('span', {}, [
+      el('b', {}, ['Garder une copie de secours de mes documents sur cet appareil']),
+      el('br'), el('span', {}, [App.keepLocal() ? 'Activé : vos documents sont aussi gardés dans Plume sur cet appareil. Déconseillé sur un ordinateur partagé.' : 'Désactivé (recommandé à l’école et sur un ordinateur partagé) : rien n’est gardé sur l’appareil. Enregistrez vos documents sur l’ordinateur ou une clé USB.'])])]);
+  },
+
   async render(id, main) {
     switch (id) {
       case 'home':
-        main.append(el('h1', {}, ['Bonjour']), el('h2', {}, ['Nouveau']), this.tplGrid(), el('h2', {}, ['Documents récents (sur cet appareil)']), await this.recent(8));
+        main.append(el('h1', {}, ['Bonjour']),
+          el('div', { class: 'bs-actions bs-start' }, [
+            el('button', { class: 'bs-card', onclick: () => { this.close(); App.newDoc('blank'); } }, [icon('file-plus', 'lg'), el('b', {}, ['Document vierge']), el('span', {}, ['Une page blanche, prête à écrire.'])]),
+            el('button', { class: 'bs-card', onclick: () => { this.close(); App.openPicker(); } }, [icon('folder-open', 'lg'), el('b', {}, ['Ouvrir un fichier…']), el('span', {}, ['Depuis l’ordinateur, une clé USB ou un disque : Word, OpenDocument, PDF, texte…'])])
+          ]),
+          el('h2', {}, ['Modèles']), this.tplGrid());
+        const docs = await Store.listDocs().catch(() => []);
+        if (App.keepLocal()) main.append(el('h2', {}, ['Documents récents (sur cet appareil)']), await this.recent(8));
+        else if (docs.length) main.append(el('h2', {}, ['Copies gardées sur cet appareil par une version précédente']), await this.recent(8),
+          el('button', { class: 'btn', onclick: async () => { await App.purgeLocal(); toast('Copies effacées de cet appareil.'); this.open('home'); } }, [icon('trash-2'), ' Tout effacer de cet appareil']));
+        main.append(this.privacyBox());
         break;
       case 'new': main.append(el('h1', {}, ['Nouveau']), this.tplGrid()); break;
       case 'open':
@@ -104,7 +124,7 @@ const Backstage = {
         row('Titre', title); row('Auteur', author);
         row('Pages', String(s.pages)); row('Mots', String(s.words)); row('Caractères', String(s.chars));
         row('Format de page', `${U.pxToCm(Ed.page.w).toFixed(1)} × ${U.pxToCm(Ed.page.h).toFixed(1)} cm`);
-        row('Enregistrement', App.fileHandle ? 'Fichier .docx sur l’appareil (Ctrl+S réenregistre)' : 'Automatique dans le navigateur ; téléchargez un .docx pour le partager');
+        row('Enregistrement', App.fileHandle || App.desktopPath ? 'Fichier sur l’appareil (Ctrl+S réenregistre)' : App.keepLocal() ? 'Copie de secours automatique sur cet appareil ; enregistrez un fichier pour le garder' : 'Rien n’est gardé sur l’appareil : enregistrez le fichier (ordinateur ou clé USB)');
         main.append(el('h1', {}, ['Informations']), el('h2', {}, [App.name()]), t);
         break;
       }

@@ -32,13 +32,12 @@ const App = {
     $('#exitReading').addEventListener('click', () => this.setReading(false));
     $('#themeBtn').addEventListener('click', () => this.toggleTheme());
 
-    // Restaurer le dernier document ou démarrer à vide
-    let restored = false;
-    try {
-      const last = await Store.getKV('lastDoc');
-      if (last) restored = await this.openStored(last, true);
-    } catch { /* stockage indisponible */ }
-    if (!restored || new URLSearchParams(location.search).has('new')) this.newDoc('blank', true);
+    // Démarrage : toujours une page blanche, jamais le dernier document (ordinateurs partagés, écoles).
+    // L'écran d'accueil propose un document vierge ou l'ouverture d'un fichier (ordinateur, clé USB…).
+    this.newDoc('blank', true);
+    try { await Store.setKV('lastDoc', null); } catch { /* stockage indisponible */ }
+    const quiet = new URLSearchParams(location.search).has('new') || navigator.webdriver;
+    if (!quiet) setTimeout(() => { if (!this._launched) Backstage.open('home'); }, 50);
 
     // Ouverture depuis le système (application installée)
     // Application de bureau (Electron) : fichiers ouverts depuis l'Explorateur / le Finder
@@ -47,10 +46,10 @@ const App = {
       window.plumeDesktop.onOpenFile(f => this.openFile(new File([f.data], f.name), null, f.path));
     }
     if ('launchQueue' in window) {
-      launchQueue.setConsumer(async p => { if (p.files && p.files.length) { const h = p.files[0]; this.openFile(await h.getFile(), h); } });
+      launchQueue.setConsumer(async p => { if (p.files && p.files.length) { this._launched = true; const h = p.files[0]; this.openFile(await h.getFile(), h); } });
     }
     if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
-    window.addEventListener('beforeunload', e => { if (this.dirty && !this.savedLocally) { e.preventDefault(); e.returnValue = ''; } });
+    window.addEventListener('beforeunload', e => { if (this.dirty && !(this.savedLocally && this.keepLocal())) { e.preventDefault(); e.returnValue = ''; } });
     Ed.editor.focus();
     if (!localStorage.getItem('plume-guide-vu') && !navigator.webdriver) { localStorage.setItem('plume-guide-vu', '1'); setTimeout(() => Guide.open(), 600); }
     // petits écrans : la page s'adapte à la largeur
@@ -59,6 +58,8 @@ const App = {
 
   /** Tableaux plus larges que la page : réduits à l'affichage seulement (le fichier garde ses largeurs) */
   fitWide() {
+    // documents à plusieurs sections : chaque page a sa propre largeur, gérée par la mise en page
+    if (Ed.sections && Ed.sections().length > 1) { $$('table[style*="zoom"]', Ed.editor).forEach(t => t.style.zoom = ''); return; }
     const cs = getComputedStyle(Ed.editor), er = Ed.editor.getBoundingClientRect();
     const right = er.right - (parseFloat(cs.paddingRight) || 0) - (parseFloat(cs.borderRightWidth) || 0);
     let changed = false;
@@ -92,7 +93,6 @@ const App = {
     document.title = this.name() + ' — Plume';
     $('#canvas').scrollTop = 0;
     this.navRefresh(); this.drawRuler(); Ribbon.refresh(); this.updateStatus();
-    Store.setKV('lastDoc', this.docId).catch(() => { });
   },
   async openStored(id, silent) {
     const d = await Store.getDoc(id).catch(() => null);
@@ -121,6 +121,8 @@ const App = {
     fi.click();
   },
   async openFile(file, handle = null, desktopPath = null) {
+    this._launched = true;
+    if ($('#backstage').classList.contains('open')) Backstage.close();
     const base = file.name.replace(/\.[^.]+$/, '');
     try {
       if (this.dirty) await this.flushAutosave();
@@ -235,6 +237,8 @@ const App = {
   autosave: debounce(function () { App.flushAutosave(); }, 1500),
   async flushAutosave(force) {
     if (!this.docId) return;
+    // mode confidentiel (par défaut) : rien n'est écrit sur l'appareil
+    if (!this.keepLocal()) { this.savedLocally = false; return; }
     try {
       const st = await Ed.getState();
       await Store.putDoc({ id: this.docId, name: this.name(), ...st, format: this.format || 'docx', source: Ed.source ? Ed.source.bytes : null, updated: Date.now() });
@@ -591,8 +595,23 @@ const App = {
     });
   },
 
-  async user() { return localStorage.getItem('plume-user') || ''; },
-  setUser(n) { localStorage.setItem('plume-user', n || ''); }
+  async user() { return localStorage.getItem('plume-user') || sessionStorage.getItem('plume-user') || ''; },
+  setUser(n) { (this.keepLocal() ? localStorage : sessionStorage).setItem('plume-user', n || ''); },
+  /** Copie de secours des documents sur l'appareil : désactivée par défaut (aucune donnée persistante) */
+  keepLocal() { try { return localStorage.getItem('plume-memoire') === 'on'; } catch { return false; } },
+  async setKeepLocal(on) {
+    try { localStorage.setItem('plume-memoire', on ? 'on' : 'off'); } catch { }
+    if (on) { await this.flushAutosave(true); toast('Copie de secours <b>activée</b> sur cet appareil.'); }
+    else { await this.purgeLocal(); toast('Mode confidentiel : <b>rien n’est gardé</b> sur cet appareil.'); }
+  },
+  /** Efface toutes les copies de documents gardées sur l'appareil */
+  async purgeLocal() {
+    try {
+      for (const d of await Store.listDocs()) await Store.delDoc(d.id);
+      await Store.setKV('lastDoc', null);
+      localStorage.removeItem('plume-user');
+    } catch { /* stockage indisponible */ }
+  }
 };
 
 /** Markdown minimal → HTML (titres, listes, gras, italique, liens) */
@@ -631,7 +650,7 @@ const Comments = {
     return roots.map(r => ({ ...this.data(r), parent: null, replies: all.filter(x => x.dataset.parent === r.dataset.cid && x !== r).map(x => this.data(x)).map((x, i) => [x, i]).sort((a, b) => (Date.parse(a[0].date) || 0) - (Date.parse(b[0].date) || 0) || a[1] - b[1]).map(x => x[0]) }));
   },
   rootOf(cid) { const r = this.ref(cid); return r && r.dataset.parent && this.ref(r.dataset.parent) ? r.dataset.parent : cid; },
-  author() { return localStorage.getItem('plume-user') || Ed.props.author || 'Utilisateur Plume'; },
+  author() { return localStorage.getItem('plume-user') || sessionStorage.getItem('plume-user') || Ed.props.author || 'Utilisateur Plume'; },
   initials(a) { return a.split(/\s+/).map(w => w[0] || '').join('').slice(0, 3).toUpperCase(); },
   stamp() { return new Date().toISOString().replace(/\.\d+Z$/, 'Z'); },
   range(cid) {
