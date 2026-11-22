@@ -5,7 +5,7 @@ import asyncio, base64, io, os, re, subprocess, sys, zipfile
 from lxml import etree
 from playwright.async_api import async_playwright
 
-PORT = os.environ.get('PLUME_PORT', '8774')
+PORT = os.environ.get('PLUME_PORT', '8765')
 URL = f'http://localhost:{PORT}/?new=1'
 HERE = os.path.dirname(os.path.abspath(__file__))
 WD = sys.argv[1] if len(sys.argv) > 1 else '/tmp/plume-ilots'
