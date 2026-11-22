@@ -215,7 +215,7 @@ const Ed = {
     while (n && n.parentElement !== this.editor) n = n.parentElement;
     if (!n) return ms.length;
     let i = 0;
-    for (const m of ms) { if (m === n || (m.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_PRECEDING)) i++; else break; }
+    for (const m of ms) { if (m !== n && (m.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)) i++; else break; }
     // le marqueur lui-même appartient à la section qu'il termine
     return ms.includes(n) ? ms.indexOf(n) : i;
   },

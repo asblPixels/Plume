@@ -434,7 +434,7 @@ const DocxImport = (() => {
         const flow = b => {
           if (eff.keepNext && !isHeading) b.dataset.keepnext = '1';
           else if (isHeading && eff.keepNext === false) b.dataset.keepnext = '0';
-          if (eff.keepLines) b.dataset.keeplines = '1';
+          if (eff.keepLines && !isHeading) b.dataset.keeplines = '1';
           if (eff.widow === false) b.dataset.widow = '0';
         };
         let firstBlock = true;

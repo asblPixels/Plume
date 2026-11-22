@@ -221,7 +221,7 @@ const Formats = (() => {
   /* ---------- Export ---------- */
   async function build(format, ctx) {
     // exports : document « propre » (sans artefacts de pagination ni décalages d'affichage)
-    if (format !== 'pdf' && window.Ed && Ed.withCleanDom && ctx.editor === Ed.editor) return Ed.withCleanDom(() => buildRaw(format, ctx));
+    if (format !== 'pdf' && typeof Ed !== 'undefined' && ctx.editor === Ed.editor) return Ed.withCleanDom(() => buildRaw(format, ctx));
     return buildRaw(format, ctx);
   }
   async function buildRaw(format, ctx) {
