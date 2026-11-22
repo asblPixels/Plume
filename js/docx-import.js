@@ -287,6 +287,66 @@ const DocxImport = (() => {
 
   const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml', webp: 'image/webp', tif: 'image/tiff', tiff: 'image/tiff' };
 
+  /** Aperçu HTML simple d'une équation OMML (exposants, indices, fractions, racines) */
+  function mathHtml(n) {
+    const k = (x, name) => x && Array.from(x.children).find(c => c.nodeName === name);
+    const all = x => x ? Array.from(x.children).map(mathHtml).join('') : '';
+    switch (n.nodeName) {
+      case 'm:t': return xmlEsc(n.textContent);
+      case 'm:sSup': return all(k(n, 'm:e')) + '<sup>' + all(k(n, 'm:sup')) + '</sup>';
+      case 'm:sSub': return all(k(n, 'm:e')) + '<sub>' + all(k(n, 'm:sub')) + '</sub>';
+      case 'm:sSubSup': return all(k(n, 'm:e')) + '<sub>' + all(k(n, 'm:sub')) + '</sub><sup>' + all(k(n, 'm:sup')) + '</sup>';
+      case 'm:f': return '<span style="display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.9em"><span style="border-bottom:1px solid">' + all(k(n, 'm:num')) + '</span><span>' + all(k(n, 'm:den')) + '</span></span>';
+      case 'm:rad': return '√<span style="border-top:1px solid">' + all(k(n, 'm:e')) + '</span>';
+      case 'm:d': return '(' + Array.from(n.children).filter(c => c.nodeName === 'm:e').map(all).join(', ') + ')';
+      case 'm:rPr': case 'm:ctrlPr': case 'w:rPr': case 'm:sSupPr': case 'm:sSubPr': case 'm:fPr': case 'm:radPr': case 'm:dPr': case 'm:deg': return '';
+      default: return all(n);
+    }
+  }
+  /** Mini rendu SVG d'un graphique Office (barres, lignes, secteurs) */
+  function chartSvg(xml, w, h) {
+    const d = parseXml(xml);
+    const title = Array.from((d.getElementsByTagName('c:title')[0] || { getElementsByTagName: () => [] }).getElementsByTagName('a:t')).map(t => t.textContent).join('');
+    const plot = d.getElementsByTagName('c:plotArea')[0];
+    if (!plot) return '';
+    const type = Array.from(plot.children).find(c => /Chart$/.test(c.nodeName));
+    const series = Array.from(plot.getElementsByTagName('c:ser')).slice(0, 6).map(s => {
+      const v = s.getElementsByTagName('c:val')[0] || s.getElementsByTagName('c:yVal')[0];
+      const pts = v ? Array.from(v.getElementsByTagName('c:pt')).map(p => ({ i: +p.getAttribute('idx'), v: parseFloat((p.getElementsByTagName('c:v')[0] || {}).textContent) || 0 })) : [];
+      const clr = s.getElementsByTagName('a:srgbClr')[0];
+      return { pts, color: clr ? '#' + clr.getAttribute('val') : null };
+    });
+    const COLORS = ['#156082', '#E97132', '#196B24', '#0F9ED5', '#A02B93', '#4EA72E'];
+    const n = Math.max(1, ...series.map(s => s.pts.length));
+    const max = Math.max(1e-9, ...series.flatMap(s => s.pts.map(p => p.v)));
+    const top = title ? 26 : 10, left = 24, bottom = h - 16, right = w - 10;
+    let g = '';
+    const kindName = type ? type.nodeName : '';
+    if (/pie|doughnut/i.test(kindName) && series[0]) {
+      const tot = series[0].pts.reduce((a, p) => a + Math.max(0, p.v), 0) || 1;
+      const cx = w / 2, cy = (top + bottom) / 2, r = Math.max(10, Math.min(w, bottom - top) / 2 - 4);
+      let a0 = -Math.PI / 2;
+      series[0].pts.forEach((p, i) => {
+        const a1 = a0 + Math.max(0, p.v) / tot * Math.PI * 2;
+        const large = a1 - a0 > Math.PI ? 1 : 0;
+        g += `<path d="M${cx},${cy} L${cx + r * Math.cos(a0)},${cy + r * Math.sin(a0)} A${r},${r} 0 ${large} 1 ${cx + r * Math.cos(a1)},${cy + r * Math.sin(a1)} Z" fill="${COLORS[i % 6]}"/>`;
+        a0 = a1;
+      });
+    } else if (/line|scatter|area/i.test(kindName)) {
+      series.forEach((s, k) => {
+        const pts = s.pts.map(p => `${left + (n > 1 ? p.i / (n - 1) : .5) * (right - left)},${bottom - p.v / max * (bottom - top)}`).join(' ');
+        g += `<polyline points="${pts}" fill="none" stroke="${s.color || COLORS[k % 6]}" stroke-width="2"/>`;
+      });
+    } else {
+      const gw = (right - left) / n, bw = gw * .8 / Math.max(1, series.length);
+      series.forEach((s, k) => s.pts.forEach(p => {
+        const bh = Math.max(0, p.v) / max * (bottom - top);
+        g += `<rect x="${left + p.i * gw + gw * .1 + k * bw}" y="${bottom - bh}" width="${Math.max(1, bw - 1)}" height="${bh}" fill="${s.color || COLORS[k % 6]}"/>`;
+      }));
+    }
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${title ? `<text x="${w / 2}" y="18" text-anchor="middle" font-size="13" fill="#404040">${xmlEsc(title)}</text>` : ''}<line x1="${left}" y1="${bottom}" x2="${right}" y2="${bottom}" stroke="#bbb"/>${g}</svg>`;
+  }
+
   /* =====================================================================
      Conversion principale
      ===================================================================== */
@@ -582,7 +642,9 @@ const DocxImport = (() => {
                 break;
               }
               case 'm:oMath': case 'm:oMathPara': {
-                island(n, 'math', `<span class="pl-math">${mathHtml(n) || 'équation'}</span>`);
+                let pv = null;
+                try { pv = typeof Ilots !== 'undefined' ? Ilots.mathPreview(n) : null; } catch { pv = null; }
+                island(n, 'math', pv || `<span class="pl-math">${mathHtml(n) || 'équation'}</span>`);
                 break;
               }
               case 'mc:AlternateContent': { const c = kid(n, 'mc:Choice') || kid(n, 'mc:Fallback'); if (c) await walk(c); break; }
@@ -844,6 +906,13 @@ const DocxImport = (() => {
         const holder = document.createElement('div');
         const saved = []; // listes indépendantes
         await (async () => { const out = document.createElement('div'); await convertInline(tx, out); holder.append(...out.childNodes); })();
+        // l'aperçu est dans un <span> : des blocs (<p>…) y seraient éjectés à la relecture HTML (historique, réouverture)
+        for (const b of Array.from(holder.querySelectorAll('p,h1,h2,h3,h4,h5,h6,div,ul,ol,li,table,thead,tbody,tr,td,th,blockquote,pre,hr')).reverse()) {
+          const s = document.createElement('span');
+          s.className = 'pl-tbp' + (b.className ? ' ' + b.className : '');
+          if (b.getAttribute('style')) s.setAttribute('style', b.getAttribute('style'));
+          s.append(...b.childNodes); b.replaceWith(s);
+        }
         return { kind: 'textbox', html: `<span class="pl-island-box pl-tb" style="width:${w}px;min-height:${Math.min(h, 400)}px;${float}" title="Zone de texte — conservée telle quelle">${holder.innerHTML}</span>` };
       }
       // image (flottante, EMF/WMF, VML, objet OLE)
@@ -865,66 +934,6 @@ const DocxImport = (() => {
       }
       return box('<span class="pl-island-label">Forme</span>', 'shape', 'Forme Office');
     }
-    /** Aperçu HTML simple d'une équation OMML (exposants, indices, fractions, racines) */
-    function mathHtml(n) {
-      const k = (x, name) => x && Array.from(x.children).find(c => c.nodeName === name);
-      const all = x => x ? Array.from(x.children).map(mathHtml).join('') : '';
-      switch (n.nodeName) {
-        case 'm:t': return xmlEsc(n.textContent);
-        case 'm:sSup': return all(k(n, 'm:e')) + '<sup>' + all(k(n, 'm:sup')) + '</sup>';
-        case 'm:sSub': return all(k(n, 'm:e')) + '<sub>' + all(k(n, 'm:sub')) + '</sub>';
-        case 'm:sSubSup': return all(k(n, 'm:e')) + '<sub>' + all(k(n, 'm:sub')) + '</sub><sup>' + all(k(n, 'm:sup')) + '</sup>';
-        case 'm:f': return '<span style="display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.9em"><span style="border-bottom:1px solid">' + all(k(n, 'm:num')) + '</span><span>' + all(k(n, 'm:den')) + '</span></span>';
-        case 'm:rad': return '√<span style="border-top:1px solid">' + all(k(n, 'm:e')) + '</span>';
-        case 'm:d': return '(' + Array.from(n.children).filter(c => c.nodeName === 'm:e').map(all).join(', ') + ')';
-        case 'm:rPr': case 'm:ctrlPr': case 'w:rPr': case 'm:sSupPr': case 'm:sSubPr': case 'm:fPr': case 'm:radPr': case 'm:dPr': case 'm:deg': return '';
-        default: return all(n);
-      }
-    }
-    /** Mini rendu SVG d'un graphique Office (barres, lignes, secteurs) */
-    function chartSvg(xml, w, h) {
-      const d = parseXml(xml);
-      const title = Array.from((d.getElementsByTagName('c:title')[0] || { getElementsByTagName: () => [] }).getElementsByTagName('a:t')).map(t => t.textContent).join('');
-      const plot = d.getElementsByTagName('c:plotArea')[0];
-      if (!plot) return '';
-      const type = Array.from(plot.children).find(c => /Chart$/.test(c.nodeName));
-      const series = Array.from(plot.getElementsByTagName('c:ser')).slice(0, 6).map(s => {
-        const v = s.getElementsByTagName('c:val')[0] || s.getElementsByTagName('c:yVal')[0];
-        const pts = v ? Array.from(v.getElementsByTagName('c:pt')).map(p => ({ i: +p.getAttribute('idx'), v: parseFloat((p.getElementsByTagName('c:v')[0] || {}).textContent) || 0 })) : [];
-        const clr = s.getElementsByTagName('a:srgbClr')[0];
-        return { pts, color: clr ? '#' + clr.getAttribute('val') : null };
-      });
-      const COLORS = ['#156082', '#E97132', '#196B24', '#0F9ED5', '#A02B93', '#4EA72E'];
-      const n = Math.max(1, ...series.map(s => s.pts.length));
-      const max = Math.max(1e-9, ...series.flatMap(s => s.pts.map(p => p.v)));
-      const top = title ? 26 : 10, left = 24, bottom = h - 16, right = w - 10;
-      let g = '';
-      const kindName = type ? type.nodeName : '';
-      if (/pie|doughnut/i.test(kindName) && series[0]) {
-        const tot = series[0].pts.reduce((a, p) => a + Math.max(0, p.v), 0) || 1;
-        const cx = w / 2, cy = (top + bottom) / 2, r = Math.max(10, Math.min(w, bottom - top) / 2 - 4);
-        let a0 = -Math.PI / 2;
-        series[0].pts.forEach((p, i) => {
-          const a1 = a0 + Math.max(0, p.v) / tot * Math.PI * 2;
-          const large = a1 - a0 > Math.PI ? 1 : 0;
-          g += `<path d="M${cx},${cy} L${cx + r * Math.cos(a0)},${cy + r * Math.sin(a0)} A${r},${r} 0 ${large} 1 ${cx + r * Math.cos(a1)},${cy + r * Math.sin(a1)} Z" fill="${COLORS[i % 6]}"/>`;
-          a0 = a1;
-        });
-      } else if (/line|scatter|area/i.test(kindName)) {
-        series.forEach((s, k) => {
-          const pts = s.pts.map(p => `${left + (n > 1 ? p.i / (n - 1) : .5) * (right - left)},${bottom - p.v / max * (bottom - top)}`).join(' ');
-          g += `<polyline points="${pts}" fill="none" stroke="${s.color || COLORS[k % 6]}" stroke-width="2"/>`;
-        });
-      } else {
-        const gw = (right - left) / n, bw = gw * .8 / Math.max(1, series.length);
-        series.forEach((s, k) => s.pts.forEach(p => {
-          const bh = Math.max(0, p.v) / max * (bottom - top);
-          g += `<rect x="${left + p.i * gw + gw * .1 + k * bw}" y="${bottom - bh}" width="${Math.max(1, bw - 1)}" height="${bh}" fill="${s.color || COLORS[k % 6]}"/>`;
-        }));
-      }
-      return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${title ? `<text x="${w / 2}" y="18" text-anchor="middle" font-size="13" fill="#404040">${xmlEsc(title)}</text>` : ''}<line x1="${left}" y1="${bottom}" x2="${right}" y2="${bottom}" stroke="#bbb"/>${g}</svg>`;
-    }
-
     /* ---------- Styles CSS ---------- */
     function lineCss(p) {
       if (p.line == null) return null;
@@ -1068,5 +1077,5 @@ const DocxImport = (() => {
     };
   }
 
-  return { importDocx, cssFont };
+  return { importDocx, cssFont, chartSvg, mathHtml };
 })();
