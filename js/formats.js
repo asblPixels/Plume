@@ -220,6 +220,13 @@ const Formats = (() => {
 
   /* ---------- Export ---------- */
   async function build(format, ctx) {
+    // pendant l'export, les couleurs d'affichage des révisions ne doivent pas être lues comme mise en forme
+    const neutral = ['docx', 'odt', 'rtf', 'md', 'doc'].includes(format);
+    if (neutral) document.body.classList.add('exporting-doc');
+    try { return await buildFormat(format, ctx); }
+    finally { if (neutral) document.body.classList.remove('exporting-doc'); }
+  }
+  async function buildFormat(format, ctx) {
     switch (format) {
       case 'docx': return DocxExport.exportDocx(ctx);
       case 'odt': return Odt.exportOdt(ctx);

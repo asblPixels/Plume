@@ -5,7 +5,14 @@
    ===================================================================== */
 'use strict';
 
-/* ---------- Suivi des modifications (enregistrement) ---------- */
+/* ---------- Suivi des modifications (enregistrement) ----------
+   Modèle dans l'éditeur :
+   - texte inséré   : <span class="pl-ins" data-author data-date>
+   - texte supprimé : <span class="pl-del" data-author data-date contenteditable="false">
+   - mise en forme  : <span class="pl-fmt" data-author data-date data-old='{"b":..,"i":..,"u":..,"strike":..}'>
+   - marque de paragraphe insérée / supprimée : attributs data-pins-author/date, data-pdel-author/date du bloc
+   ------------------------------------------------------------------------------------------------------ */
+const LEAF_BLOCK = /^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/;
 const Track = {
   on: false,
   author() { return localStorage.getItem('plume-user') || Ed.props.author || 'Utilisateur Plume'; },
@@ -13,8 +20,284 @@ const Track = {
   toggle() {
     this.on = !this.on;
     document.body.classList.toggle('tracking', this.on);
-    toast(this.on ? 'Suivi des modifications <b>activé</b> : vos ajouts et suppressions sont marqués.' : 'Suivi des modifications <b>désactivé</b>.');
+    toast(this.on ? `Suivi des modifications <b>activé</b> : vos ajouts et suppressions sont marqués au nom de <b>${htmlEsc(this.author())}</b>.` : 'Suivi des modifications <b>désactivé</b>.');
     Ribbon.refresh();
+  },
+  /** Nom d'auteur utilisé pour les révisions et les commentaires */
+  async setAuthor() {
+    const inp = el('input', { value: this.author(), style: 'width:100%' });
+    const res = await dialog({ title: 'Nom d’utilisateur', body: el('div', {}, [el('p', { style: 'margin:0 0 8px' }, ['Ce nom signe vos commentaires et vos modifications suivies.']), inp]), onOpen: () => { inp.focus(); inp.select(); }, buttons: [{ label: 'Annuler', value: null }, { label: 'OK', primary: true, value: 'ok' }] });
+    if (res === 'ok' && inp.value.trim()) { App.setUser(inp.value.trim()); toast('Nom d’utilisateur : <b>' + htmlEsc(inp.value.trim()) + '</b>'); }
+  },
+  /** Bloc élémentaire (paragraphe, titre, élément de liste…) contenant un nœud */
+  blockOf(n) {
+    let e = n && (n.nodeType === 3 ? n.parentElement : n);
+    while (e && e !== Ed.editor) { if (LEAF_BLOCK.test(e.tagName)) return e; e = e.parentElement; }
+    return null;
+  },
+  /** Blocs élémentaires du document, dans l'ordre */
+  leafBlocks(root = Ed.editor) { return $$('p,h1,h2,h3,h4,h5,h6,li,blockquote,pre', root).filter(b => !b.querySelector('p,h1,h2,h3,h4,h5,h6,li,blockquote,pre') || b.tagName === 'LI'); },
+  markAttrs(b) { const d = b.dataset; return { pins: d.pinsAuthor != null ? [d.pinsAuthor, d.pinsDate || ''] : null, pdel: d.pdelAuthor != null ? [d.pdelAuthor, d.pdelDate || ''] : null }; },
+  setMark(b, m) {
+    for (const k of ['pins', 'pdel']) {
+      if (m && m[k]) { b.setAttribute(`data-${k}-author`, m[k][0]); b.setAttribute(`data-${k}-date`, m[k][1]); }
+      else { b.removeAttribute(`data-${k}-author`); b.removeAttribute(`data-${k}-date`); }
+    }
+  },
+  /** Fusionne un bloc avec le suivant (suppression réelle de sa marque de paragraphe) */
+  join(b) {
+    const all = this.leafBlocks(b.closest('.hf') || Ed.editor);
+    const next = all[all.indexOf(b) + 1];
+    if (!next) { this.setMark(b, null); return; }
+    if (!b.textContent && !b.querySelector('img,.pl-island')) b.innerHTML = '';
+    else { const last = b.lastChild; if (last && last.nodeName === 'BR') last.remove(); }
+    const moved = Array.from(next.childNodes).filter(n => !(n.nodeName === 'BR' && n === next.lastChild && next.childNodes.length === 1 && b.childNodes.length));
+    b.append(...moved);
+    this.dropPlaceholderBr(b);
+    this.setMark(b, this.markAttrs(next));
+    let par = next.parentElement; next.remove();
+    while (par && par !== Ed.editor && !par.children.length && /^(UL|OL|BLOCKQUOTE|DIV)$/.test(par.tagName)) { const up = par.parentElement; par.remove(); par = up; }
+    if (!b.childNodes.length) b.append(el('br'));
+  },
+  /** Retire le <br> de remplissage d'un bloc devenu non vide (sinon exporté comme saut de ligne) */
+  dropPlaceholderBr(b) {
+    if (!b) return;
+    let last = b.lastChild;
+    while (last && last.nodeType === 3 && !last.length) last = last.previousSibling;
+    if (last && last.nodeName === 'BR' && b.textContent.length && !(last.previousSibling && last.previousSibling.nodeName === 'BR')) last.remove();
+  },
+  /** Éléments insécables traités d'un bloc (tabulation, champ, note, image, îlot) */
+  atomOf(n) {
+    const e = n.nodeType === 3 ? n.parentElement : n;
+    return e && e.closest && e.closest('.pl-tab,.pl-field,.pl-fn,.pl-island,.pl-merge');
+  },
+  /** Segments (texte ou élément insécable) couverts par une plage, avec leurs bornes */
+  segments(r) {
+    const segs = [];
+    let root = r.commonAncestorContainer;
+    if (root.nodeType === 3) root = root.parentNode;
+    const atoms = new Set();
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    const consider = n => {
+      if (n.nodeType === 1) {
+        if (n.tagName === 'IMG' && !this.atomOf(n.parentElement || n) && r.intersectsNode(n)) segs.push({ node: n, atom: true });
+        return;
+      }
+      if (!n.length || !r.intersectsNode(n)) return;
+      const atom = this.atomOf(n);
+      if (atom) { if (!atoms.has(atom)) { atoms.add(atom); segs.push({ node: atom, atom: true }); } return; }
+      if (n.parentElement.closest('.pl-cref')) return;
+      const s = n === r.startContainer ? r.startOffset : 0;
+      const e = n === r.endContainer ? r.endOffset : n.length;
+      if (s < e) segs.push({ node: n, s, e });
+    };
+    if (root.nodeType === 3) consider(root);
+    let n; while ((n = w.nextNode())) consider(n);
+    return segs.filter(x => Ed.editor.contains(x.node));
+  },
+  /** Blocs dont la marque de paragraphe est couverte par la plage (tous sauf le dernier) */
+  crossedBlocks(r) {
+    return this.leafBlocks().filter(b => {
+      if (!r.intersectsNode(b)) return false;
+      const len = b.childNodes.length;
+      return r.comparePoint(b, len) === 0 && !(r.endContainer === b && r.endOffset === len) && !b.contains(r.endContainer);
+    });
+  },
+  /** La plage contient-elle encore quelque chose à supprimer ? */
+  hasLive(r) {
+    if (this.segments(r).some(x => !(x.node.nodeType === 3 ? x.node.parentElement : x.node).closest('.pl-del'))) return true;
+    return this.crossedBlocks(r).some(b => b.dataset.pdelAuthor == null);
+  },
+  /** Marque comme supprimé le contenu d'une plage (ou le retire s'il s'agit de sa propre insertion) */
+  markDeleted(r) {
+    if (r.collapsed) return;
+    const me = this.author(), now = this.stamp();
+    const crossed = this.crossedBlocks(r);
+    const segs = this.segments(r);
+    for (const sg of segs) {
+      let x = sg.node;
+      if (!sg.atom) {
+        if (sg.e < x.length) x.splitText(sg.e);
+        if (sg.s > 0) x = x.splitText(sg.s);
+      }
+      const host = x.nodeType === 3 ? x.parentElement : x;
+      if ((x.nodeType === 1 ? x.parentElement : host).closest('.pl-del')) continue;
+      const ins = (x.nodeType === 1 ? x.parentElement : host).closest('.pl-ins');
+      if (ins && ins.dataset.author === me) {
+        x.remove();
+        if (!ins.textContent && !ins.querySelector('img,.pl-island,.pl-field,.pl-fn')) ins.replaceWith(...ins.childNodes);
+        continue;
+      }
+      const span = el('span', { class: 'pl-del', contenteditable: 'false', 'data-author': me, 'data-date': now });
+      x.replaceWith(span); span.append(x);
+    }
+    // marques de paragraphe
+    for (const b of crossed) {
+      if (!b.isConnected) continue;
+      if (b.dataset.pinsAuthor === me && b.dataset.pdelAuthor == null) this.join(b);
+      else if (b.dataset.pdelAuthor == null) { b.setAttribute('data-pdel-author', me); b.setAttribute('data-pdel-date', now); }
+    }
+  },
+  /** Retour arrière / Suppr avec suivi */
+  remove(dir, unit) {
+    const sel = getSelection();
+    if (!sel.rangeCount) return;
+    const wasCollapsed = sel.isCollapsed;
+    if (wasCollapsed) {
+      // on passe par-dessus le texte déjà supprimé, comme Word
+      let before = null;
+      for (let k = 0; k < 40; k++) {
+        sel.modify('extend', dir, unit);
+        const r = sel.getRangeAt(0);
+        const sig = r.toString().length + ':' + r.startOffset + ':' + r.endOffset + (r.startContainer.nodeName) + (r.endContainer.nodeName);
+        if (r.collapsed || sig === before) break;
+        before = sig;
+        if (this.hasLive(r)) break;
+      }
+    }
+    const r = sel.getRangeAt(0);
+    if (r.collapsed || !Ed.editor.contains(r.commonAncestorContainer)) return;
+    // pas de suppression à cheval sur deux cellules de tableau (comme Word)
+    const cell = n => (n.nodeType === 3 ? n.parentElement : n).closest('td,th');
+    if (wasCollapsed && cell(r.startContainer) !== cell(r.endContainer)) { const c = r.cloneRange(); c.collapse(dir === 'forward'); sel.removeAllRanges(); sel.addRange(c); return; }
+    const marker = document.createTextNode('');
+    const mr = r.cloneRange(); mr.collapse(dir !== 'forward'); mr.insertNode(marker);
+    this.markDeleted(r);
+    this.tidy();
+    this.caretAt(marker);
+    Ed.changed(true);
+  },
+  /** Place le curseur sur un repère (nœud texte vide) puis retire celui-ci */
+  caretAt(marker) {
+    const sel = getSelection();
+    if (marker.isConnected) {
+      const nr = document.createRange(); nr.setStartAfter(marker); nr.collapse(true);
+      sel.removeAllRanges(); sel.addRange(nr);
+      marker.remove();
+    }
+    if (sel.rangeCount) Ed.lastRange = sel.getRangeAt(0).cloneRange();
+  },
+  /** Regroupe les marques voisines du même auteur et retire les marques vides */
+  tidy(root = Ed.editor) {
+    for (const cls of ['pl-del', 'pl-ins']) for (const d of $$('.' + cls, root)) {
+      if (!d.isConnected) continue;
+      let n = d.nextSibling;
+      while (n && n.nodeType === 3 && !n.length) n = n.nextSibling;
+      while (n && n.nodeType === 1 && n.classList.contains(cls) && n.dataset.author === d.dataset.author) {
+        d.append(...n.childNodes); const next = n.nextSibling; n.remove(); n = next;
+        while (n && n.nodeType === 3 && !n.length) n = n.nextSibling;
+      }
+    }
+    // nœuds texte voisins regroupés (un seul w:t / w:delText à l'export) ; les repères vides sont conservés
+    for (const d of $$('.pl-del, .pl-ins', root)) for (let n = d.firstChild; n;) {
+      const nx = n.nextSibling;
+      if (n.nodeType === 3 && nx && nx.nodeType === 3 && n.length && nx.length) { n.appendData(nx.data); nx.remove(); continue; }
+      n = nx;
+    }
+    for (const b of this.leafBlocks(root)) if (!b.childNodes.length) b.append(el('br'));
+  },
+  insert(text) {
+    const sel = getSelection();
+    if (!sel.rangeCount) return;
+    let r = sel.getRangeAt(0);
+    if (!r.collapsed) {
+      // remplacement : la suppression précède l'insertion
+      const marker = document.createTextNode('');
+      const er = r.cloneRange(); er.collapse(false); er.insertNode(marker);
+      this.markDeleted(r);
+      r = document.createRange(); r.setStartAfter(marker); r.collapse(true);
+      marker.remove();
+    }
+    const me = this.author();
+    // jamais à l'intérieur d'un texte supprimé
+    const host0 = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer;
+    let del = host0.closest('.pl-del');
+    if (del) { while (del.parentElement.closest('.pl-del')) del = del.parentElement.closest('.pl-del'); r.setStartAfter(del); r.collapse(true); }
+    const c = r.startContainer, off = r.startOffset;
+    const host = c.nodeType === 3 ? c.parentElement : c;
+    const ins = host.closest('.pl-ins');
+    const own = e => e && e.nodeType === 1 && e.classList.contains('pl-ins') && e.dataset.author === me;
+    let tn, at;
+    // nœud juste avant le curseur : une insertion à soi qu'on peut prolonger ?
+    const prevNode = c.nodeType === 3 ? (off === 0 ? c.previousSibling : null) : c.childNodes[off - 1];
+    if (own(ins)) {
+      if (c.nodeType === 3) { tn = c; at = off; }
+      else { tn = document.createTextNode(''); r.insertNode(tn); at = 0; }
+    } else if (own(prevNode)) {
+      tn = prevNode.lastChild && prevNode.lastChild.nodeType === 3 ? prevNode.lastChild : prevNode.appendChild(document.createTextNode(''));
+      at = tn.length;
+    } else {
+      if (ins) {
+        // insertion dans celle d'un autre auteur : on la scinde
+        const tail = document.createRange(); tail.setStart(c, off); tail.setEnd(ins, ins.childNodes.length);
+        const frag = tail.extractContents();
+        const ins2 = ins.cloneNode(false); ins2.append(frag);
+        ins.after(ins2);
+        r = document.createRange(); r.setStartAfter(ins); r.collapse(true);
+        if (!ins2.textContent) ins2.remove();
+      }
+      const span = el('span', { class: 'pl-ins', 'data-author': me, 'data-date': this.stamp() }, ['']);
+      r.insertNode(span);
+      tn = span.firstChild; at = 0;
+    }
+    tn.insertData(at, text);
+    this.dropPlaceholderBr(this.blockOf(tn));
+    const nr = document.createRange(); nr.setStart(tn, at + text.length); nr.collapse(true);
+    sel.removeAllRanges(); sel.addRange(nr);
+    Ed.lastRange = nr.cloneRange();
+    Ed.changed(true);
+  },
+  /** Mise en forme suivie : mémorise l'ancienne mise en forme du texte sélectionné (gras, italique, souligné, barré) */
+  oldFormat(t) {
+    const pe = t.parentElement;
+    const c = getComputedStyle(pe);
+    const o = { b: parseInt(c.fontWeight, 10) >= 600, i: c.fontStyle === 'italic', u: false, strike: false };
+    const block = this.blockOf(t);
+    for (let a = pe; a && a !== block && a !== Ed.editor; a = a.parentElement) {
+      if (a.classList.contains('pl-ins') || a.classList.contains('pl-del')) continue;
+      const deco = (a.style && a.style.textDecorationLine) || (a.style && a.style.textDecoration) || '';
+      if (deco.includes('underline') || a.tagName === 'U') o.u = true;
+      if (deco.includes('line-through') || /^(S|STRIKE|DEL)$/.test(a.tagName)) o.strike = true;
+    }
+    return o;
+  },
+  /** Avant une commande de mise en forme suivie : mémorise l'ancienne mise en forme de chaque nœud texte sélectionné */
+  beforeFormat() {
+    const r = Ed.range();
+    if (!r || r.collapsed || !Ed.editor.contains(r.commonAncestorContainer)) return null;
+    const me = this.author(), old = new Map();
+    let first = null;
+    for (const sg of this.segments(r)) {
+      if (sg.atom) continue;
+      const pe = sg.node.parentElement;
+      if (pe.closest('.pl-del') || (pe.closest('.pl-ins') && pe.closest('.pl-ins').dataset.author === me)) continue;
+      const f = pe.closest('.pl-fmt');
+      const o = f ? f.dataset.old : JSON.stringify(this.oldFormat(sg.node));
+      old.set(sg.node, o); first = first || o;
+    }
+    return first ? { old, first, me, date: this.stamp() } : null;
+  },
+  /** Après la commande : chaque texte sélectionné est enveloppé dans une marque pl-fmt (w:rPrChange) */
+  afterFormat(st) {
+    if (!st) return;
+    const r = Ed.range();
+    if (!r || r.collapsed) return;
+    const segs = this.segments(r).filter(x => !x.atom);
+    let first = null, last = null;
+    for (const sg of segs) {
+      let x = sg.node;
+      const pe = x.parentElement;
+      if (pe.closest('.pl-del') || (pe.closest('.pl-ins') && pe.closest('.pl-ins').dataset.author === st.me)) continue;
+      const o = st.old.get(x) || st.first;
+      if (sg.e < x.length) x.splitText(sg.e);
+      if (sg.s > 0) x = x.splitText(sg.s);
+      if (!x.parentElement.closest('.pl-fmt')) {
+        const span = el('span', { class: 'pl-fmt', 'data-author': st.me, 'data-date': st.date, 'data-old': o });
+        x.replaceWith(span); span.append(x);
+      }
+      first = first || x; last = x;
+    }
+    if (first) { const nr = document.createRange(); nr.setStart(first, 0); nr.setEnd(last, last.length); const s = getSelection(); s.removeAllRanges(); s.addRange(nr); }
   },
   init() {
     // hors suivi : on ne prolonge pas une marque d'insertion existante
@@ -29,108 +312,61 @@ const Track = {
       if (!atEnd) return;
       e.preventDefault();
       // une espace seule en fin de ligne serait absorbée par le navigateur : espace insécable provisoire
-      const t = document.createTextNode(e.data === ' ' ? '\u00A0' : e.data);
+      const t = document.createTextNode(e.data === ' ' ? ' ' : e.data);
       ins.after(t);
       const nr = document.createRange(); nr.setStart(t, t.length); nr.collapse(true);
       const s = getSelection(); s.removeAllRanges(); s.addRange(nr);
       Ed.lastRange = nr.cloneRange(); Ed.changed(true);
     });
+    // Entrée : la marque de paragraphe d'origine reste sur la seconde partie ; la première reçoit une marque neuve
+    Ed.editor.addEventListener('beforeinput', e => {
+      if (e.inputType !== 'insertParagraph') return;
+      const r = Ed.range();
+      const b = r && this.blockOf(r.startContainer);
+      this._split = b ? { block: b, mark: this.markAttrs(b) } : null;
+    }, true);
     Ed.editor.addEventListener('input', e => {
-      if (e.inputType === 'insertParagraph') $$('.pl-ins, .pl-del', Ed.editor).forEach(x => { if (!x.textContent) x.remove(); });
+      if (e.inputType !== 'insertParagraph') return;
+      const r = Ed.range();
+      const cur = r && this.blockOf(r.startContainer);
+      if (cur && this._split) {
+        const all = this.leafBlocks();
+        const prev = all[all.indexOf(cur) - 1];
+        this.setMark(cur, this._split.mark);
+        if (prev) this.setMark(prev, this.on && !Protect.on ? { pins: [this.author(), this.stamp()] } : null);
+      }
+      this._split = null;
+      // marques vides recopiées par le navigateur dans le nouveau paragraphe : on les déballe sans perdre le curseur
+      const sel = getSelection();
+      for (const x of $$('.pl-ins, .pl-del, .pl-fmt', Ed.editor)) {
+        if (x.textContent || x.querySelector('img,.pl-island,.pl-field,.pl-fn')) continue;
+        const range = sel.rangeCount ? sel.getRangeAt(0) : null;
+        const inside = range && x.contains(range.startContainer);
+        const anchor = document.createTextNode('');
+        x.before(anchor);
+        x.replaceWith(...x.childNodes);
+        if (inside) { const nr = document.createRange(); nr.setStartAfter(anchor); nr.collapse(true); sel.removeAllRanges(); sel.addRange(nr); }
+        anchor.remove();
+      }
     });
     Ed.editor.addEventListener('beforeinput', e => {
       if (!this.on || Protect.on) return;
       const t = e.inputType;
-      if (t === 'insertText' || t === 'insertReplacementText' || t === 'insertFromPaste' || t === 'insertFromDrop') {
+      if (t === 'insertText' || t === 'insertReplacementText' || t === 'insertFromPaste' || t === 'insertFromDrop' || t === 'insertFromYank') {
         let text = e.data;
         if (text == null && e.dataTransfer) text = e.dataTransfer.getData('text/plain');
         if (text == null) return;
         e.preventDefault();
-        this.insert(text);
-      } else if (t === 'deleteContentBackward' || t === 'deleteContentForward' || t === 'deleteWordBackward' || t === 'deleteWordForward' || t === 'deleteByCut') {
+        // collage de plusieurs lignes : une ligne par paragraphe n'est pas gérée, les sauts deviennent des espaces
+        this.insert(text.replace(/\r?\n/g, ' '));
+      } else if (/^delete/.test(t)) {
         e.preventDefault();
         if (t === 'deleteByCut') { const r = Ed.range(); if (r && !r.collapsed) navigator.clipboard && navigator.clipboard.writeText(r.toString()).catch(() => { }); }
-        this.remove(/Backward/.test(t) ? 'backward' : 'forward', /Word/.test(t) ? 'word' : 'character');
+        const r = Ed.range();
+        const sel = r && !r.collapsed;
+        this.remove(/Backward/.test(t) || (sel && !/Forward/.test(t)) ? 'backward' : 'forward', /Word/.test(t) ? 'word' : /Line|Soft|Hard/.test(t) ? 'lineboundary' : 'character');
       }
     });
-  },
-  /** Supprime ou marque comme supprimé le contenu d'une plage */
-  markDeleted(r) {
-    const root = Ed.editor;
-    if (r.collapsed) return;
-    // découpe des nœuds texte aux bornes
-    if (r.startContainer.nodeType === 3 && r.startOffset > 0 && r.startOffset < r.startContainer.length) {
-      const tail = r.startContainer.splitText(r.startOffset); r.setStart(tail, 0);
-    }
-    if (r.endContainer.nodeType === 3 && r.endOffset > 0 && r.endOffset < r.endContainer.length) r.endContainer.splitText(r.endOffset);
-    const nodes = [];
-    const w = document.createTreeWalker(r.commonAncestorContainer.nodeType === 3 ? r.commonAncestorContainer.parentNode : r.commonAncestorContainer, NodeFilter.SHOW_TEXT);
-    let n;
-    while ((n = w.nextNode())) if (r.intersectsNode(n) && n.length) nodes.push(n);
-    let last = null;
-    for (const t of nodes) {
-      if (!root.contains(t)) continue;
-      const ins = t.parentElement.closest('.pl-ins');
-      if (ins && ins.dataset.author === this.author()) { last = ins; t.remove(); if (!ins.textContent) { last = ins.previousSibling || ins.parentNode; ins.remove(); } continue; }
-      if (t.parentElement.closest('.pl-del')) { last = t.parentElement.closest('.pl-del'); continue; }
-      const span = el('span', { class: 'pl-del', contenteditable: 'false', 'data-author': this.author(), 'data-date': this.stamp() });
-      t.replaceWith(span); span.append(t); last = span;
-    }
-    return { first: nodes[0], last };
-  },
-  remove(dir, unit) {
-    const sel = getSelection();
-    if (!sel.rangeCount) return;
-    if (sel.isCollapsed) sel.modify('extend', dir, unit);
-    const r = sel.getRangeAt(0);
-    if (r.collapsed) return;
-    const startMarker = document.createTextNode('');
-    const endRange = r.cloneRange(); endRange.collapse(dir === 'forward' ? false : true);
-    endRange.insertNode(startMarker);
-    this.markDeleted(r);
-    // curseur : avant la suppression (retour arrière) ou après (suppr)
-    const nr = document.createRange();
-    nr.setStartAfter(startMarker); nr.collapse(true);
-    if (dir === 'forward') { let x = startMarker; nr.setStartAfter(x); }
-    startMarker.remove();
-    sel.removeAllRanges(); sel.addRange(nr);
-    this.mergeAdjacent();
-    Ed.afterCmd();
-  },
-  /** Regroupe les marques de suppression voisines du même auteur */
-  mergeAdjacent() {
-    for (const d of $$('.pl-del', Ed.editor)) {
-      let n = d.nextSibling;
-      while (n && n.nodeType === 1 && n.classList.contains('pl-del') && n.dataset.author === d.dataset.author) {
-        d.append(...n.childNodes); const next = n.nextSibling; n.remove(); n = next;
-      }
-      d.normalize();
-    }
-  },
-  insert(text) {
-    const sel = getSelection();
-    if (!sel.rangeCount) return;
-    let r = sel.getRangeAt(0);
-    if (!r.collapsed) {
-      const end = document.createTextNode('');
-      const er = r.cloneRange(); er.collapse(false); er.insertNode(end);
-      this.markDeleted(r);
-      r = document.createRange(); r.setStartAfter(end); r.collapse(true); end.remove();
-    }
-    const container = r.startContainer;
-    const ins = (container.nodeType === 3 ? container.parentElement : container).closest('.pl-ins');
-    if (ins && ins.dataset.author === this.author() && container.nodeType === 3) {
-      container.insertData(r.startOffset, text);
-      const nr = document.createRange(); nr.setStart(container, r.startOffset + text.length); nr.collapse(true);
-      sel.removeAllRanges(); sel.addRange(nr);
-    } else {
-      const span = el('span', { class: 'pl-ins', 'data-author': this.author(), 'data-date': this.stamp() }, [text]);
-      r.insertNode(span);
-      const nr = document.createRange(); nr.setStart(span.firstChild, text.length); nr.collapse(true);
-      sel.removeAllRanges(); sel.addRange(nr);
-    }
-    Ed.lastRange = sel.getRangeAt(0).cloneRange();
-    Ed.changed(true);
   }
 };
 

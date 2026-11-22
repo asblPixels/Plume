@@ -329,16 +329,49 @@ const DocxImport = (() => {
       }
     }
 
-    // Commentaires
+    // Commentaires (+ fils de discussion et état « résolu » de Word 2013+)
     const comments = {};
     const cPart = partOf('comments');
     if (cPart) {
       const x = await read(cPart);
       if (x) for (const c of parseXml(x).getElementsByTagName('w:comment')) {
-        const paras = Array.from(c.getElementsByTagName('w:p')).map(p => Array.from(p.getElementsByTagName('w:t')).map(t => t.textContent).join(''));
-        comments[c.getAttribute('w:id')] = { author: c.getAttribute('w:author') || '', date: c.getAttribute('w:date') || '', initials: c.getAttribute('w:initials') || '', text: paras.join('\n').trim() };
+        const ps = Array.from(c.getElementsByTagName('w:p'));
+        const paras = ps.map(p => Array.from(p.getElementsByTagName('w:t')).map(t => t.textContent).join(''));
+        const last = ps[ps.length - 1];
+        comments[c.getAttribute('w:id')] = { author: c.getAttribute('w:author') || '', date: c.getAttribute('w:date') || '', initials: c.getAttribute('w:initials') || '', text: paras.join('\n').trim(), paraId: last ? (last.getAttribute('w14:paraId') || '').toUpperCase() : '' };
+      }
+      const byPara = {};
+      for (const [id, c] of Object.entries(comments)) if (c.paraId) byPara[c.paraId] = id;
+      const xPart = partOf('commentsExtended'), iPart = partOf('commentsIds'), ePart = partOf('commentsExtensible');
+      const ex = xPart ? await read(xPart) : null;
+      if (ex) for (const e of parseXml(ex).getElementsByTagName('w15:commentEx')) {
+        const id = byPara[(e.getAttribute('w15:paraId') || '').toUpperCase()];
+        if (id == null) continue;
+        const done = e.getAttribute('w15:done');
+        comments[id].done = done === '1' || done === 'true';
+        const par = byPara[(e.getAttribute('w15:paraIdParent') || '').toUpperCase()];
+        if (par != null && par !== id) comments[id].parent = par;
+      }
+      // réponse à une réponse : rattachée au commentaire racine du fil
+      for (const c of Object.values(comments)) {
+        const seen = new Set();
+        while (c.parent != null && comments[c.parent] && comments[c.parent].parent != null && !seen.has(c.parent)) { seen.add(c.parent); c.parent = comments[c.parent].parent; }
+        if (c.parent != null && !comments[c.parent]) delete c.parent;
+      }
+      const durable = {};
+      const ids = iPart ? await read(iPart) : null;
+      if (ids) for (const e of parseXml(ids).getElementsByTagName('w16cid:commentId')) {
+        const id = byPara[(e.getAttribute('w16cid:paraId') || '').toUpperCase()];
+        if (id != null) { comments[id].durable = (e.getAttribute('w16cid:durableId') || '').toUpperCase(); durable[comments[id].durable] = id; }
+      }
+      const cex = ePart ? await read(ePart) : null;
+      if (cex) for (const e of parseXml(cex).getElementsByTagName('w16cex:commentExtensible')) {
+        const id = durable[(e.getAttribute('w16cex:durableId') || '').toUpperCase()];
+        const utc = e.getAttribute('w16cex:dateUtc');
+        if (id != null && utc) comments[id].date = utc; // date UTC réelle (w:date est l'heure locale)
       }
     }
+    const isReply = id => comments[id] && comments[id].parent != null;
 
     // Réglages du document (style Normal)
     const normal = chain(st, st.normalId);
@@ -421,6 +454,14 @@ const DocxImport = (() => {
 
         // Contenu en ligne (découpé aux sauts de page)
         const segs = await inline(p, styleR, part);
+        // Marque de paragraphe insérée / supprimée (suivi des modifications)
+        const markRev = el => {
+          const rpr = kid(pPrEl, 'w:rPr');
+          for (const [tag, k] of [['w:ins', 'pins'], ['w:del', 'pdel']]) {
+            const m = rpr && kid(rpr, tag);
+            if (m) { el.setAttribute(`data-${k}-author`, m.getAttribute('w:author') || ''); el.setAttribute(`data-${k}-date`, m.getAttribute('w:date') || ''); }
+          }
+        };
 
         if (eff.pbb) { closeLists(); target.append(pageBreak()); }
 
@@ -434,6 +475,7 @@ const DocxImport = (() => {
           if (isList && i === 0) {
             const li = listItem(eff);
             li.innerHTML = html || '<br>';
+            if (i === segs.length - 1) markRev(li);
             if (css) li.setAttribute('style', css);
             if (direct.pStyle && direct.pStyle !== st.normalId) li.dataset.pstyle = direct.pStyle;
           } else {
@@ -443,6 +485,7 @@ const DocxImport = (() => {
             if (css) b.setAttribute('style', css);
             if (styleId !== st.normalId) b.dataset.pstyle = styleId;
             b.innerHTML = html || '<br>';
+            if (i === segs.length - 1) markRev(b);
             target.append(b);
           }
         });
@@ -504,11 +547,13 @@ const DocxImport = (() => {
         let link = null;          // {href}
         let buf = null;           // texte en attente {open, close, text}
         let rev = null;           // révision en cours {type, author, date}
+        let fmt = null;           // changement de mise en forme suivi (w:rPrChange) du run en cours
 
         const revWrap = h => rev ? `<span class="pl-${rev.type}" data-author="${xmlEsc(rev.author)}" data-date="${xmlEsc(rev.date)}"${rev.type === 'del' ? ' contenteditable="false"' : ''}>${h}</span>` : h;
         const flush = () => {
           if (!buf) return;
           let h = buf.open + buf.text + buf.close;
+          if (buf.fmt) h = `<span class="pl-fmt" data-author="${xmlEsc(buf.fmt.author)}" data-date="${xmlEsc(buf.fmt.date)}" data-old="${xmlEsc(buf.fmt.old)}">${h}</span>`;
           if (buf.link) h = `<a href="${xmlEsc(buf.link)}">${h}</a>`;
           h = revWrap(h);
           segs[segs.length - 1] += h;
@@ -517,9 +562,9 @@ const DocxImport = (() => {
         const pushText = (html, rp, raw = false) => {
           const w = runWrap(rp, styleR);
           const lk = currentLink();
-          if (buf && buf.open === w.open && buf.link === lk && buf.rev === rev && !raw) { buf.text += html; return; }
+          if (buf && buf.open === w.open && buf.link === lk && buf.rev === rev && buf.fmt === fmt && !raw) { buf.text += html; return; }
           flush();
-          buf = { open: w.open, close: w.close, text: html, link: lk, rev };
+          buf = { open: w.open, close: w.close, text: html, link: lk, rev, fmt };
           if (raw) flush();
         };
         const pushRaw = html => { flush(); segs[segs.length - 1] += html; };
@@ -571,8 +616,9 @@ const DocxImport = (() => {
                 rev = prev;
                 break;
               }
-              case 'w:commentRangeStart': pushRaw(`<span class="pl-cstart" data-cid="${xmlEsc(n.getAttribute('w:id'))}"></span>`); break;
-              case 'w:commentRangeEnd': pushRaw(`<span class="pl-cend" data-cid="${xmlEsc(n.getAttribute('w:id'))}"></span>`); break;
+              // les réponses partagent la plage du commentaire parent : pas de bornes propres dans Plume
+              case 'w:commentRangeStart': if (!isReply(n.getAttribute('w:id'))) pushRaw(`<span class="pl-cstart" data-cid="${xmlEsc(n.getAttribute('w:id'))}"></span>`); break;
+              case 'w:commentRangeEnd': if (!isReply(n.getAttribute('w:id'))) pushRaw(`<span class="pl-cend" data-cid="${xmlEsc(n.getAttribute('w:id'))}"></span>`); break;
               case 'w:smartTag': case 'w:customXml': case 'w:sdtContent': case 'w:dir': case 'w:bdo':
                 await walk(n); break;
               case 'w:sdt': await walk(kid(n, 'w:sdtContent') || n); break;
@@ -595,6 +641,15 @@ const DocxImport = (() => {
           const charStyle = direct.rStyle ? chain(st, direct.rStyle).rPr : {};
           const rp = Object.assign({}, styleR, charStyle, direct);
           if (rp.vanish) return;
+          // mise en forme modifiée avec suivi : ancienne mise en forme (gras, italique, souligné, barré)
+          const rch = kid(kid(r, 'w:rPr'), 'w:rPrChange');
+          fmt = null;
+          if (rch) {
+            const od = parseRPr(kid(rch, 'w:rPr'), ctx);
+            const ocs = od.rStyle ? chain(st, od.rStyle).rPr : {};
+            const o = Object.assign({}, styleR, ocs, od);
+            fmt = { author: rch.getAttribute('w:author') || '', date: rch.getAttribute('w:date') || '', old: JSON.stringify({ b: !!o.b, i: !!o.i, u: !!o.u, strike: !!o.strike }) };
+          }
           // Objets Office non éditables dans Plume : conservés tels quels (îlot)
           const complex = Array.from(r.children).find(c => (c.nodeName === 'w:drawing' && !isSimplePicture(c)) || c.nodeName === 'mc:AlternateContent' || c.nodeName === 'w:pict' || c.nodeName === 'w:object');
           if (complex && !inInstr() && !skipping()) {
@@ -632,7 +687,7 @@ const DocxImport = (() => {
               case 'w:t': case 'w:delText': if (c.textContent) pushText(xmlEsc(c.textContent), rp); break;
               case 'w:commentReference': {
                 const id = c.getAttribute('w:id'); const cm = comments[id] || {};
-                pushRaw(`<span class="pl-cref" contenteditable="false" data-cid="${xmlEsc(id)}" data-author="${xmlEsc(cm.author || '')}" data-initials="${xmlEsc(cm.initials || '')}" data-date="${xmlEsc(cm.date || '')}" data-text="${xmlEsc(cm.text || '')}"></span>`);
+                pushRaw(`<span class="pl-cref" contenteditable="false" data-cid="${xmlEsc(id)}" data-author="${xmlEsc(cm.author || '')}" data-initials="${xmlEsc(cm.initials || '')}" data-date="${xmlEsc(cm.date || '')}" data-text="${xmlEsc(cm.text || '')}"${cm.parent != null ? ` data-parent="${xmlEsc(cm.parent)}"` : ''}${cm.done ? ' data-done="1"' : ''}${cm.durable ? ` data-durable="${xmlEsc(cm.durable)}"` : ''}></span>`);
                 break;
               }
               case 'w:tab': pushText('<span class="pl-tab">\t</span>', rp); break;
