@@ -580,6 +580,44 @@ body.reading #exitReading { display: inline-flex; }
 .pl-smart { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; justify-content: center; }
 .pl-smart span { background: #156082; color: #fff; font: 12px var(--ui-font); padding: 6px 10px; border-radius: 4px; }
 .pl-math { font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", serif; font-style: italic; padding: 0 2px; }
+.pl-math math { font-style: normal; font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", math, serif; }
+#editor .pl-island:has(> .pl-math-d), .hf .pl-island:has(> .pl-math-d) { display: flex; justify-content: center; margin: 4px 0; }
+#editor .pl-island.il-sel, .hf .pl-island.il-sel { outline: 2px solid var(--brand-ink); outline-offset: 2px; }
+.pl-island-box.pl-tb .pl-tbp { display: block; margin: 0 0 3pt; }
+.pl-island-box.pl-tb .pl-tbp.il-sep { border-top: 1px dashed #c5cdd3; margin: 4px 0; }
+
+/* ---------- Dialogues de modification des îlots ---------- */
+.il-lab { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ui-fg-2); margin-bottom: 8px; flex: 1; }
+.il-in { width: 100%; box-sizing: border-box; }
+.il-row { display: flex; gap: 6px; align-items: center; }
+.il-cols { display: flex; gap: 14px; align-items: flex-start; }
+.il-col { flex: 1; min-width: 0; }
+.il-note { font-size: 12px; color: var(--ui-fg-2); line-height: 1.45; margin: 8px 0 0; }
+.il-warn { color: #B54708; }
+.il-check { display: flex; gap: 6px; align-items: center; font-size: 13px; margin: 6px 0; }
+.il-chart-pv { width: 300px; height: 170px; flex: none; border: 1px solid var(--ui-border); border-radius: 6px; background: #fff; overflow: hidden; }
+.il-grid { max-height: 300px; overflow: auto; margin: 6px 0; border: 1px solid var(--ui-border); border-radius: 6px; }
+.il-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.il-table th, .il-table td { border-bottom: 1px solid var(--ui-border); padding: 2px 4px; text-align: left; }
+.il-table th { position: sticky; top: 0; background: var(--ui-bg-2); z-index: 1; }
+.il-th { display: flex; gap: 2px; align-items: center; }
+.il-cell { width: 100%; min-width: 64px; box-sizing: border-box; border: 1px solid transparent; background: transparent; padding: 3px 5px; border-radius: 4px; font: inherit; color: inherit; }
+.il-cell:focus { border-color: var(--brand-ink); outline: none; background: #fff; color: #111; }
+.il-cell.il-num { text-align: right; }
+.il-cell.il-sname { font-weight: 600; }
+.il-cell.bad { border-color: #D92D20; background: #FEF3F2; }
+.il-x { border: 0; background: transparent; color: var(--ui-fg-2); cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 12px; flex: none; }
+.il-x:hover:not(:disabled) { background: var(--ui-hover, #eef2f4); color: #D92D20; }
+.il-x:disabled { opacity: .3; cursor: default; }
+.il-ta { width: 100%; box-sizing: border-box; font: 14px var(--ui-font); resize: vertical; }
+.il-smart-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow: auto; }
+.il-node-row { display: flex; gap: 4px; align-items: flex-start; }
+.il-node-row .il-x { font-size: 14px; }
+.il-pal { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 6px; }
+.il-pal-b { min-width: 30px; height: 28px; border: 1px solid var(--ui-border); background: var(--ui-bg-2); border-radius: 5px; cursor: pointer; font: 14px "Cambria Math", "STIX Two Math", serif; color: inherit; }
+.il-pal-b:hover { border-color: var(--brand-ink); }
+.il-math-in { font-family: "DejaVu Sans Mono", Consolas, monospace; font-size: 14px; }
+.il-math-pv { min-height: 64px; display: flex; align-items: center; justify-content: center; margin-top: 8px; padding: 10px; border: 1px solid var(--ui-border); border-radius: 6px; background: #fff; color: #111; font-size: 20px; overflow-x: auto; }
 
 /* ---------- Suivi des modifications ---------- */
 #editor .pl-ins, .hf .pl-ins { color: var(--rev, #1F6F43); text-decoration: underline; text-decoration-color: var(--rev, #1F6F43); }
