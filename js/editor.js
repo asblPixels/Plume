@@ -823,7 +823,7 @@ const Ed = {
     if (e.target.tagName === 'IMG') { this.selectImage(e.target); const r = document.createRange(); r.selectNode(e.target); const s = getSelection(); s.removeAllRanges(); s.addRange(r); this.lastRange = r; }
     else this.selectImage(null);
     const isl = e.target.closest('.pl-island');
-    if (isl) { this.islandInfo(isl); return; }
+    if (isl) { if (typeof Ilots !== 'undefined') Ilots.click(isl, e); else this.islandInfo(isl); return; }
     const cref = e.target.closest('.pl-cref');
     if (cref) { App.openNav('comments'); Comments.goto(cref.dataset.cid); return; }
     const fn = e.target.closest('.pl-fn');
@@ -1003,7 +1003,7 @@ const Sanitize = {
             if (!/^(data:image\/|blob:|https?:)/i.test(a.value)) c.remove();
           } else if (['colspan', 'rowspan', 'start', 'alt', 'width', 'height'].includes(n)) { /* conservé */ }
           else if (n === 'class' && /^(pl-|title$|subtitle$)/.test(a.value)) { /* classes Plume */ }
-          else if (/^data-(borders|field|note|x|kind|part|cid|author|date|text|initials|pstyle|numid)$/.test(n) || n === 'contenteditable' || n === 'id') { /* conservé */ }
+          else if (/^data-(borders|field|note|x|own|kind|part|cid|author|date|text|initials|pstyle|numid)$/.test(n) || n === 'contenteditable' || n === 'id') { /* conservé */ }
           else c.removeAttribute(a.name);
         }
         if (tag === 'FONT') {

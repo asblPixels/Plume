@@ -72,6 +72,8 @@ function registerCommands() {
   cmd('pageNum', 'Numéro de page', 'hash', () => App.pageNumber());
   cmd('date', 'Date et heure', 'calendar', () => Dialogs.date());
   cmd('symbol', 'Symbole', 'omega', () => {});
+  cmd('chart', 'Graphique', 'chart-column', () => Ilots.insertChart());
+  cmd('equation', 'Équation', 'sigma', () => Ilots.insertMath());
   // Création
   cmd('docFont', 'Police du document', 'type', f => { const fn = f || 'Calibri'; Ed.settings.fontCss = DocxImport.cssFont(fn); Ed.applySettings(); Ed.changed(false); });
   cmd('docSpacing', 'Espacement des paragraphes', 'list-collapse', v => { Object.assign(Ed.settings, v); Ed.applySettings(); Ed.changed(false); });
@@ -164,11 +166,11 @@ const Ribbon = {
       T('insertion', 'Insertion', [
         G('Pages', [{ col: ['cover', 'blankPage', 'pageBreak'] }]),
         G('Tableaux', [{ bigMenu: 'table', menu: 'tableGrid' }]),
-        G('Illustrations', [{ big: 'image' }]),
+        G('Illustrations', [{ big: 'image' }, { big: 'chart' }]),
         G('Liens', [{ big: 'link' }, { col: ['bookmark'] }]),
         G('En-tête et pied', [{ col: ['header', 'footer', 'pageNum'] }]),
         G('Texte', [{ col: ['textbox', 'hr', 'date'] }]),
-        G('Symboles', [{ bigMenu: 'symbol', menu: 'symbols' }])
+        G('Symboles', [{ big: 'equation' }, { bigMenu: 'symbol', menu: 'symbols' }])
       ]),
       T('creation', 'Création', [
         G('Mise en forme du document', [{ bigMenu: 'docFont', menu: 'docFonts' }, { bigMenu: 'docSpacing', menu: 'docSpacings' }, { bigMenu: 'docHeading', menu: 'headingColors' }]),

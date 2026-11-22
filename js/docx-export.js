@@ -131,7 +131,13 @@ const DocxExport = (() => {
     }
     // Préchargement des relations utilisées par les îlots (sérialisation synchrone ensuite)
     const islandParts = new Set();
-    for (const root of [editor, headerEl, footerEl]) if (root) root.querySelectorAll('.pl-island').forEach(i => islandParts.add(i.dataset.part || 'word/document.xml'));
+    const ownMap = new Map();   // îlot → parties propres (objets modifiés ou créés dans Plume)
+    for (const root of [editor, headerEl, footerEl]) if (root) for (const i of root.querySelectorAll('.pl-island')) {
+      islandParts.add(i.dataset.part || 'word/document.xml');
+      if (typeof Ilots !== 'undefined') {
+        try { const o = await Ilots.exportOwn(i, src); if (o) ownMap.set(i, o); } catch (e) { console.warn('Îlot : parties propres ignorées', e); }
+      }
+    }
     for (const p of islandParts) await srcRels(p);
 
     // Pour mesurer, on se place à 100 % et en page claire
@@ -179,7 +185,10 @@ const DocxExport = (() => {
       try { xml = unb64(n.dataset.x); } catch { return ''; }
       const srcPart = n.dataset.part || 'word/document.xml';
       const rels = srcRelsCache[srcPart] || {};
+      const own = ownMap.get(n);
       xml = xml.replace(/\b(r:[A-Za-z]+|o:relid)="([^"]+)"/g, (m, attr, rid) => {
+        const o = own && own.rels && own.rels[rid];
+        if (o) { const t = writeOwn(own, o.part, part); if (t) return `${attr}="${part.addRel(o.type, relTarget(part.name, t))}"`; }
         const r = rels[rid];
         if (!r) return m;
         if (r.mode === 'External') return `${attr}="${part.addRel(r.type, r.target, true)}"`;
@@ -192,6 +201,32 @@ const DocxExport = (() => {
       return xml;
     }
     const pendingCopies = new Set();
+    /** Écrit une partie propre d'un îlot (graphique modifié, classeur, données SmartArt, image…) et ses relations */
+    const ownFiles = [], ownPaths = new Set();
+    function writeOwn(own, key, host) {
+      const memo = own._paths || (own._paths = {});
+      if (memo[key]) return memo[key];
+      const p = own.parts && own.parts[key];
+      if (!p) return null;
+      let n = 1, path;
+      do { path = `${p.dir}/plume-${p.base}${n++}.${p.ext}`; } while (ownPaths.has(path) || (src && src.file(path)));
+      ownPaths.add(path); memo[key] = path;
+      const rels = [];
+      for (const r of p.rels || []) {
+        if (r.external) rels.push({ id: r.id, type: r.type, target: r.target, external: true });
+        else if (r.part) { const t = writeOwn(own, r.part, host); if (t) rels.push({ id: r.id, type: r.type, target: relTarget(path, t) }); }
+        else if (r.src && src && src.file(r.src)) { pendingCopies.add(r.src); rels.push({ id: r.id, type: r.type, target: relTarget(path, r.src) }); }
+      }
+      let data = p.xml;
+      for (const h of p.hostRels || []) {
+        let t = null;
+        if (h.part) t = writeOwn(own, h.part, host);
+        else if (h.src && src && src.file(h.src)) { pendingCopies.add(h.src); t = h.src; }
+        data = data.split(h.ph).join(t ? host.addRel(h.type, relTarget(host.name, t)) : '');
+      }
+      ownFiles.push({ path, data, bin: p.bin, ct: p.ct, rels });
+      return path;
+    }
     const srcStylesXml = src ? await srcRead('word/styles.xml') : null;
     const srcStyleIds = new Set(srcStylesXml ? Array.from(srcStylesXml.matchAll(/w:styleId="([^"]+)"/g), m => m[1]) : []);
     const srcNumXml = src ? await srcRead('word/numbering.xml') : null;
@@ -759,6 +794,12 @@ const DocxExport = (() => {
       ctFinal = ctFinal.replace('</Types>', extra + '</Types>');
     }
 
+    // parties propres des îlots
+    for (const f of ownFiles) {
+      zip.file(f.path, f.bin ? Uint8Array.from(atob(f.bin), c => c.charCodeAt(0)) : f.data);
+      if (f.rels.length) zip.file(relsPathOf(f.path), relsXml(f.rels));
+      ctFinal = ctFinal.replace('</Types>', `<Override PartName="/${xmlEsc(f.path)}" ContentType="${xmlEsc(f.ct)}"/></Types>`);
+    }
     zip.file('[Content_Types].xml', ctFinal);
     for (const pth of copied) if (!GENERATED.has(pth) && src.file(pth)) zip.file(pth, await src.file(pth).async('uint8array'));
     zip.file('_rels/.rels', relsXml([
