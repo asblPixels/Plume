@@ -54,7 +54,7 @@ const App = {
     Ed.editor.focus();
     if (!localStorage.getItem('plume-guide-vu') && !navigator.webdriver) { localStorage.setItem('plume-guide-vu', '1'); setTimeout(() => Guide.open(), 600); }
     // petits écrans : la page s'adapte à la largeur
-    if ($('#canvas').clientWidth < Ed.page.w + 40) this.fitWidth();
+    if ($('#canvas').clientWidth < (Ed.sheetW || Ed.page.w) + 40) this.fitWidth();
   },
 
   /** Tableaux plus larges que la page : réduits à l'affichage seulement (le fichier garde ses largeurs) */
@@ -158,7 +158,7 @@ const App = {
     Ed.props.title = Ed.props.title || this.name();
     return { editor: Ed.editor, headerEl: Ed.headerEl(), footerEl: Ed.footerEl(), page: Ed.page, props: Ed.props, settings: Ed.settings, source: Ed.source ? Ed.source.zip : null };
   },
-  async buildDocx() { return DocxExport.exportDocx(this.exportCtx()); },
+  async buildDocx() { return Ed.withCleanDom(() => DocxExport.exportDocx(this.exportCtx())); },
   fileName(ext) { return this.name().replace(/[\\/:*?"<>|]/g, '_') + '.' + ext; },
   /** Le document ouvert contient-il des macros VBA (conservées, jamais exécutées) ? */
   hasMacros() { return !!(Ed.source && DocxExport.hasMacros(Ed.source.zip)); },
@@ -198,9 +198,11 @@ const App = {
     try {
       this.setSaveState('Enregistrement…');
       if (fmt === 'pdf' && !(window.plumeDesktop && window.plumeDesktop.printToPdf)) this.setSaveState('Création du PDF…');
-      if (fmt === 'pdf') this.preparePrint();
+      // PDF vectoriel (application de bureau) : rendu d'impression ; PDF direct : pages affichées telles quelles
+      const vector = fmt === 'pdf' && window.plumeDesktop && window.plumeDesktop.printToPdf;
+      if (vector) this.preparePrint();
       const blob = await Formats.build(fmt, this.exportCtx());
-      if (fmt === 'pdf') this.endPrint();
+      if (vector) this.endPrint();
       const fname = this.fileName(fmt);
       if (this.desktopPath && window.plumeDesktop && !asNew) {
         await window.plumeDesktop.writeFile(this.desktopPath, await blob.arrayBuffer());
@@ -249,9 +251,19 @@ const App = {
     ph.style.top = '0'; pf.style.bottom = '0';
     let st = $('#printPage');
     if (!st) { st = el('style', { id: 'printPage' }); document.head.append(st); }
-    const p = Ed.page, cm = v => U.pxToCm(v).toFixed(2) + 'cm';
-    st.textContent = `@page { size: ${cm(p.w)} ${cm(p.h)}; margin: ${cm(p.mt)} ${cm(p.mr)} ${cm(p.mb)} ${cm(p.ml)}; }
-      @media print { .print-hf .pl-field[data-field="page"]{display:none} }`;
+    const cm = v => U.pxToCm(v).toFixed(2) + 'cm';
+    const page = p => `size: ${cm(p.w)} ${cm(p.h)}; margin: ${cm(p.mt)} ${cm(p.mr)} ${cm(p.mb)} ${cm(p.ml)};`;
+    // une page nommée par section : tailles et orientations différentes à l'impression
+    const secs = Ed.sections();
+    let css = `@page { ${page(secs[0])} }\n`;
+    if (secs.length > 1) {
+      secs.forEach((s, i) => { css += `@page plsec${i} { ${page(s)} }\n`; });
+      let si = 0;
+      Array.from(Ed.editor.children).forEach((b, k) => { css += `#editor > :nth-child(${k + 1}){page:plsec${si}}\n`; if (b.matches('hr.pl-section')) si++; });
+    }
+    st.textContent = css + '@media print { .print-hf .pl-field[data-field="page"]{display:none} }';
+    Ed.stripArtifacts();
+    Ed._clean = 1;
     this._push = $('#pushStyle').textContent; $('#pushStyle').textContent = '';
     this.preparePrintComments();
   },
@@ -274,7 +286,7 @@ const App = {
     });
   },
   endPrint() {
-    if (this._push !== undefined) { $('#pushStyle').textContent = this._push; this._push = undefined; }
+    if (this._push !== undefined) { $('#pushStyle').textContent = this._push; this._push = undefined; Ed._clean = 0; Ed._layout(); }
     document.body.classList.remove('print-markup', 'print-clean');
     $$('.pl-cref[data-n]', Ed.editor).forEach(r => r.removeAttribute('data-n'));
     Comments.highlight();
@@ -286,7 +298,7 @@ const App = {
   },
   async htmlDocument() {
     const st = await Ed.getState();
-    return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Plume"><title>${htmlEsc(this.name())}</title><style>body{font-family:${Ed.settings.fontCss};font-size:${Ed.settings.size}pt;line-height:${Ed.settings.lineHeight};max-width:${Math.round(Ed.contentWidth())}px;margin:40px auto;padding:0 20px}p{margin:0 0 ${Ed.settings.after}pt}table{border-collapse:collapse}td,th{border:1px solid #000;padding:2px 7px;vertical-align:top}table[data-borders=none] td{border:0}img{max-width:100%;height:auto}h1,h2,h3{color:${Ed.settings.heading}}.pl-pagebreak{border:0;page-break-after:always}.pl-toc .toc-upd{display:none}.toc-line{display:flex}.toc-line .dots{flex:1;border-bottom:1px dotted #777;margin:0 4px 4px}.pl-del{text-decoration:line-through;color:#B42318}.pl-ins{text-decoration:underline;color:#1F6F43}.pl-island-box{display:inline-block;border:1px solid #ddd}</style></head><body>${st.header ? `<header>${st.header}</header>` : ''}${st.html}${st.footer ? `<footer>${st.footer}</footer>` : ''}</body></html>`;
+    return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="generator" content="Plume"><title>${htmlEsc(this.name())}</title><style>body{font-family:${Ed.settings.fontCss};font-size:${Ed.settings.size}pt;line-height:${Ed.settings.lineHeight};max-width:${Math.round(Ed.contentWidth())}px;margin:40px auto;padding:0 20px}p{margin:0 0 ${Ed.settings.after}pt}table{border-collapse:collapse}td,th{border:1px solid #000;padding:2px 7px;vertical-align:top}table[data-borders=none] td{border:0}img{max-width:100%;height:auto}h1,h2,h3{color:${Ed.settings.heading}}.pl-pagebreak,.pl-section{border:0;page-break-after:always}.pl-colbreak{border:0}.pl-toc .toc-upd{display:none}.toc-line{display:flex}.toc-line .dots{flex:1;border-bottom:1px dotted #777;margin:0 4px 4px}.pl-del{text-decoration:line-through;color:#B42318}.pl-ins{text-decoration:underline;color:#1F6F43}.pl-island-box{display:inline-block;border:1px solid #ddd}</style></head><body>${st.header ? `<header>${st.header}</header>` : ''}${st.html}${st.footer ? `<footer>${st.footer}</footer>` : ''}</body></html>`;
   },
   exportHtml() { return this.saveAs('html'); },
   exportTxt() { return this.saveAs('txt'); },
@@ -326,20 +338,19 @@ const App = {
   },
 
   /* ---------- Mise en page ---------- */
-  setMargins([t, r, b, l]) { Object.assign(Ed.page, { mt: U.cmToPx(t), mr: U.cmToPx(r), mb: U.cmToPx(b), ml: U.cmToPx(l) }); this.pageChanged(); },
+  /* Mise en page : s'applique à la section du curseur (tout le document s'il n'y en a qu'une) */
+  setMargins([t, r, b, l]) { Ed.updateSect(Ed.curSectIndex(), p => Object.assign(p, { mt: U.cmToPx(t), mr: U.cmToPx(r), mb: U.cmToPx(b), ml: U.cmToPx(l) })); this.pageChanged(); },
   setOrientation(o) {
-    const p = Ed.page;
-    const land = p.w > p.h;
-    if ((o === 'landscape') !== land) { [p.w, p.h] = [p.h, p.w]; }
+    Ed.updateSect(Ed.curSectIndex(), p => { if ((o === 'landscape') !== (p.w > p.h)) [p.w, p.h] = [p.h, p.w]; });
     this.pageChanged();
   },
   setSize(k) {
     const [w, h] = PAGE_SIZES[k];
-    const land = Ed.page.w > Ed.page.h;
-    Ed.page.w = U.cmToPx(land ? h : w); Ed.page.h = U.cmToPx(land ? w : h);
+    Ed.updateSect(Ed.curSectIndex(), p => { const land = p.w > p.h; p.w = U.cmToPx(land ? h : w); p.h = U.cmToPx(land ? w : h); });
     this.pageChanged();
   },
-  pageChanged() { Ed.renderPages(false); Ed.relayout(); Ed.changed(false); this.drawRuler(); },
+  setColumns(k) { Ed.setColumns(k); this.drawRuler(); },
+  pageChanged() { Ed._layout(); Ed.changed(false); this.drawRuler(); },
   setLang(code, label) {
     Ed.editor.lang = code;
     $('#sbLang').textContent = label || code;
@@ -370,8 +381,8 @@ const App = {
     Ed.placeHandle && Ed.placeHandle();
     this.drawRuler();
   },
-  fitWidth() { this.setZoom(($('#canvas').clientWidth - 40) / Ed.page.w); },
-  fitPage() { this.setZoom(Math.min(($('#canvas').clientHeight - 50) / Ed.page.h, ($('#canvas').clientWidth - 40) / Ed.page.w)); },
+  fitWidth() { this.setZoom(($('#canvas').clientWidth - 40) / (Ed.sheetW || Ed.page.w)); },
+  fitPage() { const g = Ed.caretGeom(), pg = (Ed.pages || Ed.defaultPages())[Ed.caretPage()] || Ed.page; this.setZoom(Math.min(($('#canvas').clientHeight - 50) / pg.h, ($('#canvas').clientWidth - 40) / Math.max(g.w, Ed.sheetW || g.w))); },
   setReading(on) {
     document.body.classList.toggle('reading', on);
     Ed.editor.contentEditable = on ? 'false' : 'true';
@@ -423,8 +434,9 @@ const App = {
   drawRuler() {
     const ruler = $('#ruler'); if (!ruler || document.body.classList.contains('no-ruler')) return;
     const s = Ed.sheet.getBoundingClientRect(), w = $('#rulerWrap').getBoundingClientRect();
-    const z = Ed.zoom, p = Ed.page;
-    ruler.style.left = (s.left - w.left) + 'px';
+    const z = Ed.zoom, g = Ed.caretGeom(), si = Ed.curSectIndex();
+    const p = { w: g.w, ml: g.ml, mr: g.mr };
+    ruler.style.left = (s.left - w.left + g.x * z) + 'px';
     ruler.style.width = p.w * z + 'px';
     ruler.innerHTML = '';
     ruler.append(el('div', { class: 'rm', style: `left:0;width:${p.ml * z}px` }), el('div', { class: 'rm', style: `right:0;width:${p.mr * z}px` }));
@@ -445,9 +457,8 @@ const App = {
           const v = Math.max(U.cmToPx(0.5), Math.min(p.w / 2 - 20, start + d));
           if (side === 'l') p.ml = v; else p.mr = v;
           h.style.left = (side === 'l' ? p.ml * z : (p.w - p.mr) * z) + 'px';
-          Ed.renderPages(false);
         };
-        const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); this.pageChanged(); };
+        const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); Ed.updateSect(si, sp => { sp.ml = p.ml; sp.mr = p.mr; }); this.pageChanged(); };
         h.addEventListener('pointermove', move); h.addEventListener('pointerup', up);
       });
       return h;
@@ -565,7 +576,7 @@ const App = {
       if (k === 'r') return run('right');
       if (k === 'j') return run('justify');
       if (k === 'd') return run('fontDlg');
-      if (k === 'enter') return run('pageBreak');
+      if (k === 'enter') return run(e.shiftKey ? 'colBreak' : 'pageBreak');
       if (k === ' ') return run('clear');
       if (e.key === '>' || (e.shiftKey && e.key === '.')) return run('grow');
       if (e.key === '<' || (e.shiftKey && e.key === ',')) return run('shrink');

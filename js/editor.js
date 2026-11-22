@@ -7,6 +7,28 @@
 
 const GAP = 26; // espace entre deux pages (px)
 
+/**
+ * Hauteur de ligne « naturelle » des polices, comme Word la calcule :
+ * (usWinAscent + usWinDescent) / unitsPerEm (ou hhea avec interligne).
+ * L'interligne « multiple » de Word (w:line auto) multiplie cette hauteur,
+ * pas la taille de police : 11 pt × 1,08 × 1,22 (Calibri) ≈ 14,5 pt.
+ * Mesures fontTools (polices installées / vendor/fonts) ou valeurs Word connues.
+ */
+const FONT_RATIO = {
+  calibri: 1.22, carlito: 1.22, aptos: 1.2, arial: 1.149, 'liberation sans': 1.149, arimo: 1.149, helvetica: 1.149,
+  'times new roman': 1.149, 'liberation serif': 1.149, tinos: 1.149, times: 1.149, cambria: 1.172, caladea: 1.172,
+  georgia: 1.136, verdana: 1.215, 'segoe ui': 1.33, 'courier new': 1.133, 'liberation mono': 1.133, cousine: 1.133,
+  'comic sans ms': 1.394, consolas: 1.17, 'cascadia code': 1.17, tahoma: 1.207, 'trebuchet ms': 1.16,
+  'dejavu sans': 1.164, 'dejavu serif': 1.164, 'dejavu sans mono': 1.164, 'open sans': 1.362, 'noto sans': 1.362,
+  roboto: 1.172, inter: 1.21, marelle: 2.88, borel: 2.304, 'playwrite fr moderne': 2.22, 'playwrite fr trad': 2.867,
+  andika: 1.611, 'atkinson hyperlegible': 1.24, 'comic neue': 1.35, lexend: 1.59, opendyslexic: 1.82
+};
+/** Ratio de la première police d'une pile CSS (1,2 si inconnue) */
+function fontRatio(css) {
+  const f = String(css || '').split(',')[0].trim().replace(/^["']|["']$/g, '').toLowerCase();
+  return FONT_RATIO[f] || 1.2;
+}
+
 const Ed = {
   editor: null, sheet: null, pagesLayer: null,
   page: null, settings: null,
@@ -37,7 +59,19 @@ const Ed = {
     document.execCommand('defaultParagraphSeparator', false, 'p');
 
     const ed = this.editor;
+    ed.classList.add('pl-wlh');
     ed.addEventListener('input', () => this.changed(true));
+    // saisie composée (IME) : pas de recalcul pendant la composition
+    ed.addEventListener('compositionstart', () => { this._composing = true; });
+    ed.addEventListener('compositionend', () => { this._composing = false; this.relayout(); });
+    // copier / couper / glisser : jamais d'artefact de pagination dans le presse-papiers
+    const clipClean = () => {
+      const r = this.range();
+      if (r && [...ed.querySelectorAll('[data-pl-artifact]')].some(a => r.intersectsNode(a))) { this.stripArtifacts(); this.relayout(); }
+    };
+    ed.addEventListener('copy', clipClean, true);
+    ed.addEventListener('cut', clipClean, true);
+    ed.addEventListener('dragstart', clipClean, true);
     ed.addEventListener('keydown', e => this.onKeyDown(e));
     ed.addEventListener('beforeinput', e => {
       if (e.inputType === 'historyUndo') { e.preventDefault(); this.undo(); }
@@ -71,6 +105,7 @@ const Ed = {
     st.setProperty('--doc-pbefore', s.before + 'pt');
     st.setProperty('--doc-color', s.color || '#000');
     st.setProperty('--doc-heading', s.heading || '#0B5E4E');
+    st.setProperty('--doc-fr', fontRatio(s.fontCss));
     // les en-têtes/pieds héritent de la police du document
     this.pagesLayer.style.setProperty('--doc-font', s.fontCss);
     this.pagesLayer.style.setProperty('--doc-pafter', '0pt');
@@ -88,7 +123,9 @@ const Ed = {
     this.footerHTML = footer || '';
     this.applySettings();
     this.history = []; this.hIndex = -1;
+    this.pages = null; this._laidOut = false;
     this.renderPages(true);
+    this._layout();
     this.relayout();
     this.commit();
     this.placeCaretStart();
@@ -102,7 +139,7 @@ const Ed = {
 
   /** Contenu stocké : on retire les éventuels résidus d'interface */
   sanitizeStored(html) {
-    return html.replace(/\sclass="sel-img"/g, '');
+    return this.cleanString(html.replace(/\sclass="sel-img"/g, ''));
   },
 
   placeCaretStart() {
@@ -127,7 +164,7 @@ const Ed = {
       return html;
     };
     return {
-      html: await toData(this.editor.innerHTML),
+      html: await toData(this.cleanHTML()),
       header: await toData(this.headerHTML), footer: await toData(this.footerHTML),
       page: this.page, settings: this.settings, props: this.props
     };
@@ -148,11 +185,87 @@ const Ed = {
   },
 
   /* =====================================================================
-     Pages et pagination
+     Sections, pages et pagination
+     ---------------------------------------------------------------------
+     Le document reste un flux unique (contenteditable). Les pages sont des
+     cartes dessinées derrière lui ; la pagination ne modifie jamais le
+     modèle : elle pose des règles CSS (#pushStyle : marges, décalages de
+     colonnes) et des « artefacts » (sauts de ligne de page, rangées vides de
+     tableau) marqués data-pl-artifact, retirés avant chaque recalcul et
+     exclus de tout enregistrement / export / copie / historique.
+     Sections : <hr class="pl-section" data-sect='{…}'> termine une section
+     et porte SES propriétés (comme le w:sectPr de Word) ; la dernière
+     section est Ed.page.
      ===================================================================== */
+  pages: null,      // [{y, x, w, h, mt, mb, ml, mr, mh, mf, si, seps}]
+  sheetW: 0,        // largeur de la feuille (page la plus large)
+
+  /** Marqueurs de fin de section (premier niveau) */
+  sectMarkers() { return Array.from(this.editor.children).filter(e => e.tagName === 'HR' && e.classList.contains('pl-section')); },
+  /** Propriétés d'un marqueur (mises en cache tant que l'attribut ne change pas) */
+  sectOf(m) {
+    const raw = m.dataset.sect || '{}';
+    if (m._sc && m._sc.raw === raw) return m._sc.v;
+    let v = {};
+    try { v = JSON.parse(raw); } catch { v = {}; }
+    v = Object.assign(this.defaultPage(), v);
+    m._sc = { raw, v };
+    return v;
+  },
+  /** Toutes les sections, dans l'ordre ; la dernière est Ed.page */
+  sections() { return [...this.sectMarkers().map(m => this.sectOf(m)), this.page]; },
+  /** Index de la section contenant un nœud */
+  sectIndexOf(node) {
+    const ms = this.sectMarkers();
+    if (!ms.length || !node) return 0;
+    let n = node.nodeType === 1 ? node : node.parentElement;
+    while (n && n.parentElement !== this.editor) n = n.parentElement;
+    if (!n) return ms.length;
+    let i = 0;
+    for (const m of ms) { if (m !== n && (m.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)) i++; else break; }
+    // le marqueur lui-même appartient à la section qu'il termine
+    return ms.includes(n) ? ms.indexOf(n) : i;
+  },
+  curSectIndex() { const r = this.lastRange; return r && this.editor.contains(r.startContainer) ? this.sectIndexOf(r.startContainer) : this.sections().length - 1; },
+  curSect() { return this.sections()[this.curSectIndex()]; },
+  /** Modifie les propriétés d'une section (fn reçoit l'objet modifiable) */
+  updateSect(i, fn) {
+    const ms = this.sectMarkers();
+    if (i >= ms.length) { fn(this.page); return; }
+    const v = JSON.parse(JSON.stringify(this.sectOf(ms[i])));
+    fn(v);
+    ms[i].dataset.sect = JSON.stringify(v);
+  },
+  /** Géométrie des colonnes d'une section : [{x, w}] relatifs au bord gauche de la zone de texte */
+  colsOf(s) {
+    const cw = s.w - s.ml - s.mr;
+    const c = s.cols || {};
+    const n = Math.max(1, Math.min(12, c.n | 0 || 1));
+    if (n === 1) return [{ x: 0, w: cw }];
+    const out = [];
+    if (c.eq === false && Array.isArray(c.list) && c.list.length >= n) {
+      const tot = c.list.slice(0, n).reduce((a, k, j) => a + k.w + (j < n - 1 ? (k.space || 0) : 0), 0) || cw;
+      const k = cw / tot; let x = 0;
+      for (let j = 0; j < n; j++) { const w = c.list[j].w * k; out.push({ x, w }); x += w + (c.list[j].space || 0) * k; }
+      return out;
+    }
+    const sp = c.space != null ? c.space : U.cmToPx(1.25);
+    const w = Math.max(20, (cw - sp * (n - 1)) / n);
+    for (let j = 0; j < n; j++) out.push({ x: j * (w + sp), w });
+    return out;
+  },
+  /** Page par défaut (avant la première mise en page) */
+  defaultPages() {
+    const s = this.sections()[0];
+    return [{ y: 0, x: 0, w: s.w, h: s.h, mt: s.mt, mb: s.mb, ml: s.ml, mr: s.mr, mh: s.mh, mf: s.mf, si: 0, seps: [] }];
+  },
+
   renderPages(force) {
-    const n = this.pageCount;
-    const P = this.page.h + GAP;
+    if (!this.pages || !this._laidOut) this.pages = this.defaultPages();
+    const pgs = this.pages;
+    const n = pgs.length;
+    this.pageCount = n;
+    const W = this.sheetW = Math.max(...this.sections().map(s => s.w));
     const layer = this.pagesLayer;
     if (force) layer.innerHTML = '';
     while (layer.children.length > n) layer.lastChild.remove();
@@ -171,28 +284,40 @@ const Ed = {
       this.fillHF(card, layer.children.length - 1);
     }
     Array.from(layer.children).forEach((card, i) => {
-      Object.assign(card.style, { top: i * P + 'px', width: this.page.w + 'px', height: this.page.h + 'px' });
+      const p = pgs[i];
+      Object.assign(card.style, { top: p.y + 'px', left: p.x + 'px', width: p.w + 'px', height: p.h + 'px' });
       const hd = card.querySelector('.header'), ft = card.querySelector('.footer');
-      Object.assign(hd.style, { top: this.page.mh + 'px', left: this.page.ml + 'px', right: this.page.mr + 'px' });
-      Object.assign(ft.style, { bottom: this.page.mf + 'px', left: this.page.ml + 'px', right: this.page.mr + 'px', top: 'auto' });
+      Object.assign(hd.style, { top: p.mh + 'px', left: p.ml + 'px', right: p.mr + 'px' });
+      Object.assign(ft.style, { bottom: p.mf + 'px', left: p.ml + 'px', right: p.mr + 'px', top: 'auto' });
       card.querySelector('.page-num-badge').textContent = i + 1;
+      // traits de séparation des colonnes
+      const key = JSON.stringify(p.seps || []);
+      if (card._seps !== key) {
+        card._seps = key;
+        card.querySelectorAll('.pl-colsep').forEach(x => x.remove());
+        for (const s of p.seps || []) card.append(el('div', { class: 'pl-colsep', style: `left:${s.x.toFixed(1)}px;top:${s.y1.toFixed(1)}px;height:${Math.max(0, s.y2 - s.y1).toFixed(1)}px` }));
+      }
       if (force) this.fillHF(card, i);
       else this.updateFields(card, i);
     });
-    const ed = this.editor;
+    const ed = this.editor, s0 = this.sections()[0];
+    const x0 = (W - s0.w) / 2;
     Object.assign(ed.style, {
-      width: this.page.w + 'px',
-      paddingTop: this.page.mt + 'px', paddingLeft: this.page.ml + 'px',
-      paddingRight: this.page.mr + 'px', paddingBottom: this.page.mb + 'px'
+      width: W + 'px',
+      paddingTop: s0.mt + 'px', paddingLeft: (x0 + s0.ml) + 'px',
+      paddingRight: (x0 + s0.mr) + 'px', paddingBottom: s0.mb + 'px'
     });
-    this.sheet.style.width = this.page.w + 'px';
-    this.sheet.style.height = (n * P - GAP) + 'px';
-    ed.style.minHeight = (n * P - GAP) + 'px';
+    const last = pgs[n - 1];
+    const H = last.y + last.h;
+    this.sheet.style.width = W + 'px';
+    this.sheet.style.height = H + 'px';
+    ed.style.minHeight = H + 'px';
   },
   fillHF(card, i) {
     const hd = card.querySelector('.header'), ft = card.querySelector('.footer');
     // Première page différente (document Word d'origine) : affichée, conservée telle quelle
-    const first = i === 0 && this.page.titlePg && this.page.first;
+    const s0 = this.sections()[0];
+    const first = i === 0 && (s0.titlePg || this.page.titlePg) && this.page.first;
     for (const [elx, html, firstHtml] of [[hd, this.headerHTML, first && this.page.first.header], [ft, this.footerHTML, first && this.page.first.footer]]) {
       if (first) {
         elx.contentEditable = 'false';
@@ -217,7 +342,7 @@ const Ed = {
     if (isHeader) this.headerHTML = html; else this.footerHTML = html;
     Array.from(this.pagesLayer.children).forEach((card, i) => {
       const t = card.querySelector(isHeader ? '.header' : '.footer');
-      if (t !== h && !(i === 0 && this.page.titlePg)) { t.innerHTML = html; this.updateFields(card, i); }
+      if (t !== h && t.contentEditable !== 'false') { t.innerHTML = html; this.updateFields(card, i); }
     });
     this.changed(true);
   },
@@ -228,76 +353,531 @@ const Ed = {
   /** Unités de pagination : blocs de premier niveau, et éléments de liste */
   units() {
     const out = [];
+    let si = 0;
     Array.from(this.editor.children).forEach((b, k) => {
-      if (b.tagName === 'STYLE') return;
+      if (b.tagName === 'STYLE' || b.hasAttribute('data-pl-artifact')) return;
+      const isSect = b.tagName === 'HR' && b.classList.contains('pl-section');
       if ((b.tagName === 'UL' || b.tagName === 'OL') && b.children.length) {
-        Array.from(b.children).forEach((li, j) => out.push({ el: li, sel: `#editor > :nth-child(${k + 1}) > :nth-child(${j + 1})` }));
-      } else out.push({ el: b, sel: `#editor > :nth-child(${k + 1})` });
+        Array.from(b.children).forEach((li, j) => out.push({ el: li, top: b, si, sel: `#editor > :nth-child(${k + 1}) > :nth-child(${j + 1})`, tsel: `#editor > :nth-child(${k + 1})` }));
+      } else out.push({ el: b, top: b, si, sel: `#editor > :nth-child(${k + 1})`, tsel: `#editor > :nth-child(${k + 1})` });
+      if (isSect) si++;
     });
     return out;
   },
 
+  /* ---------- Artefacts de pagination ---------- */
+  /** Retire les artefacts (et recolle les nœuds texte coupés) en conservant la sélection */
+  stripArtifacts(root = this.editor) {
+    const arts = root.querySelectorAll('[data-pl-artifact]');
+    if (!arts.length) return false;
+    const sel = getSelection();
+    const pts = sel.rangeCount && root.contains(sel.anchorNode) ? [sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset] : null;
+    const lr = this.lastRange && root.contains(this.lastRange.startContainer) ? [this.lastRange.startContainer, this.lastRange.startOffset, this.lastRange.endContainer, this.lastRange.endOffset] : null;
+    const moved = new Map();  // nœud texte fusionné -> {into, add}
+    for (const a of arts) {
+      const prev = a.previousSibling, next = a.nextSibling;
+      a.remove();
+      if (prev && next && prev.nodeType === 3 && next.nodeType === 3) {
+        moved.set(next, { into: prev, add: prev.length });
+        prev.appendData(next.data);
+        next.remove();
+      }
+    }
+    const map = (n, o) => { while (moved.has(n)) { const m = moved.get(n); o += m.add; n = m.into; } return [n, o]; };
+    const fix = p => { if (!p) return null; const [a, ao] = map(p[0], p[1]); const [b, bo] = map(p[2], p[3]); return [a, ao, b, bo]; };
+    const ok = n => n && n.isConnected;
+    const sp = fix(pts);
+    if (sp && (sp[0] !== pts[0] || sp[2] !== pts[2]) && ok(sp[0]) && ok(sp[2])) { try { sel.setBaseAndExtent(sp[0], sp[1], sp[2], sp[3]); } catch { } }
+    const lp = fix(lr);
+    if (lp && ok(lp[0]) && ok(lp[2])) { try { const r = document.createRange(); r.setStart(lp[0], lp[1]); r.setEnd(lp[2], lp[3]); this.lastRange = r; } catch { } }
+    return true;
+  },
+  /** HTML du document sans artefacts ni variables d'affichage */
+  cleanHTML(html = this.editor.innerHTML) {
+    return Ed.cleanString(html);
+  },
+  cleanString(html) {
+    if (!html.includes('data-pl-artifact') && !html.includes('--pl-')) return html;
+    return html
+      .replace(/<tr\b[^>]*\bdata-pl-artifact\b[^>]*>[\s\S]*?<\/tr>/g, '')
+      .replace(/<span\b[^>]*\bdata-pl-artifact\b[^>]*>\s*<\/span>/g, '')
+      .replace(/\s*--pl-(?:lhx|lh|fr):[^;"]*;?/g, '')
+      .replace(/ style="\s*"/g, '');
+  },
+  /** Exécute fn sur un document « propre » (exports) puis rétablit la pagination */
+  async withCleanDom(fn) {
+    if (this._clean) return fn();
+    this._clean = 1;
+    const ed = this.editor;
+    this.stripArtifacts();
+    const push = this.pushStyle.textContent;
+    this.pushStyle.textContent = '';
+    ed.classList.remove('pl-wlh');
+    try { return await fn(); }
+    finally {
+      this._clean = 0;
+      ed.classList.add('pl-wlh');
+      this.pushStyle.textContent = push;
+      this._layout();
+    }
+  },
+
+  /* ---------- Interligne façon Word ---------- */
+  /** Pose --pl-lh / --pl-lhx / --pl-fr (affichage uniquement : retirés à l'enregistrement) */
+  syncLineVars() {
+    const set = (s, k, v) => { if (s.getPropertyValue(k) !== v) { if (v) s.setProperty(k, v); else s.removeProperty(k); } };
+    for (const e of this.editor.querySelectorAll('[style*="line-height"],[style*="font-family"],[style*="--pl-"]')) {
+      const s = e.style, lh = s.lineHeight, ff = s.fontFamily;
+      let n = '', x = '';
+      if (lh && lh !== 'normal') {
+        if (/^[\d.]+$/.test(lh)) { n = lh; x = 'initial'; }
+        else if (/%$/.test(lh)) { n = String(parseFloat(lh) / 100); x = 'initial'; }
+        else x = lh;            // interligne exact / au moins : valeur conservée
+      }
+      set(s, '--pl-lh', n); set(s, '--pl-lhx', x); set(s, '--pl-fr', ff ? String(fontRatio(ff)) : '');
+    }
+  },
+
   relayout: null, // défini plus bas (débouncé)
   _layout() {
-    if (this.editor.dataset.exporting) return;
-    const pg = this.page;
-    const P = pg.h + GAP;
-    const contentH = pg.h - pg.mt - pg.mb;
-    const cTop = i => i * P + pg.mt;
-    const cBot = i => i * P + pg.h - pg.mb;
+    if (this.editor.dataset.exporting || this._clean || this._composing) return;
+    const t0 = performance.now();
+    const ed = this.editor;
+    this.stripArtifacts();
+    this.syncLineVars();
     this.pushStyle.textContent = '';
+    const secs = this.sections();
+    const W = Math.max(...secs.map(s => s.w));
+    this.sheetW = W;
+    const s0 = secs[0];
+    const padL = (W - s0.w) / 2 + s0.ml, padR = (W - s0.w) / 2 + s0.mr;
+    Object.assign(ed.style, { width: W + 'px', paddingTop: s0.mt + 'px', paddingLeft: padL + 'px', paddingRight: padR + 'px', paddingBottom: s0.mb + 'px' });
+    const cols = secs.map(s => this.colsOf(s));
+    const offL = s => (W - s.w) / 2 + s.ml;
     const units = this.units();
-    const metrics = units.map(u => {
-      const cs = getComputedStyle(u.el);
-      const prev = u.el.previousElementSibling;
-      return {
-        top: u.el.offsetTop, h: u.el.offsetHeight, mt: parseFloat(cs.marginTop) || 0,
-        prevMB: prev ? parseFloat(getComputedStyle(prev).marginBottom) || 0 : 0,
-        pb: u.el.classList && u.el.classList.contains('pl-pagebreak')
-      };
-    });
-    // ajuster le top des li (offsetParent = editor) — déjà relatif à l'éditeur
-    let shift = 0, forceNext = false, lastBottom = pg.mt;
+    const multi = cols.some(c => c.length > 1);
+
+    // --- 1. Géométrie horizontale (sections, largeur de colonne) ---
+    const hRules = [];
+    const tops = new Map();   // bloc de premier niveau -> {dL, dR, ml, mr}
+    const needH = [];
+    for (const u of units) {
+      if (tops.has(u.top)) continue;
+      const s = secs[u.si], c0 = cols[u.si][0];
+      const x0 = offL(s) + c0.x, right = W - (x0 + c0.w);
+      const dL = x0 - padL, dR = right - padR;
+      const t = { dL, dR, sel: u.tsel };
+      tops.set(u.top, t);
+      if (Math.abs(dL) > 0.01 || Math.abs(dR) > 0.01 || multi) needH.push([u.top, t]);
+    }
+    for (const [e, t] of needH) { const cs = getComputedStyle(e); t.ml = parseFloat(cs.marginLeft) || 0; t.mr = parseFloat(cs.marginRight) || 0; }
+    const hRule = (t, dx = 0, dw = 0) => `${t.sel}{margin-left:${(t.ml + t.dL + dx).toFixed(2)}px !important;margin-right:${(t.mr + t.dR - dx - dw).toFixed(2)}px !important}`;
+    for (const [, t] of needH) if (Math.abs(t.dL) > 0.01 || Math.abs(t.dR) > 0.01) hRules.push(hRule(t));
+    // largeurs particulières (colonnes de largeurs inégales), affinées en 2e passe
+    let widthFix = new Map();   // unité -> index de colonne
+    let place, pages, regions, iter = 0, er;
+    const z = this.zoom || 1;
+    for (; ;) {
+      const wRules = [];
+      for (const [i, c] of widthFix) {
+        const u = units[i], cg = cols[u.si];
+        const dw = cg[c].w - cg[0].w;
+        if (u.el === u.top) wRules.push(hRule(tops.get(u.top), 0, dw));
+      }
+      this.pushStyle.textContent = hRules.concat(wRules).join('\n');
+      // --- 2. Mesures (une seule mise en page) ---
+      er = ed.getBoundingClientRect();
+      const Y = r => (r - er.top) / z;
+      const M = units.map(u => {
+        const r = u.el.getBoundingClientRect();
+        const e = u.el, tag = e.tagName;
+        return {
+          top: Y(r.top), bot: Y(r.bottom),
+          kind: tag === 'HR' ? (e.classList.contains('pl-section') ? 'sect' : e.classList.contains('pl-colbreak') ? 'cb' : e.classList.contains('pl-pagebreak') ? 'pb' : 'blk') : tag === 'TABLE' ? 'table' : 'blk'
+        };
+      });
+      ({ place, pages, regions } = this._place(units, M, secs, cols, W, er, z));
+      if (!multi || ++iter > 2) { this._M = M; break; }
+      // colonnes inégales : la hauteur dépend de la colonne attribuée
+      const nf = new Map();
+      place.forEach((p, i) => { if (p && p.c > 0 && Math.abs(cols[units[i].si][p.c].w - cols[units[i].si][0].w) > 0.5) nf.set(i, p.c); });
+      const same = nf.size === widthFix.size && [...nf].every(([k, v]) => widthFix.get(k) === v);
+      if (same) { this._M = M; break; }
+      widthFix = nf;
+    }
+    const M = this._M;
+
+    // --- 3. Règles verticales et décalages de colonnes (lectures d'abord) ---
     const rules = [];
-    units.forEach((u, idx) => {
-      const m = metrics[idx];
-      let top = m.top + shift;
-      const p = Math.max(0, Math.floor(top / P));
-      let push = 0;
-      if (forceNext) {
-        const target = cTop(Math.floor((top - 1) / P) + 1);
-        const pbPage = Math.floor((metrics[idx - 1].top + shift - 1) / P);
-        push = Math.max(0, cTop(pbPage + 1) - top);
-        if (target < 0) push = 0;
-        forceNext = false;
-      } else if (top >= cBot(p) - 1 && top > cTop(p)) {
-        push = cTop(p + 1) - top;
-      } else if (top + m.h > cBot(p) + 1 && m.h <= contentH && top > cTop(p) + 2) {
-        push = cTop(p + 1) - top;
+    let prevPB = null, prevMB = null;
+    const jumps = [];
+    units.forEach((u, i) => {
+      const p = place[i], m = M[i];
+      const natural = i === 0 ? m.top : prevPB + (m.top - prevMB);
+      const delta = p.t - natural;
+      if (Math.abs(delta) > 0.3) rules.push(`${u.sel}{margin-top:${this._marginFor(u.el, delta, m.top, er, z).toFixed(2)}px !important}`);
+      const cg = cols[u.si];
+      if (p.c > 0 || widthFix.has(i)) {
+        const dx = cg[p.c].x - cg[0].x, dw = cg[p.c].w - cg[0].w;
+        if (u.el === u.top) rules.push(hRule(tops.get(u.top), dx, dw));
+        else if (dx || dw) { const cs = getComputedStyle(u.el); rules.push(`${u.sel}{margin-left:${((parseFloat(cs.marginLeft) || 0) + dx).toFixed(2)}px !important;margin-right:${((parseFloat(cs.marginRight) || 0) - dx - dw).toFixed(2)}px !important}`); }
       }
-      if (push > 0.5) {
-        const newMT = Math.max(m.prevMB, m.mt) + push;
-        rules.push(`${u.sel}{margin-top:${newMT.toFixed(2)}px !important}`);
-        shift += push; top += push;
-      }
-      if (m.pb) forceNext = true;
-      lastBottom = Math.max(lastBottom, top + m.h);
+      let extra = 0;
+      for (const j of p.jumps || []) { extra += j.h; jumps.push(j); }
+      prevPB = p.t + (m.bot - m.top) + extra; prevMB = m.bot;
     });
-    this.pushStyle.textContent = rules.join('\n');
-    // un saut de page en toute fin de document ouvre une nouvelle page
-    let n = Math.max(1, Math.floor((lastBottom - 1) / P) + 1);
-    if (forceNext) n = Math.max(n, Math.floor((lastBottom - 1) / P) + 2);
-    const changedCount = n !== this.pageCount;
-    this.pageCount = n;
+    // libellé des marqueurs de section (type de la section suivante)
+    const LBL = { nextPage: 'page suivante', continuous: 'continu', evenPage: 'page paire', oddPage: 'page impaire' };
+    units.forEach((u, i) => { if (M[i].kind === 'sect') rules.push(`${u.sel}::after{content:"Saut de section (${LBL[(secs[u.si + 1] || {}).type || 'nextPage'] || 'page suivante'})"}`); });
+    // --- 4. Écritures ---
+    for (let k = jumps.length - 1; k >= 0; k--) this._insertJump(jumps[k]);   // à rebours : offsets intacts
+    this.pushStyle.textContent = hRules.concat(rules).join('\n');
+    // séparateurs de colonnes
+    for (const pg of pages) pg.seps = [];
+    for (const r of regions) {
+      if (!r.sep || r.cols.length < 2 || !r.units.length) continue;
+      let y2 = r.top;
+      for (const i of r.units) { const p = place[i]; y2 = Math.max(y2, p.t + (M[i].bot - M[i].top)); }
+      const pg = pages[r.p], s = secs[r.si];
+      for (let c = 1; c < r.cols.length; c++) {
+        const x = s.ml + (r.cols[c - 1].x + r.cols[c - 1].w + r.cols[c].x) / 2;
+        pg.seps.push({ x, y1: r.top - pg.y, y2: Math.min(y2, pg.y + pg.h - pg.mb) - pg.y });
+      }
+    }
+    this.pages = pages;
+    this._laidOut = true;
+    const changedCount = pages.length !== this.pageCount;
+    this.pageCount = pages.length;
     this.renderPages(false);
     if (changedCount) Array.from(this.pagesLayer.children).forEach((c, i) => this.updateFields(c, i));
     this.renderNotes();
     this.updateTocPages();
+    this.layoutMs = performance.now() - t0;
     this.onLayout && this.onLayout();
   },
 
-  /** Page (0-based) d'un élément ou d'un rectangle */
-  pageOfY(y) { return Math.max(0, Math.min(this.pageCount - 1, Math.floor(y / (this.page.h + GAP)))); },
+  /** Placement des unités : pages, colonnes, coupes à la ligne, solidarités */
+  _place(units, M, secs, cols, W, er, z) {
+    const pages = [], regions = [];
+    const newPage = si => {
+      const s = secs[si], prev = pages[pages.length - 1];
+      pages.push({ y: prev ? prev.y + prev.h + GAP : 0, x: (W - s.w) / 2, w: s.w, h: s.h, mt: s.mt, mb: s.mb, ml: s.ml, mr: s.mr, mh: s.mh, mf: s.mf, si, seps: [] });
+      return pages.length - 1;
+    };
+    const cTop = p => pages[p].y + pages[p].mt, cBot = p => pages[p].y + pages[p].h - pages[p].mb;
+    const newRegion = (p, si, top) => { const r = { p, si, top, bot: cBot(p), cols: cols[si], sep: !!(secs[si].cols && secs[si].cols.sep), units: [] }; regions.push(r); return r; };
+    const place = new Array(units.length);
+    const keepNext = e => e.dataset.keepnext === '1' || (/^H[1-6]$/.test(e.tagName) && e.dataset.keepnext !== '0');
+    const lineCache = new Map();
+    const linesOf = i => { if (!lineCache.has(i)) lineCache.set(i, this._lines(units[i].el, er, z)); return lineCache.get(i); };
+
+    let p = newPage(0), reg = newRegion(p, 0, cTop(p)), c = 0;
+    let y = null;          // bas de la dernière unité de la colonne courante (null : haut de colonne)
+    let prevBot = null;    // bas mesuré de l'unité précédente
+    let force = null;      // 'page' | 'col' : saut imposé avant l'unité suivante
+    let curSi = 0, guard = 0;
+    const snaps = [];
+    const goNextPage = si => { p = newPage(si); reg = newRegion(p, si, cTop(p)); c = 0; y = null; };
+    const goNextCol = si => { if (c + 1 < reg.cols.length) { c++; y = null; } else goNextPage(si); };
+    const balance = r => {
+      // colonnes équilibrées en fin de section continue (comme Word)
+      const U = r.units.filter(i => M[i].kind !== 'sect');
+      if (r.cols.length < 2 || U.length < 2 || r.units.some(i => M[i].kind === 'cb')) return;
+      const H = i => M[i].bot - M[i].top;
+      const fits = lim => {
+        let col = 0, yy = null, res = [];
+        for (const i of r.units) {
+          let t = yy === null ? r.top : yy + (M[i].top - prevOf(i));
+          if (yy !== null && t + H(i) > r.top + lim + 0.5 && M[i].kind !== 'sect') { col++; t = r.top; }
+          res.push([i, t, col]); yy = t + H(i);
+        }
+        return col < r.cols.length ? res : null;
+      };
+      const prevOf = i => (i > 0 ? M[i - 1].bot : M[i].top);
+      let lo = Math.max(...U.map(H)), hi = r.bot - r.top;
+      if (!fits(hi)) return;
+      for (let k = 0; k < 18; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
+      const res = fits(hi);
+      let maxB = r.top;
+      for (const [i, t, col] of res) { place[i] = { ...place[i], t, c: col }; maxB = Math.max(maxB, t + H(i)); }
+      return maxB;
+    };
+
+    for (let i = 0; i < units.length; i++) {
+      if (++guard > units.length * 6 + 100) break;   // sécurité
+      const u = units[i], m = M[i], h = m.bot - m.top, e = u.el;
+      snaps[i] = { p, c, y, prevBot, force, curSi, pages: pages.length, regs: regions.length, reg, regUnits: reg.units.length };
+      // --- changement de section ---
+      if (u.si !== curSi) {
+        const s = secs[u.si], old = pages[p];
+        const type = s.type || 'nextPage';
+        const sameSize = Math.abs(s.w - old.w) < 1 && Math.abs(s.h - old.h) < 1;
+        let endY = y === null ? reg.top : y;
+        if (reg.cols.length > 1) { const b = balance(reg); if (b != null) endY = b; }
+        if (type === 'continuous' && sameSize && force !== 'page') {
+          const startY = (y === null && reg.units.length === 0) ? reg.top : endY + (m.top - prevBot);
+          if (startY >= cBot(p) - 1) goNextPage(u.si);
+          else { reg = newRegion(p, u.si, startY); c = 0; y = startY - (m.top - prevBot); if (reg.top <= cTop(p) + 0.5) y = null; }
+        } else {
+          goNextPage(u.si);
+          const num = pages.length; // numéro (1-based) de la nouvelle page
+          if ((type === 'evenPage' && num % 2 === 1) || (type === 'oddPage' && num % 2 === 0)) goNextPage(u.si);
+        }
+        force = null;
+        curSi = u.si;
+      }
+      // --- sauts imposés ---
+      if (force === 'page') { goNextPage(u.si); force = null; }
+      else if (force === 'col') { goNextCol(u.si); force = null; }
+      if (e.dataset && e.dataset.pbb === '1' && i > 0 && !(y === null && c === 0)) goNextPage(u.si);
+      if (place[i] && place[i].moved && !(y === null && c === 0)) goNextPage(u.si);   // ramené par « paragraphes solidaires »
+
+      const isBreak = m.kind === 'sect' || m.kind === 'pb' || m.kind === 'cb';
+      const colTop = () => reg.top;
+      let t = (i === 0) ? m.top : (y === null ? colTop() : y + (m.top - prevBot));
+      if (i === 0 && y === null) t = Math.max(m.top, reg.top);
+      let jumps = null;
+      if (!isBreak) {
+        let tries = 0;
+        for (; ;) {
+          if (++tries > 400) break;
+          const bot = reg.bot, atTop = y === null;
+          if (!atTop && t >= bot - 1) { goNextCol(u.si); t = colTop(); continue; }
+          if (t + h <= bot + 1) break;           // tient dans la colonne
+          // --- ne tient pas ---
+          const single = reg.cols.length === 1;
+          const keepL = e.dataset.keeplines === '1' && h <= (bot - colTop()) + 1;
+          if (single && m.kind === 'blk' && !keepL) {
+            const r = this._splitLines(linesOf(i), t - m.top, m, atTop, e.dataset.widow !== '0', () => { const before = pages.length; goNextPage(u.si); return { top: colTop(), bot: reg.bot, created: pages.length > before }; }, bot);
+            if (r) { jumps = r; break; }
+          } else if (single && m.kind === 'table') {
+            const r = this._splitRows(e, er, z, t - m.top, atTop, () => { goNextPage(u.si); return { top: colTop(), bot: reg.bot }; }, bot);
+            if (r) { jumps = r; break; }
+          }
+          if (atTop) break;                      // plus grand qu'une page : on le laisse dépasser
+          // solidaire avec le suivant : on emmène les paragraphes « keepNext » précédents
+          if (reg.cols.length === 1 && i > 0 && c === 0) {
+            let j = i - 1;
+            while (j >= 0 && place[j] && place[j].p === p && keepNext(units[j].el) && !['sect', 'pb', 'cb'].includes(M[j].kind) && units[j].si === u.si) j--;
+            const s = j + 1;
+            if (s < i && snaps[s] && !place[s].moved && place[s].t > cTop(p) + 2 && (M[i - 1].bot - M[s].top) + Math.min(h, 40) < (cBot(p) - cTop(p))) {
+              // retour en arrière : la chaîne commence la page suivante
+              const sn = snaps[s];
+              pages.length = sn.pages; regions.length = sn.regs;
+              ({ p, c, y, prevBot, force, curSi } = sn); reg = sn.reg; reg.units.length = sn.regUnits;
+              for (let k = s; k < i; k++) place[k] = null;
+              place[s] = { moved: true };
+              i = s - 1;
+              t = NaN;
+              break;
+            }
+          }
+          goNextCol(u.si); t = colTop();
+        }
+        if (Number.isNaN(t)) continue;
+      }
+      let extra = 0;
+      if (jumps) for (const j of jumps) extra += j.h;
+      place[i] = { t, c, p, jumps, moved: !!(place[i] && place[i].moved) };
+      reg.units.push(i);
+      y = t + h + extra; prevBot = m.bot;
+      if (m.kind === 'pb') force = 'page';
+      if (m.kind === 'cb') force = reg.cols.length > 1 ? 'col' : 'page';
+    }
+    // fin du document : saut final, section vide
+    if (force === 'page') goNextPage(curSi);
+    return { place, pages, regions };
+  },
+
+  /** Lignes d'un bloc (coordonnées mesurées) : [{top, bot, node, off, blk}] */
+  _lines(el, er, z) {
+    const Y = v => (v - er.top) / z;
+    const frags = [];
+    const BLK = /^(P|H[1-6]|LI|DIV|BLOCKQUOTE|PRE|TD|TH|UL|OL)$/;
+    const blkOf = n => { let x = n.nodeType === 1 ? n : n.parentElement; while (x && x !== el && !BLK.test(x.tagName)) x = x.parentElement; return x || el; };
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: n => {
+        if (n.nodeType === 3) return NodeFilter.FILTER_ACCEPT;
+        if (n.tagName === 'TABLE') return NodeFilter.FILTER_REJECT;
+        if (n.tagName === 'IMG' || n.tagName === 'BR' || (n.isContentEditable === false && n.getAttribute('contenteditable') === 'false') || n.classList.contains('pl-island')) return NodeFilter.FILTER_ACCEPT;
+        return NodeFilter.FILTER_SKIP;
+      }
+    });
+    const rg = document.createRange();
+    let n;
+    while ((n = w.nextNode())) {
+      if (n.nodeType === 1) {
+        if (n.tagName === 'IMG' && getComputedStyle(n).float !== 'none') continue;
+        const rs = Array.from(n.getClientRects()).filter(r => r.height > 0);
+        if (!rs.length) continue;
+        rs.forEach((r, k) => frags.push({ top: Y(r.top), bot: Y(r.bottom), node: k ? null : n, off: -1, blk: blkOf(n) }));
+        // éléments non éditables : pas de descente dans le contenu
+        if (n.firstChild) { let k = n; while (k.lastChild) k = k.lastChild; w.currentNode = k; }
+        continue;
+      }
+      if (!n.data.length) continue;
+      rg.selectNodeContents(n);
+      const rs = Array.from(rg.getClientRects()).filter(r => r.height > 0);
+      if (!rs.length) continue;
+      const blk = blkOf(n);
+      let lastTop = -1e9, lastBot = -1e9;
+      for (const r of rs) {
+        const top = Y(r.top), bot = Y(r.bottom);
+        if (frags.length && (top + bot) / 2 <= lastBot && top >= lastTop - 0.5) { lastBot = Math.max(lastBot, bot); continue; }
+        // début de ligne dans ce nœud : recherche dichotomique du premier caractère
+        let off = 0;
+        if (lastTop > -1e9) {
+          let lo = 0, hi = n.data.length - 1;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            rg.setStart(n, mid); rg.setEnd(n, mid + 1);
+            const cr = Array.from(rg.getClientRects()).filter(q => q.height > 0);
+            const ct = cr.length ? Y(cr[cr.length - 1].top) : lastTop;
+            if (ct >= top - 1) hi = mid; else lo = mid + 1;
+          }
+          off = lo;
+        }
+        frags.push({ top, bot, node: n, off, blk });
+        lastTop = top; lastBot = bot;
+      }
+    }
+    // regroupement en lignes
+    const lines = [];
+    for (const f of frags) {
+      const L = lines[lines.length - 1];
+      if (L && L.blk === f.blk && (f.top + f.bot) / 2 <= L.bot + 0.5) { L.top = Math.min(L.top, f.top); L.bot = Math.max(L.bot, f.bot); continue; }
+      lines.push({ top: f.top, bot: f.bot, node: f.node, off: f.off, blk: f.blk });
+    }
+    // limites des boîtes de ligne (interligne compris)
+    const box = new Map();
+    const contentBox = b => {
+      if (!box.has(b)) { const r = b.getBoundingClientRect(), cs = getComputedStyle(b); box.set(b, { top: Y(r.top) + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0), bot: Y(r.bottom) - (parseFloat(cs.borderBottomWidth) || 0) - (parseFloat(cs.paddingBottom) || 0) }); }
+      return box.get(b);
+    };
+    lines.forEach((L, k) => {
+      const prev = lines[k - 1], next = lines[k + 1];
+      L.boxTop = !prev || prev.blk !== L.blk ? Math.min(L.top, contentBox(L.blk).top) : (prev.bot + L.top) / 2;
+      L.boxBot = !next ? Math.max(L.bot, Math.min(contentBox(L.blk).bot, L.bot + (L.bot - L.top))) : next.blk !== L.blk ? Math.max(L.bot, Math.min(contentBox(L.blk).bot, next.top)) : (L.bot + next.top) / 2;
+    });
+    for (let k = 1; k < lines.length; k++) if (lines[k].blk !== lines[k - 1].blk && lines[k].boxTop < lines[k - 1].boxBot) lines[k].boxTop = lines[k - 1].boxBot;
+    return lines;
+  },
+
+  /** Coupe un paragraphe à la ligne : renvoie [{node, off, h}] ou null (à déplacer en entier) */
+  _splitLines(lines, off0, m, atTop, widow, nextPage, bot) {
+    const L = lines.length;
+    if (L < 2) return null;
+    const out = [];
+    let off = off0, start = 0, b = bot;
+    const minL = widow ? 2 : 1;
+    for (let guard = 0; guard < 500; guard++) {
+      if (m.bot + off <= b + 1) return out;
+      // nombre de lignes qui tiennent
+      let k = start;
+      while (k < L && lines[k].boxBot + off <= b + 1) k++;
+      let fit = k - start;
+      const rest = L - k;
+      const first = out.length === 0;
+      if (fit >= L - start) return out;                         // seul le bas (marges internes) dépasse
+      if (rest < minL) fit -= (minL - rest);                    // veuve
+      while (fit > 0 && !lines[start + fit].node) fit--;       // ligne sans point de coupe sûr
+      if (fit < (first && !atTop ? minL : 1)) {
+        if (first && !atTop) return null;                       // orpheline : paragraphe entier à la page suivante
+        fit = Math.max(1, k - start);                           // en tête de page : coupe forcée
+        while (fit < L - start && !lines[start + fit].node) fit++;
+        if (fit >= L - start) return out;
+      }
+      const ln = lines[start + fit];
+      const np = nextPage();
+      const h = np.top - (ln.boxTop + off);
+      if (h < 0) return out.length ? out : null;
+      out.push({ node: ln.node, off: ln.off, h, kind: 'line' });
+      off += h; start += fit; b = np.bot;
+    }
+    return out;
+  },
+
+  /** Coupe un tableau entre deux lignes : [{row, h, cols}] ou null */
+  _splitRows(T, er, z, off0, atTop, nextPage, bot) {
+    const rows = Array.from(T.rows).filter(r => !r.hasAttribute('data-pl-artifact'));
+    if (rows.length < 2) return null;
+    const Y = v => (v - er.top) / z;
+    const R = rows.map(r => { const b = r.getBoundingClientRect(); return { top: Y(b.top), bot: Y(b.bottom) }; });
+    // lignes interdites : traversées par une fusion verticale, ou en-têtes
+    const blocked = new Set();
+    rows.forEach((r, k) => { for (const c of r.cells) for (let s = 1; s < (c.rowSpan || 1); s++) blocked.add(k + s); });
+    let nHead = 0; while (nHead < rows.length && rows[nHead].dataset.header) nHead++;
+    let nCols = 1; for (const r of rows) { let n = 0; for (const c of r.cells) n += c.colSpan || 1; nCols = Math.max(nCols, n); }
+    const out = [];
+    let off = off0, start = 0, b = bot;
+    for (let guard = 0; guard < 500; guard++) {
+      if (R[R.length - 1].bot + off <= b + 1) return out.length ? out : null;
+      let k = start;
+      while (k < R.length && R[k].bot + off <= b + 1) k++;
+      while (k > start && (blocked.has(k) || k <= nHead - 1)) k--;
+      if (k <= start || (out.length === 0 && k <= nHead)) {
+        if (out.length === 0 && !atTop) return null;
+        k = start + 1; while (k < R.length && blocked.has(k)) k++;
+        if (k >= R.length) return out.length ? out : null;
+      }
+      const np = nextPage();
+      const h = np.top - (R[k].top + off);
+      if (h < 0) return out.length ? out : null;
+      out.push({ row: rows[k], h, cols: nCols, kind: 'row' });
+      off += h; start = k; b = np.bot;
+    }
+    return out;
+  },
+
+  /** Insère un artefact de saut (ligne de paragraphe ou rangée de tableau) */
+  _insertJump(j) {
+    if (j.kind === 'row') {
+      const tr = document.createElement('tr');
+      tr.className = 'pl-pgjump'; tr.setAttribute('data-pl-artifact', ''); tr.setAttribute('contenteditable', 'false');
+      const td = document.createElement('td');
+      td.colSpan = j.cols; td.style.cssText = `height:${j.h.toFixed(2)}px;padding:0;border:0;background:transparent`;
+      tr.append(td);
+      j.row.before(tr);
+      return;
+    }
+    const sp = document.createElement('span');
+    sp.className = 'pl-pgjump'; sp.setAttribute('contenteditable', 'false'); sp.setAttribute('data-pl-artifact', '');
+    sp.style.height = j.h.toFixed(2) + 'px';
+    let n = j.node;
+    if (!n.isConnected) return;
+    if (n.nodeType === 3 && j.off > 0) { if (j.off >= n.length) return; n = n.splitText(j.off); }
+    n.parentNode.insertBefore(sp, n);
+  },
+
+  /** Marge haute à poser pour déplacer un bloc de delta (fusion des marges comprise) */
+  _marginFor(e, delta, top, er, z) {
+    const cs = getComputedStyle(e);
+    const own = parseFloat(cs.marginTop) || 0;
+    // marges adjacentes (sœur précédente, parents dont e est le premier enfant)
+    let pos = 0, n = e, prevBottom = null;
+    for (; ;) {
+      let prev = n.previousElementSibling;
+      while (prev && (prev.tagName === 'STYLE' || getComputedStyle(prev).display === 'none' || getComputedStyle(prev).position === 'absolute')) prev = prev.previousElementSibling;
+      if (prev) { pos = Math.max(pos, parseFloat(getComputedStyle(prev).marginBottom) || 0); prevBottom = (prev.getBoundingClientRect().bottom - er.top) / z; break; }
+      const par = n.parentElement;
+      if (!par || par === this.editor) { const ecs = getComputedStyle(this.editor); prevBottom = parseFloat(ecs.paddingTop) || 0; break; }
+      const pcs = getComputedStyle(par);
+      if ((parseFloat(pcs.paddingTop) || 0) > 0 || (parseFloat(pcs.borderTopWidth) || 0) > 0 || pcs.display === 'flow-root' || pcs.overflow !== 'visible') { prevBottom = (par.getBoundingClientRect().top - er.top) / z + (parseFloat(pcs.borderTopWidth) || 0) + (parseFloat(pcs.paddingTop) || 0); break; }
+      pos = Math.max(pos, parseFloat(pcs.marginTop) || 0);
+      n = par;
+    }
+    const g0 = top - prevBottom;
+    const g1 = g0 + delta;
+    return g1 >= pos ? g1 : g1 - pos;
+  },
+
+  /** Page (0-based) d'une ordonnée de la feuille */
+  pageOfY(y) {
+    const pg = this.pages || this.defaultPages();
+    let lo = 0, hi = pg.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (pg[mid].y - GAP / 2 <= y) lo = mid; else hi = mid - 1; }
+    return lo;
+  },
   yInSheet(node) {
     const r = (node.nodeType === 1 ? node : node.parentElement).getBoundingClientRect();
     const s = this.sheet.getBoundingClientRect();
@@ -310,6 +890,13 @@ const Ed = {
     const s = this.sheet.getBoundingClientRect();
     return this.pageOfY((rect.top - s.top) / this.zoom);
   },
+  /** Géométrie de la page du curseur (règle, insertion) */
+  caretGeom() {
+    const pg = (this.pages || this.defaultPages())[this.caretPage()] || this.defaultPages()[0];
+    const s = this.curSect();
+    const c = this.colsOf(s);
+    return { x: pg.x, w: pg.w, ml: s.ml, mr: s.mr, cols: c };
+  },
 
   /** Notes de bas de page : numérotation + affichage en bas de chaque page */
   renderNotes() {
@@ -321,10 +908,12 @@ const Ed = {
       const p = this.pageOfY(this.yInSheet(f));
       (per[p] = per[p] || []).push({ n, f });
     });
+    const pgs = this.pages || this.defaultPages();
     Array.from(this.pagesLayer.children).forEach((card, i) => {
       const box = card.querySelector('.pnotes');
       const list = per[i] || [];
-      Object.assign(box.style, { left: this.page.ml + 'px', right: this.page.mr + 'px', top: (this.page.h - this.page.mb + 4) + 'px', fontSize: '9pt', fontFamily: 'var(--doc-font)', zIndex: 3, color: '#222', lineHeight: 1.25 });
+      const pg = pgs[i] || pgs[0];
+      Object.assign(box.style, { left: pg.ml + 'px', right: pg.mr + 'px', top: (pg.h - pg.mb + 4) + 'px', fontSize: '9pt', fontFamily: 'var(--doc-font)', zIndex: 3, color: '#222', lineHeight: 1.25 });
       box.innerHTML = '';
       if (!list.length) return;
       box.append(el('div', { style: 'width:4cm;border-top:1px solid #555;margin-bottom:3px' }));
@@ -349,7 +938,7 @@ const Ed = {
      ===================================================================== */
   history: [], hIndex: -1,
   snapshot() {
-    return { html: this.editor.innerHTML, header: this.headerHTML, footer: this.footerHTML, sel: this.saveSel() };
+    return { html: this.cleanHTML(), header: this.headerHTML, footer: this.footerHTML, sel: this.saveSel() };
   },
   commit() {
     clearTimeout(this._typingTimer); this._typingTimer = null;
@@ -393,15 +982,34 @@ const Ed = {
 
   /* ---------- Sélection : chemins de nœuds ---------- */
   range() { const s = getSelection(); return s.rangeCount ? s.getRangeAt(0) : null; },
+  /** Chemin « propre » d'un nœud : sans artefacts, nœuds texte adjacents fusionnés (comme après innerHTML) */
   pathOf(node) {
     const p = [];
     while (node && node !== this.editor) {
       const par = node.parentNode;
       if (!par) return null;
-      p.unshift(Array.prototype.indexOf.call(par.childNodes, node));
+      p.unshift(this._cleanCount(par, node, Infinity));
       node = par;
     }
     return node === this.editor ? p : null;
+  },
+  /** Index propre de « node » dans par (ou nombre d'enfants propres avant la position lim) */
+  _cleanCount(par, node, lim) {
+    let i = -1, prevText = false, j = 0;
+    for (const c of par.childNodes) {
+      if (j++ >= lim) break;
+      const skip = (c.nodeType === 1 && c.hasAttribute('data-pl-artifact')) || (c.nodeType === 3 && !c.length);
+      if (!skip) { const t = c.nodeType === 3; if (!(t && prevText)) i++; prevText = t; }
+      if (c === node) return Math.max(0, i);
+    }
+    return node ? Math.max(0, i) : i + 1;
+  },
+  _cleanPoint(n, o) {
+    if (n.nodeType === 3) {
+      for (let x = n.previousSibling; x && ((x.nodeType === 1 && x.hasAttribute('data-pl-artifact')) || x.nodeType === 3); x = x.previousSibling) if (x.nodeType === 3) o += x.length;
+      return [this.pathOf(n), o];
+    }
+    return [this.pathOf(n), this._cleanCount(n, null, o)];
   },
   nodeAt(path) {
     let n = this.editor;
@@ -411,8 +1019,8 @@ const Ed = {
   saveSel() {
     const r = this.lastRange;
     if (!r || !this.editor.contains(r.startContainer)) return null;
-    const a = this.pathOf(r.startContainer), b = this.pathOf(r.endContainer);
-    return a && b ? { a, ao: r.startOffset, b, bo: r.endOffset } : null;
+    const [a, ao] = this._cleanPoint(r.startContainer, r.startOffset), [b, bo] = this._cleanPoint(r.endContainer, r.endOffset);
+    return a && b ? { a, ao, b, bo } : null;
   },
   restoreSel(s) {
     if (!s) return;
@@ -654,7 +1262,44 @@ const Ed = {
     document.execCommand('insertHTML', false, '<hr class="pl-pagebreak" contenteditable="false"><p><br></p>');
     this.afterCmd();
   },
-  contentWidth() { return this.page.w - this.page.ml - this.page.mr; },
+  columnBreak() {
+    this.focus();
+    document.execCommand('insertHTML', false, '<hr class="pl-colbreak" contenteditable="false"><p><br></p>');
+    this.afterCmd();
+  },
+  /** Saut de section au curseur : type = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' */
+  sectionBreak(type = 'nextPage') {
+    this.focus();
+    const i = this.curSectIndex();
+    const data = JSON.parse(JSON.stringify(this.sections()[i]));
+    delete data.first;
+    const id = 'sb' + uid();
+    document.execCommand('insertHTML', false, `<hr class="pl-section" contenteditable="false" data-new="${id}" data-sect="${htmlEsc(JSON.stringify(data))}"><p><br></p>`);
+    const hr = this.editor.querySelector(`hr[data-new="${id}"]`);
+    if (hr) {
+      hr.removeAttribute('data-new');
+      // un marqueur de section est toujours au premier niveau
+      if (hr.parentElement !== this.editor) { let t = hr; while (t.parentElement !== this.editor) t = t.parentElement; t.after(hr); if (!hr.nextElementSibling) hr.after(el('p', { html: '<br>' })); }
+      this.updateSect(this.sectIndexOf(hr) + 1, s => { s.type = type; });
+    }
+    this.afterCmd();
+  },
+  /** Colonnes de la section du curseur : '1' | '2' | '3' | 'left' | 'right' */
+  setColumns(kind) {
+    const i = this.curSectIndex();
+    this.updateSect(i, s => {
+      const sp = U.cmToPx(1.25), cw = s.w - s.ml - s.mr, sep = !!(s.cols && s.cols.sep);
+      if (kind === '1') s.cols = { n: 1 };
+      else if (kind === '2' || kind === '3') s.cols = { n: +kind, space: sp, eq: true, sep };
+      else {
+        const a = (cw - sp) / 3, b = cw - sp - a;
+        s.cols = { n: 2, space: sp, eq: false, sep, list: kind === 'left' ? [{ w: a, space: sp }, { w: b }] : [{ w: b, space: sp }, { w: a }] };
+      }
+    });
+    this.changed(false);
+  },
+  toggleColSep() { this.updateSect(this.curSectIndex(), s => { s.cols = Object.assign({ n: 1 }, s.cols, { sep: !(s.cols && s.cols.sep) }); }); this.changed(false); },
+  contentWidth() { const s = this.curSect(); return this.colsOf(s)[0].w; },
   insertTable(rows, cols) {
     const w = Math.floor(this.contentWidth() / cols);
     let h = `<table data-borders="all" style="width:${w * cols}px"><colgroup>${`<col style="width:${w}px">`.repeat(cols)}</colgroup><tbody>`;
@@ -884,6 +1529,12 @@ const Ed = {
 
   /* ---------- Clavier ---------- */
   onKeyDown(e) {
+    // Effacement près d'un saut de page en milieu de paragraphe : on retire d'abord les artefacts
+    if ((e.key === 'Backspace' || e.key === 'Delete') && this.editor.querySelector('span[data-pl-artifact]')) {
+      const r = this.range();
+      const b = r && (r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement).closest('p,h1,h2,h3,h4,h5,h6,li,blockquote,pre,div,td');
+      if (!r || !r.collapsed || (b && b.querySelector('span[data-pl-artifact]'))) { this.stripArtifacts(); this.relayout(); }
+    }
     // Tabulation : insère une tabulation (ou change de niveau dans une liste / cellule suivante)
     if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) {
       const c = this.cellCtx();
@@ -1001,7 +1652,7 @@ const Ed = {
     return {
       words, chars: text.replace(/\n/g, '').length, charsNoSpace: text.replace(/\s/g, '').length,
       paras: $$('p,h1,h2,h3,h4,h5,h6,li', this.editor).filter(p => p.textContent.trim()).length,
-      lines: text.split('\n').filter(l => l.trim()).length, pages: this.pageCount
+      lines: Math.max(0, text.split('\n').filter(l => l.trim()).length - this.editor.querySelectorAll('span[data-pl-artifact]').length), pages: this.pageCount
     };
   },
   selectionWords() {
@@ -1026,6 +1677,7 @@ const Sanitize = {
       for (const c of Array.from(node.childNodes)) {
         if (c.nodeType === 8) { c.remove(); continue; }
         if (c.nodeType !== 1) continue;
+        if (c.hasAttribute('data-pl-artifact')) { c.remove(); continue; }
         const tag = c.tagName;
         if (['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'XML', 'O:P', 'IFRAME', 'OBJECT', 'EMBED', 'FORM', 'INPUT', 'BUTTON', 'SVG', 'MATH'].includes(tag) || tag.includes(':')) {
           if (tag === 'O:P' || tag.includes(':')) c.replaceWith(...c.childNodes); else c.remove();
@@ -1046,7 +1698,7 @@ const Sanitize = {
             if (!/^(data:image\/|blob:|https?:)/i.test(a.value)) c.remove();
           } else if (['colspan', 'rowspan', 'start', 'alt', 'width', 'height'].includes(n)) { /* conservé */ }
           else if (n === 'class' && /^(pl-|title$|subtitle$)/.test(a.value)) { /* classes Plume */ }
-          else if (/^data-(borders|field|note|x|own|kind|part|cid|author|date|text|initials|pstyle|numid|tblstyle|look|tbdr|band)$/.test(n) || n === 'contenteditable' || n === 'id') { /* conservé */ }
+          else if (/^data-(borders|field|note|x|own|kind|part|cid|author|date|text|initials|pstyle|numid|tblstyle|look|tbdr|band|sect|keepnext|keeplines|widow|pbb)$/.test(n) || n === 'contenteditable' || n === 'id') { /* conservé */ }
           else c.removeAttribute(a.name);
         }
         if (tag === 'FONT') {

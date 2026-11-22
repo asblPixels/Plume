@@ -458,11 +458,21 @@ const Rtf = (() => {
     };
     const block = (e, inCell) => {
       const t = e.tagName;
-      if (t === 'HR') { if (e.classList.contains('pl-pagebreak')) { pageBreakNext = true; return ''; } return '\\pard\\brdrb\\brdrs\\brdrw10\\brsp20 \\par\n'; }
+      if (t === 'HR') {
+        if (e.classList.contains('pl-pagebreak')) { pageBreakNext = true; return ''; }
+        if (e.classList.contains('pl-colbreak')) return '';
+        if (e.classList.contains('pl-section')) {
+          // section suivante : nouvelle page sauf saut continu
+          const nx = Array.from(e.parentNode.children).slice(Array.from(e.parentNode.children).indexOf(e) + 1).find(x => x.matches && x.matches('hr.pl-section'));
+          let ty = 'nextPage'; try { ty = nx ? JSON.parse(nx.dataset.sect || '{}').type || 'nextPage' : (window.Ed ? Ed.page.type || 'nextPage' : 'nextPage'); } catch { }
+          if (ty !== 'continuous') pageBreakNext = true;
+          return '';
+        }
+        return '\\pard\\brdrb\\brdrs\\brdrw10\\brsp20 \\par\n'; }
       if (t === 'TABLE') return table(e);
       if (t === 'UL' || t === 'OL') return list(e, 0);
       if (Array.from(e.children).some(isBlock)) return blocks(e, inCell);
-      const pb = pageBreakNext ? '\\pagebb' : ''; pageBreakNext = false;
+      const pb = pageBreakNext || (e.dataset && e.dataset.pbb === '1') ? '\\pagebb' : ''; pageBreakNext = false;
       return paraProps(e, (inCell ? '\\intbl' : '') + pb) + ' ' + runs(Array.from(e.childNodes), e) + (inCell ? '' : '\\par\n');
     };
     const list = (L, level) => {

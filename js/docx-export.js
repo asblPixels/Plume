@@ -306,6 +306,13 @@ const DocxExport = (() => {
       const t = e.tagName;
       if (t === 'HR') {
         if (e.classList.contains('pl-pagebreak')) return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+        if (e.classList.contains('pl-colbreak')) return '<w:p><w:r><w:br w:type="column"/></w:r></w:p>';
+        if (e.classList.contains('pl-section')) {
+          // fin de section : w:sectPr dans le dernier paragraphe de la section (ou un paragraphe dédié)
+          const k = markers.indexOf(e);
+          if (k < 0) return '';
+          return `\u0002M${k}\u0002`;   // remplacé après coup (voir « sectPr intermédiaires »)
+        }
         return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr></w:pPr></w:p>';
       }
       if (t === 'TABLE') return table(e, part);
@@ -369,6 +376,12 @@ const DocxExport = (() => {
       const me = readBlock(blockEl);
       const ppr = [];
       if (styleId !== 'Normal') ppr.push(`<w:pStyle w:val="${styleId}"/>`);
+      // enchaînements (paragraphes / lignes solidaires, saut de page avant, veuves et orphelines)
+      const ds = blockEl && blockEl.dataset ? blockEl.dataset : {};
+      if (ds.keepnext === '1') ppr.push('<w:keepNext/>'); else if (ds.keepnext === '0') ppr.push('<w:keepNext w:val="0"/>');
+      if (ds.keeplines === '1') ppr.push('<w:keepLines/>');
+      if (ds.pbb === '1') ppr.push('<w:pageBreakBefore/>');
+      if (ds.widow === '0') ppr.push('<w:widowControl w:val="0"/>');
       if (numPrXml) ppr.push(numPrXml);
       const pBdr = me.borders.filter(x => !b.borders.some(y => y.side === x.side));
       if (pBdr.length && !blockIsParent) ppr.push('<w:pBdr>' + pBdr.map(x => `<w:${x.side} w:val="single" w:sz="${x.sz}" w:space="${x.pad}" w:color="${x.color.slice(1)}"/>`).join('') + '</w:pBdr>');
@@ -395,6 +408,7 @@ const DocxExport = (() => {
       }
       const markR = rPrXml({ ...me, strike: false, u: false, hl: null, vert: null }, b, markRev);
       if (markR) ppr.push(markR);
+      if (sectLeaf.has(blockEl)) ppr.push(sectTok(sectLeaf.get(blockEl)));
       return `<w:p>${ppr.length ? `<w:pPr>${ppr.join('')}</w:pPr>` : ''}${runs(nodes, blockEl, b, part)}</w:p>`;
     }
 
@@ -662,6 +676,28 @@ const DocxExport = (() => {
       return x;
     }
 
+    /* ---------- Sections ---------- */
+    const markers = Array.from(editor.children).filter(e => e.tagName === 'HR' && e.classList.contains('pl-section'));
+    const sectData = markers.map(m => { try { return JSON.parse(m.dataset.sect || '{}'); } catch { return {}; } });
+    const sectTok = k => `\u0001S${k}\u0001`;
+    /** Dernier élément sérialisé en paragraphe avant un marqueur */
+    const lastLeaf = e => {
+      if (!e) return null;
+      const t = e.tagName;
+      if (t === 'UL' || t === 'OL') return lastLeaf(e.lastElementChild);
+      if (t === 'LI') {
+        const l = e.lastElementChild;
+        const tail = Array.from(e.childNodes).filter(n => n.nodeType === 1 || n.textContent.trim()).pop();
+        if (l && l === tail && (l.tagName === 'UL' || l.tagName === 'OL' || (isBlock(l) && l.tagName !== 'TABLE'))) return lastLeaf(l);
+        return e;
+      }
+      if (t === 'TABLE' || t === 'HR' || e.classList.contains('pl-toc') || e.classList.contains('pl-notes')) return null;
+      if (Array.from(e.children).some(isBlock)) return isBlock(e.lastElementChild) ? lastLeaf(e.lastElementChild) : null;
+      return isBlock(e) ? e : null;
+    };
+    const sectLeaf = new Map();
+    markers.forEach((m, k) => { const l = lastLeaf(m.previousElementSibling); if (l && !sectLeaf.has(l)) sectLeaf.set(l, k); });
+
     /* ---------- Parties ---------- */
     const mainPart = makePart('word/document.xml');
     let bodyXml = blocks(editor, mainPart);
@@ -670,28 +706,55 @@ const DocxExport = (() => {
     const headerXml = hasHF(headerEl) ? blocks(headerEl, hdrPart) || '<w:p/>' : null;
     const footerXml = hasHF(footerEl) ? blocks(footerEl, ftrPart) || '<w:p/>' : null;
 
-    // Section
-    const landscape = page.w > page.h;
-    let sect = '<w:sectPr>';
-    if (headerXml) sect += `<w:headerReference w:type="default" r:id="${mainPart.addRel(REL + '/header', 'plume-header.xml')}"/>`;
-    if (footerXml) sect += `<w:footerReference w:type="default" r:id="${mainPart.addRel(REL + '/footer', 'plume-footer.xml')}"/>`;
-    sect += `<w:pgSz w:w="${twip(page.w)}" w:h="${twip(page.h)}"${landscape ? ' w:orient="landscape"' : ''}/>`;
-    sect += `<w:pgMar w:top="${twip(page.mt)}" w:right="${twip(page.mr)}" w:bottom="${twip(page.mb)}" w:left="${twip(page.ml)}" w:header="${twip(page.mh)}" w:footer="${twip(page.mf)}" w:gutter="0"/>`;
-    // références d'en-têtes supplémentaires (première page, paires) recopiées
-    let extraRefs = '';
-    for (const x of (page.hfExtra || [])) {
-      if (!src || !src.file(x.part)) continue;
-      await copyPart(x.part);
-      extraRefs += `<${x.tag} w:type="${x.type}" r:id="${mainPart.addRel(REL + (x.tag === 'w:headerReference' ? '/header' : '/footer'), relTarget('word/document.xml', x.part))}"/>`;
-    }
-    const ORDER_BEFORE = ['w:footnotePr', 'w:endnotePr', 'w:type'];
-    const extras = page.sectExtra || [];
+    // Sections : propriétés modélisées (taille, orientation, marges, colonnes, type) + éléments conservés
+    const hdrRef = headerXml ? `<w:headerReference w:type="default" r:id="${mainPart.addRel(REL + '/header', 'plume-header.xml')}"/>` : '';
+    const ftrRef = footerXml ? `<w:footerReference w:type="default" r:id="${mainPart.addRel(REL + '/footer', 'plume-footer.xml')}"/>` : '';
+    for (const sd of [...sectData, page]) for (const x of (sd.hfExtra || [])) if (src && src.file(x.part)) await copyPart(x.part);
+    const ORDER = ['w:footnotePr', 'w:endnotePr', 'w:type', 'w:pgSz', 'w:pgMar', 'w:paperSrc', 'w:pgBorders', 'w:lnNumType', 'w:pgNumType', 'w:cols', 'w:formProt', 'w:vAlign', 'w:noEndnote', 'w:titlePg', 'w:textDirection', 'w:bidi', 'w:rtlGutter', 'w:docGrid', 'w:printerSettings'];
     const nameOf = x => (x.match(/^<([\w:]+)/) || [])[1];
     const strip = x => x.replace(/\sxmlns(:\w+)?="[^"]*"/g, '');
-    const before = extras.filter(x => ORDER_BEFORE.includes(nameOf(x))).map(strip).join('');
-    const after = extras.filter(x => !ORDER_BEFORE.includes(nameOf(x))).map(strip).join('');
-    sect = sect.replace('<w:pgSz', extraRefs + before + '<w:pgSz');
-    sect += (after || '<w:cols w:space="708"/><w:docGrid w:linePitch="360"/>') + '</w:sectPr>';
+    function sectXml(sd) {
+      const parts = [];   // [ordre, xml]
+      const P = { w: 794, h: 1123, mt: 94.5, mr: 94.5, mb: 94.5, ml: 94.5, mh: 47, mf: 47, ...sd };
+      const land = P.w > P.h;
+      parts.push([3, `<w:pgSz w:w="${twip(P.w)}" w:h="${twip(P.h)}"${land ? ' w:orient="landscape"' : ''}/>`]);
+      parts.push([4, `<w:pgMar w:top="${twip(P.mt)}" w:right="${twip(P.mr)}" w:bottom="${twip(P.mb)}" w:left="${twip(P.ml)}" w:header="${twip(P.mh)}" w:footer="${twip(P.mf)}" w:gutter="0"/>`]);
+      if (P.type && P.type !== 'nextPage') parts.push([2, `<w:type w:val="${xmlEsc(P.type)}"/>`]);
+      const c = P.cols;
+      if (c) {
+        const n = Math.max(1, c.n | 0 || 1), sp = twip(c.space != null ? c.space : U.cmToPx(1.25));
+        if (n === 1) parts.push([9, `<w:cols w:space="${sp}"/>`]);
+        else if (c.eq === false && Array.isArray(c.list) && c.list.length >= n) parts.push([9, `<w:cols w:num="${n}" w:space="${sp}"${c.sep ? ' w:sep="1"' : ''} w:equalWidth="0">${c.list.slice(0, n).map((k, j) => `<w:col w:w="${twip(k.w)}"${j < n - 1 ? ` w:space="${twip(k.space || 0)}"` : ''}/>`).join('')}</w:cols>`]);
+        else parts.push([9, `<w:cols w:num="${n}" w:space="${sp}"${c.sep ? ' w:sep="1"' : ''}/>`]);
+      }
+      const extras = P.sectExtra || [];
+      for (const x of extras) {
+        const nm = nameOf(x);
+        if (nm === 'w:cols' && c) continue;           // désormais modélisé
+        if (nm === 'w:type' && P.type) continue;
+        const o = ORDER.indexOf(nm);
+        parts.push([o < 0 ? 17.5 : o, strip(x)]);
+      }
+      if (!parts.some(p => p[0] === 9)) parts.push([9, '<w:cols w:space="708"/>']);
+      if (!extras.length) parts.push([17, '<w:docGrid w:linePitch="360"/>']);
+      parts.sort((a, b) => a[0] - b[0]);
+      let refs = hdrRef + ftrRef;
+      for (const x of (P.hfExtra || [])) {
+        if (!src || !src.file(x.part)) continue;
+        refs += `<${x.tag} w:type="${x.type}" r:id="${mainPart.addRel(REL + (x.tag === 'w:headerReference' ? '/header' : '/footer'), relTarget('word/document.xml', x.part))}"/>`;
+      }
+      return `<w:sectPr>${refs}${parts.map(p => p[1]).join('')}</w:sectPr>`;
+    }
+    // sectPr intermédiaires : dans le DERNIER paragraphe portant le jeton de la section
+    sectData.forEach((sd, k) => {
+      const tok = sectTok(k), ph = `\u0002M${k}\u0002`;
+      const last = bodyXml.lastIndexOf(tok);
+      if (last < 0) { bodyXml = bodyXml.replace(ph, `<w:p><w:pPr>${sectXml(sd)}</w:pPr></w:p>`); return; }
+      bodyXml = bodyXml.slice(0, last).split(tok).join('') + sectXml(sd) + bodyXml.slice(last + tok.length);
+      bodyXml = bodyXml.replace(ph, '');
+    });
+    bodyXml = bodyXml.replace(/[\u0001\u0002][SM]\d+[\u0001\u0002]/g, '');
+    const sect = sectXml(page);
     if (!bodyXml) bodyXml = '<w:p/>';
 
     const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS} ${IGNORABLE}><w:body>${bodyXml}${sect}</w:body></w:document>`;

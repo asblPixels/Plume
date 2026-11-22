@@ -539,7 +539,7 @@ const Odt = (() => {
     const fontsUsed = new Set([settings && settings.fontCss ? settings.fontCss.split(',')[0].replace(/["']/g, '').trim() : 'Calibri']);
     Object.values(base).forEach(b => fontsUsed.add(b.font));
 
-    const pStyle = (e, named, extra = '') => {
+    const pStyle = (e, named, extra = '', master = '') => {
       const me = read(e), b = base[named];
       const pa = [];
       if (me.align !== b.align) pa.push(`fo:text-align="${me.align}"`);
@@ -553,9 +553,9 @@ const Odt = (() => {
       if (extra) pa.push(extra);
       const ta = textProps({ ...me, u: false, s: false, hl: null, pos: null }, b);
       fontsUsed.add(me.font);
-      if (!pa.length && !ta) return named;
-      const key = named + '|' + pa.join(' ') + '|' + ta;
-      if (!autoP.has(key)) autoP.set(key, { name: 'P' + (autoP.size + 1), xml: `<style:style style:name="P${autoP.size + 1}" style:family="paragraph" style:parent-style-name="${named}">${pa.length ? `<style:paragraph-properties ${pa.join(' ')}/>` : ''}${ta ? `<style:text-properties ${ta}/>` : ''}</style:style>` });
+      if (!pa.length && !ta && !master) return named;
+      const key = named + '|' + pa.join(' ') + '|' + ta + '|' + master;
+      if (!autoP.has(key)) autoP.set(key, { name: 'P' + (autoP.size + 1), xml: `<style:style style:name="P${autoP.size + 1}" style:family="paragraph" style:parent-style-name="${named}"${master ? ` style:master-page-name="${master}"` : ''}>${pa.length ? `<style:paragraph-properties ${pa.join(' ')}/>` : ''}${ta ? `<style:text-properties ${ta}/>` : ''}</style:style>` });
       return autoP.get(key).name;
     };
     const tStyle = (node, blockEl, b) => {
@@ -685,10 +685,16 @@ const Odt = (() => {
       return out;
     }
     let breakNext = false;
+    // sections : une page maîtresse par section (taille, orientation, marges, colonnes)
+    const markers = Array.from(editor.children).filter(e => e.tagName === 'HR' && e.classList.contains('pl-section'));
+    const secs = [...markers.map(m => { try { return Object.assign({}, page, { cols: null, type: null }, JSON.parse(m.dataset.sect || '{}')); } catch { return page; } }), page];
+    let pendingMaster = secs.length > 1 ? 'MP0' : '';
     function block(e) {
       const t = e.tagName;
       if (t === 'HR') {
-        if (e.classList.contains('pl-pagebreak')) { breakNext = true; return ''; }
+        if (e.classList.contains('pl-pagebreak')) { breakNext = 'page'; return ''; }
+        if (e.classList.contains('pl-colbreak')) { breakNext = 'column'; return ''; }
+        if (e.classList.contains('pl-section')) { pendingMaster = 'MP' + (markers.indexOf(e) + 1); return ''; }
         return `<text:p text:style-name="${ensureOther('Hr', '<style:style style:name="Hr" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:border-bottom="0.5pt solid #000000" fo:padding="0cm"/></style:style>')}"/>`;
       }
       if (t === 'TABLE') return table(e);
@@ -698,9 +704,12 @@ const Odt = (() => {
       }
       if (Array.from(e.children).some(isBlock)) return blocks(e);
       const named = styleName(e);
-      const extra = breakNext ? 'fo:break-before="page"' : '';
+      if (e.dataset.pbb === '1') breakNext = breakNext || 'page';
+      const keep = [e.dataset.keepnext === '1' ? 'fo:keep-with-next="always"' : '', e.dataset.keeplines === '1' ? 'fo:keep-together="always"' : '', e.dataset.widow === '0' ? 'fo:widows="0" fo:orphans="0"' : ''].filter(Boolean).join(' ');
+      const extra = [breakNext && !pendingMaster ? `fo:break-before="${breakNext}"` : '', keep].filter(Boolean).join(' ');
       breakNext = false;
-      const st = pStyle(e, named, extra);
+      const st = pStyle(e, named, extra, pendingMaster);
+      pendingMaster = '';
       const inner = runs(Array.from(e.childNodes), e, base[named]);
       if (/^Heading/.test(named)) return `<text:h text:style-name="${st}" text:outline-level="${named.slice(-1)}">${inner}</text:h>`;
       return `<text:p text:style-name="${st}">${inner}</text:p>`;
@@ -808,6 +817,7 @@ const Odt = (() => {
     }
 
     const bodyXml = blocks(editor) || '<text:p/>';
+    pendingMaster = ''; breakNext = false;
     const hdr = headerEl && headerEl.textContent.trim() ? blocks(headerEl) : '';
     const ftr = footerEl && (footerEl.textContent.trim() || footerEl.querySelector('.pl-field')) ? blocks(footerEl) : '';
 
@@ -829,9 +839,22 @@ const Odt = (() => {
       '<style:style style:name="Graphics" style:family="graphic"><style:graphic-properties text:anchor-type="as-char" svg:y="0cm" style:vertical-pos="top" style:vertical-rel="baseline"/></style:style>';
     const hh = hdr ? Math.max(0.5, U.pxToCm(page.mt - page.mh) - 0.5) : 0;
     const fh = ftr ? Math.max(0.5, U.pxToCm(page.mb - page.mf) - 0.5) : 0;
-    const layout = `<style:page-layout style:name="pm1"><style:page-layout-properties fo:page-width="${cm(page.w)}" fo:page-height="${cm(page.h)}" style:print-orientation="${page.w > page.h ? 'landscape' : 'portrait'}" fo:margin-top="${hdr ? cm(page.mh) : cm(page.mt)}" fo:margin-bottom="${ftr ? cm(page.mf) : cm(page.mb)}" fo:margin-left="${cm(page.ml)}" fo:margin-right="${cm(page.mr)}"/>` +
+    const colsXml = c => {
+      if (!c || !(c.n > 1)) return '';
+      const gap = cm(c.space != null ? c.space : U.cmToPx(1.25));
+      const sep = c.sep ? '<style:column-sep style:width="0.02cm" style:color="#000000" style:height="100%" style:style="solid"/>' : '';
+      if (c.eq === false && Array.isArray(c.list) && c.list.length >= c.n) {
+        const tot = c.list.slice(0, c.n).reduce((a, k) => a + k.w + (k.space || 0), 0) || 1;
+        return `<style:columns fo:column-count="${c.n}">${sep}${c.list.slice(0, c.n).map((k, j) => `<style:column style:rel-width="${Math.round((k.w + (k.space || 0)) / tot * 65535)}*" fo:start-indent="0cm" fo:end-indent="${j < c.n - 1 ? cm(k.space || 0) : '0cm'}"/>`).join('')}</style:columns>`;
+      }
+      return `<style:columns fo:column-count="${c.n}" fo:column-gap="${gap}">${sep}</style:columns>`;
+    };
+    const layoutOf = (name, P) => `<style:page-layout style:name="${name}"><style:page-layout-properties fo:page-width="${cm(P.w)}" fo:page-height="${cm(P.h)}" style:print-orientation="${P.w > P.h ? 'landscape' : 'portrait'}" fo:margin-top="${hdr ? cm(P.mh) : cm(P.mt)}" fo:margin-bottom="${ftr ? cm(P.mf) : cm(P.mb)}" fo:margin-left="${cm(P.ml)}" fo:margin-right="${cm(P.mr)}">${colsXml(P.cols)}</style:page-layout-properties>` +
       `<style:header-style>${hdr ? `<style:header-footer-properties fo:min-height="0cm" fo:margin-bottom="${hh.toFixed(3)}cm"/>` : ''}</style:header-style><style:footer-style>${ftr ? `<style:header-footer-properties fo:min-height="0cm" fo:margin-top="${fh.toFixed(3)}cm"/>` : ''}</style:footer-style></style:page-layout>`;
-    const stylesXml = `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-styles ${NSDECL} office:version="1.3">${fontDecls}<office:styles><style:default-style style:family="paragraph"><style:paragraph-properties style:tab-stop-distance="1.25cm"/><style:text-properties style:font-name="${xmlEsc(base.Standard.font)}" fo:font-size="${base.Standard.size}" fo:language="fr" fo:country="BE"/></style:default-style>${named}</office:styles><office:automatic-styles>${layout}</office:automatic-styles><office:master-styles><style:master-page style:name="Standard" style:page-layout-name="pm1">${hdr ? `<style:header>${hdr}</style:header>` : ''}${ftr ? `<style:footer>${ftr}</style:footer>` : ''}</style:master-page></office:master-styles></office:document-styles>`;
+    const layout = layoutOf('pm1', page) + (secs.length > 1 ? secs.map((P, i) => layoutOf('pmS' + i, P)).join('') : '');
+    const hfXml = `${hdr ? `<style:header>${hdr}</style:header>` : ''}${ftr ? `<style:footer>${ftr}</style:footer>` : ''}`;
+    const masters = secs.length > 1 ? secs.map((P, i) => `<style:master-page style:name="MP${i}" style:display-name="Section ${i + 1}" style:page-layout-name="pmS${i}">${hfXml}</style:master-page>`).join('') : '';
+    const stylesXml = `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-styles ${NSDECL} office:version="1.3">${fontDecls}<office:styles><style:default-style style:family="paragraph"><style:paragraph-properties style:tab-stop-distance="1.25cm"/><style:text-properties style:font-name="${xmlEsc(base.Standard.font)}" fo:font-size="${base.Standard.size}" fo:language="fr" fo:country="BE"/></style:default-style>${named}</office:styles><office:automatic-styles>${layout}</office:automatic-styles><office:master-styles><style:master-page style:name="Standard" style:page-layout-name="pm1">${hfXml}</style:master-page>${masters}</office:master-styles></office:document-styles>`;
     // les styles automatiques des en-têtes/pieds doivent être dans styles.xml : on y recopie les mêmes
     const stylesFinal = stylesXml.replace('<office:automatic-styles>', '<office:automatic-styles>' + (hdr || ftr ? auto : ''));
 

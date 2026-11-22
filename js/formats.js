@@ -236,10 +236,13 @@ const Formats = (() => {
     // pendant l'export, les couleurs d'affichage des révisions ne doivent pas être lues comme mise en forme
     const neutral = ['docx', 'odt', 'rtf', 'md', 'doc'].includes(format);
     if (neutral) document.body.classList.add('exporting-doc');
-    try { return await buildFormat(format, ctx); }
-    finally { if (neutral) document.body.classList.remove('exporting-doc'); }
+    try {
+      // exports : document « propre » (sans artefacts de pagination ni décalages d'affichage)
+      if (format !== 'pdf' && typeof Ed !== 'undefined' && ctx.editor === Ed.editor) return await Ed.withCleanDom(() => buildRaw(format, ctx));
+      return await buildRaw(format, ctx);
+    } finally { if (neutral) document.body.classList.remove('exporting-doc'); }
   }
-  async function buildFormat(format, ctx) {
+  async function buildRaw(format, ctx) {
     switch (format) {
       case 'docx': case 'docm': case 'dotx': case 'dotm': return DocxExport.exportDocx(ctx, { kind: format });
       case 'odt': return Odt.exportOdt(ctx);
@@ -272,7 +275,7 @@ const Formats = (() => {
     await loadScript('vendor/html2canvas.min.js');
     await loadScript('vendor/jspdf.umd.min.js');
     const { jsPDF } = window.jspdf;
-    const page = Ed.page, n = Ed.pageCount, P = page.h + GAP;
+    const pgs = Ed.pages || Ed.defaultPages(), n = pgs.length, page = pgs[0];
     const canvasEl = $('#canvas'), zoomBox = $('#zoomBox');
     const saved = { scroll: canvasEl.scrollTop, zoom: zoomBox.style.zoom, cls: document.body.className };
     // affichage « propre » : 100 %, sans marques d'édition ni surlignages
@@ -299,16 +302,19 @@ const Formats = (() => {
     try {
       for (let i = 0; i < n; i++) {
         onProgress && onProgress(i + 1, n);
-        copy.style.top = (-i * P) + 'px';
+        const pg = pgs[i];
+        // chaque page à sa taille (sections portrait / paysage)
+        stage.style.width = pg.w + 'px'; stage.style.height = pg.h + 'px';
+        copy.style.top = (-pg.y) + 'px'; copy.style.left = (-pg.x) + 'px';
         const canvas = await html2canvas(stage, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, scrollX: -window.scrollX, scrollY: -window.scrollY });
-        if (i > 0) pdf.addPage([pt(page.w), pt(page.h)], page.w > page.h ? 'landscape' : 'portrait');
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pt(page.w), pt(page.h), undefined, 'FAST');
+        if (i > 0) pdf.addPage([pt(pg.w), pt(pg.h)], pg.w > pg.h ? 'landscape' : 'portrait');
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pt(pg.w), pt(pg.h), undefined, 'FAST');
         // liens cliquables conservés
         const sr = stage.getBoundingClientRect();
         for (const a of copy.querySelectorAll('#editor a[href^="http"], #editor a[href^="mailto:"]')) {
           for (const rr of a.getClientRects()) {
             const top = rr.top - sr.top;
-            if (top < 0 || top > page.h || !rr.width) continue;
+            if (top < 0 || top > pg.h || !rr.width) continue;
             pdf.link(pt(rr.left - sr.left), pt(top), pt(rr.width), pt(rr.height), { url: a.href });
           }
         }

@@ -283,7 +283,8 @@ const Dialogs = {
     });
   },
   async pageSetup() {
-    const p = Ed.page, cm = v => U.pxToCm(v).toFixed(2);
+    const si = Ed.curSectIndex(), nS = Ed.sections().length;
+    const p = Ed.sections()[si], cm = v => U.pxToCm(v).toFixed(2);
     const n = (id, v) => el('input', { type: 'number', id, value: v, step: 0.01, min: 0 });
     const body = el('div', {}, [
       el('fieldset', {}, [el('legend', {}, ['Marges (cm)']),
@@ -291,11 +292,23 @@ const Dialogs = {
         el('div', { class: 'fld' }, [el('label', {}, ['Gauche']), n('ml', cm(p.ml))]), el('div', { class: 'fld' }, [el('label', {}, ['Droite']), n('mr', cm(p.mr))]),
         el('div', { class: 'fld' }, [el('label', {}, ['En-tête depuis le bord']), n('mh', cm(p.mh))]), el('div', { class: 'fld' }, [el('label', {}, ['Pied depuis le bord']), n('mf', cm(p.mf))])]),
       el('fieldset', {}, [el('legend', {}, ['Papier (cm)']),
-        el('div', { class: 'fld' }, [el('label', {}, ['Largeur']), n('pw', cm(p.w))]), el('div', { class: 'fld' }, [el('label', {}, ['Hauteur']), n('ph', cm(p.h))])])]);
+        el('div', { class: 'fld' }, [el('label', {}, ['Largeur']), n('pw', cm(p.w))]), el('div', { class: 'fld' }, [el('label', {}, ['Hauteur']), n('ph', cm(p.h))])]),
+      el('fieldset', {}, [el('legend', {}, ['Colonnes']),
+        el('div', { class: 'fld' }, [el('label', {}, ['Nombre']), el('input', { type: 'number', id: 'ncol', value: (p.cols && p.cols.n) || 1, min: 1, max: 6, step: 1 })]),
+        el('div', { class: 'fld' }, [el('label', {}, ['Espacement (cm)']), n('scol', cm(p.cols && p.cols.space != null ? p.cols.space : U.cmToPx(1.25)))]),
+        el('div', { class: 'fld' }, [el('label', {}, ['Ligne séparatrice']), el('input', { type: 'checkbox', id: 'sepcol', checked: !!(p.cols && p.cols.sep) })])]),
+      nS > 1 ? el('div', { class: 'fld' }, [el('label', {}, ['Appliquer à']), el('select', { id: 'applyTo' }, [el('option', { value: 'sect' }, [`Cette section (${si + 1} sur ${nS})`]), el('option', { value: 'all' }, ['Tout le document'])])]) : null]);
     const r = await dialog({ title: 'Mise en page', body, buttons: [{ label: 'Annuler', value: null }, { label: 'OK', primary: true, value: 'ok' }] });
     if (r !== 'ok') return;
     const g = id => U.cmToPx(parseFloat($('#' + id, body).value) || 0);
-    Object.assign(Ed.page, { mt: g('mt'), mb: g('mb'), ml: g('ml'), mr: g('mr'), mh: g('mh'), mf: g('mf'), w: Math.max(U.cmToPx(5), g('pw')), h: Math.max(U.cmToPx(5), g('ph')) });
+    const nc = Math.max(1, Math.min(6, parseInt($('#ncol', body).value, 10) || 1));
+    const apply = sp => {
+      Object.assign(sp, { mt: g('mt'), mb: g('mb'), ml: g('ml'), mr: g('mr'), mh: g('mh'), mf: g('mf'), w: Math.max(U.cmToPx(5), g('pw')), h: Math.max(U.cmToPx(5), g('ph')) });
+      const same = sp.cols && sp.cols.n === nc && sp.cols.eq === false;
+      sp.cols = same ? Object.assign(sp.cols, { space: g('scol'), sep: $('#sepcol', body).checked }) : { n: nc, space: g('scol'), eq: true, sep: $('#sepcol', body).checked };
+    };
+    const all = $('#applyTo', body) && $('#applyTo', body).value === 'all';
+    for (let k = 0; k < nS; k++) if (all || k === si) Ed.updateSect(k, apply);
     App.pageChanged();
   },
   async stats() {

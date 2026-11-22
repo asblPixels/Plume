@@ -128,7 +128,7 @@ const Markdown = (() => {
       if (t === 'P' || t === 'DIV' && !e.querySelector('p,h1,h2,h3,ul,ol,table')) { const x = inl(e).trim(); return x ? x + '\n\n' : ''; }
       if (t === 'BLOCKQUOTE') return blocks(e).trim().split('\n').map(l => '> ' + l).join('\n') + '\n\n';
       if (t === 'PRE') return '```\n' + e.textContent + '\n```\n\n';
-      if (t === 'HR') return e.classList.contains('pl-pagebreak') ? '\n---\n\n' : '---\n\n';
+      if (t === 'HR') return e.classList.contains('pl-colbreak') ? '' : (e.classList.contains('pl-pagebreak') || e.classList.contains('pl-section')) ? '\n---\n\n' : '---\n\n';
       if (t === 'UL' || t === 'OL') {
         let k = parseInt(e.getAttribute('start') || '1', 10), s = '';
         for (const li of Array.from(e.children)) {

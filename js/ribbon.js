@@ -84,6 +84,13 @@ function registerCommands() {
   cmd('orientation', 'Orientation', 'rectangle-vertical', o => App.setOrientation(o));
   cmd('size', 'Taille', 'file', s => App.setSize(s));
   cmd('pageSetup', 'Mise en page…', 'frame', () => Dialogs.pageSetup());
+  cmd('columns', 'Colonnes', 'columns-2', k => App.setColumns(k || '2'));
+  cmd('breaks', 'Sauts', 'separator-horizontal', () => E.pageBreak());
+  cmd('colBreak', 'Saut de colonne', 'separator-horizontal', () => E.columnBreak(), { kbd: 'Ctrl+Maj+Entrée' });
+  cmd('sectNext', 'Saut de section (page suivante)', 'separator-horizontal', () => E.sectionBreak('nextPage'));
+  cmd('sectCont', 'Saut de section (continu)', 'separator-horizontal', () => E.sectionBreak('continuous'));
+  cmd('sectEven', 'Saut de section (page paire)', 'separator-horizontal', () => E.sectionBreak('evenPage'));
+  cmd('sectOdd', 'Saut de section (page impaire)', 'separator-horizontal', () => E.sectionBreak('oddPage'));
   // Références
   cmd('toc', 'Table des matières', 'list-tree', () => E.insertToc());
   cmd('footnote', 'Insérer une note de bas de page', 'superscript', () => E.insertFootnote(), { kbd: 'Ctrl+Alt+F' });
@@ -189,7 +196,7 @@ const Ribbon = {
         G('Arrière-plan', [{ big: 'watermark' }, { big: 'pageDark' }])
       ]),
       T('miseenpage', 'Mise en page', [
-        G('Mise en page', [{ bigMenu: 'margins', menu: 'margins' }, { bigMenu: 'orientation', menu: 'orient' }, { bigMenu: 'size', menu: 'sizes' }, { col: ['pageBreak'] }], 'pageSetup'),
+        G('Mise en page', [{ bigMenu: 'margins', menu: 'margins' }, { bigMenu: 'orientation', menu: 'orient' }, { bigMenu: 'size', menu: 'sizes' }, { bigMenu: 'columns', menu: 'columns' }, { bigMenu: 'breaks', menu: 'breaks' }], 'pageSetup'),
         G('Paragraphe', [{ custom: 'paraFields' }], 'paraDlg')
       ]),
       T('references', 'Références', [
@@ -535,6 +542,24 @@ const Menus = {
         break;
       case 'orient': m.append(item('Portrait', () => App.setOrientation('portrait'), { icon: 'rectangle-vertical' }), item('Paysage', () => App.setOrientation('landscape'), { icon: 'rectangle-horizontal' })); break;
       case 'sizes': break;
+      case 'columns': {
+        const s = Ed.curSect(), c = s.cols || {}, n = c.n || 1;
+        const cur = n === 1 ? '1' : c.eq === false && c.list ? (c.list[0].w < c.list[1].w ? 'left' : 'right') : String(n);
+        [['1', 'Une'], ['2', 'Deux'], ['3', 'Trois'], ['left', 'Gauche (étroite à gauche)'], ['right', 'Droite (étroite à droite)']].forEach(([k, l]) => m.append(item(l, () => App.setColumns(k), { icon: 'columns-2', on: cur === k })));
+        m.append(el('hr'), item('Ligne séparatrice', () => { Ed.toggleColSep(); }, { on: !!c.sep }), item('Autres colonnes…', () => Dialogs.pageSetup()));
+        if (Ed.sections().length > 1) m.append(el('div', { class: 'mh' }, [`S’applique à la section ${Ed.curSectIndex() + 1} sur ${Ed.sections().length}`]));
+        break;
+      }
+      case 'breaks':
+        m.append(el('div', { class: 'mh' }, ['Sauts de page']),
+          item('Page — Ctrl+Entrée', () => Ed.pageBreak(), { icon: 'separator-horizontal' }),
+          item('Colonne — Ctrl+Maj+Entrée', () => Ed.columnBreak(), { icon: 'columns-2' }),
+          el('div', { class: 'mh' }, ['Sauts de section']),
+          item('Page suivante', () => Ed.sectionBreak('nextPage'), { icon: 'separator-horizontal' }),
+          item('Continu', () => Ed.sectionBreak('continuous'), { icon: 'separator-horizontal' }),
+          item('Page paire', () => Ed.sectionBreak('evenPage')),
+          item('Page impaire', () => Ed.sectionBreak('oddPage')));
+        break;
       case 'langs': [['Français (Belgique)', 'fr-BE'], ['Français (France)', 'fr-FR'], ['Néerlandais (Belgique)', 'nl-BE'], ['Anglais (Royaume-Uni)', 'en-GB'], ['Anglais (États-Unis)', 'en-US'], ['Allemand', 'de-DE'], ['Espagnol', 'es-ES'], ['Italien', 'it-IT'], ['Arabe', 'ar']].forEach(([l, c]) => m.append(item(l, () => App.setLang(c, l), { on: Ed.editor.lang === c }))); break;
     }
     if (name === 'sizes' && anchor.closest('.rgroup') && anchor.closest('[data-panel="miseenpage"]')) {
