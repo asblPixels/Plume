@@ -247,7 +247,8 @@ const App = {
   },
   /** Ctrl+S : même format que le fichier ouvert s'il est réinscriptible, sinon .docx */
   async save(asNew = false) {
-    const fmt = (!asNew && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop))) ? this.format : 'docx';
+    const fmt = typeof PdfEditor !== 'undefined' && PdfEditor.active ? 'pdf' :
+      (!asNew && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop))) ? this.format : 'docx';
     return this.saveAs(fmt, asNew);
   },
   async saveAs(fmt = 'docx', asNew = true) {
