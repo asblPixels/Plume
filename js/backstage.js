@@ -116,10 +116,10 @@ const Backstage = {
         break;
       case 'learn': {
         const groups = [
-          { n: '1', title: 'Écrire et mettre en forme', where: 'Accueil', details: 'Police, taille, gras, alignement, listes et styles de titres.', action: () => { this.close(); Ribbon.select && Ribbon.select('home'); } },
-          { n: '2', title: 'Ajouter des éléments', where: 'Insertion', details: 'Tableaux, images, liens, numéros de page et zones de texte.', action: () => { this.close(); Ribbon.select && Ribbon.select('insert'); } },
-          { n: '3', title: 'Organiser les pages', where: 'Mise en page', details: 'Marges, portrait ou paysage, colonnes et sauts de section.', action: () => { this.close(); Ribbon.select && Ribbon.select('layout'); } },
-          { n: '4', title: 'Relire et commenter', where: 'Révision', details: 'Orthographe, commentaires et suivi des modifications.', action: () => { this.close(); Ribbon.select && Ribbon.select('review'); } },
+          { n: '1', title: 'Écrire et mettre en forme', where: 'Accueil', details: 'Police, taille, gras, alignement, listes et styles de titres.', action: () => { this.close(); Ribbon.select && Ribbon.select('accueil'); } },
+          { n: '2', title: 'Ajouter des éléments', where: 'Insertion', details: 'Tableaux, images, liens, numéros de page et zones de texte.', action: () => { this.close(); Ribbon.select && Ribbon.select('insertion'); } },
+          { n: '3', title: 'Organiser les pages', where: 'Mise en page', details: 'Marges, portrait ou paysage, colonnes et sauts de section.', action: () => { this.close(); Ribbon.select && Ribbon.select('miseenpage'); } },
+          { n: '4', title: 'Relire et commenter', where: 'Révision', details: 'Orthographe, commentaires et suivi des modifications.', action: () => { this.close(); Ribbon.select && Ribbon.select('revision'); } },
           { n: '5', title: 'Enregistrer ou partager', where: 'Fichier → Enregistrer / Exporter', details: 'Conserver un document Word (.docx), créer un PDF ou imprimer.', action: () => this.go('export') },
           { n: '6', title: 'Retrouver une fonction', where: 'Rechercher une commande (Alt+Q)', details: 'Tapez simplement « tableau », « marge » ou « commentaire ».', action: () => { this.close(); $('#cmdSearch').focus(); } }
         ];
