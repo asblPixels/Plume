@@ -89,8 +89,8 @@
   },
   {
    "path": "js/pdf-editor.js",
-   "size": 15385,
-   "sha256": "57eb9aaf5922ab1b9067cf887d681a76e57b6632aca681d602aa4d0af613c0a3"
+   "size": 16261,
+   "sha256": "2bb4781d6169589e86bc32b9a0879bfb9e20d1ec546559a6c836271640568ad3"
   },
   {
    "path": "js/ribbon.js",
