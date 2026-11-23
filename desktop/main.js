@@ -93,7 +93,7 @@ function requestWindowClose(event) {
   if (exitApproved) return;
   event.preventDefault();
   if (!win || win.isDestroyed()) return;
-  if (win.webContents.isLoading() || win.webContents.isDestroyed() || win.webContents.isCrashed()) {
+  if (win.webContents.isLoading() || win.webContents.isDestroyed() || (typeof win.webContents.isCrashed === 'function' && win.webContents.isCrashed())) {
     const answer = dialog.showMessageBoxSync(win, {
       type: 'warning', title: 'Quitter Plume',
       message: 'Le document n’est pas accessible. Quitter Plume ?',
