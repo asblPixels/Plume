@@ -156,7 +156,12 @@ const PdfEditor = (() => {
     const textLayer = $new('div', 'pdf-text-hitboxes');
     const preview = $new('div', 'pdf-preview-layer');
     frame.append(textLayer, preview);
-    pageNodes[index] = { frame, page, viewport, preview };
+    // Les annotations vectorielles seraient décalées sur les pages tournées
+    // ou dont la boîte de découpe ne commence pas à zéro. Leur export
+    // utilise alors le rendu PDF natif de cette seule page.
+    const view = page.view || [0, 0];
+    const needsFlatten = (viewport.rotation % 360 !== 0) || view[0] !== 0 || view[1] !== 0;
+    pageNodes[index] = { frame, page, viewport, preview, needsFlatten };
     try {
       const text = await page.getTextContent();
       for (const item of text.items) {
@@ -306,9 +311,9 @@ const PdfEditor = (() => {
     try {
       const { PDFDocument, StandardFonts } = window.PDFLib;
       const source = await PDFDocument.load(original, { ignoreEncryption: false });
-      const redact = edits.some(x => x.kind === 'redact');
+      const mustFlatten = edits.some(x => x.kind === 'redact' || (pageNodes[x.page] && pageNodes[x.page].needsFlatten));
       let result;
-      if (!redact) {
+      if (!mustFlatten) {
         // Conserve les pages, polices, images et dessins existants ; ajoute
         // seulement les annotations vectorielles sélectionnées.
         result = source;
@@ -322,7 +327,7 @@ const PdfEditor = (() => {
         const font = await result.embedFont(StandardFonts.Helvetica);
         for (let i = 0; i < pdf.numPages; i++) {
           const here = edits.filter(x => x.page === i);
-          if (here.some(x => x.kind === 'redact')) {
+          if (here.some(x => x.kind === 'redact' || (pageNodes[x.page] && pageNodes[x.page].needsFlatten))) {
             await flattenedPage(result, i, await pdf.getPage(i + 1), here);
           } else {
             const [copied] = await result.copyPages(source, [i]);
