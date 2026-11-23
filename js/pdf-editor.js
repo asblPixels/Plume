@@ -274,7 +274,8 @@ const PdfEditor = (() => {
         ctx.fillText(item.value, x, y, Math.max(1,canvas.width - x - 5));
       }
     }
-    const image = await doc.embedPng(await new Promise(resolve => canvas.toBlob(resolve, 'image/png')));
+    const png = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Impossible de rasteriser la page PDF')), 'image/png'));
+    const image = await doc.embedPng(await png.arrayBuffer());
     const originalSize = sourcePage.getViewport({ scale: 1 });
     const page = doc.addPage([originalSize.width, originalSize.height]);
     page.drawImage(image, { x: 0, y: 0, width: originalSize.width, height: originalSize.height });
