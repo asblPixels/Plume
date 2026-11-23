@@ -177,15 +177,29 @@ const DocxExport = (() => {
     let imgN = 0;
     for (const img of allImgs) {
       const src = img.getAttribute('src');
-      if (!src || imgData.has(src)) continue;
+      if (src && imgData.has(src)) continue;
       try {
-        const blob = await (await fetch(src)).blob();
+        if (!src) throw new Error('Source d’image manquante');
+        const response = await fetch(src);
+        if (!response.ok) throw new Error('Image inaccessible (HTTP ' + response.status + ')');
+        const blob = await response.blob();
         let ext = ({ 'image/png': 'png', 'image/jpeg': 'jpeg', 'image/gif': 'gif' })[blob.type];
         let bytes;
         if (ext) bytes = new Uint8Array(await blob.arrayBuffer());
         else { bytes = await toPng(img); ext = 'png'; }
-        if (bytes) imgData.set(src, { bytes, ext, name: `plume-image${++imgN}.${ext}` });
-      } catch (e) { console.warn('Image ignorée', src, e); }
+        if (!bytes || !bytes.length) throw new Error('Image vide ou conversion impossible');
+        imgData.set(src, { bytes, ext, name: `plume-image${++imgN}.${ext}` });
+      } catch (e) {
+        // Ne pas produire silencieusement un DOCX amputé de ses images.
+        // Rétablir l'état d'affichage avant de laisser App.saveAs signaler l'échec.
+        if (zoomBox) zoomBox.style.zoom = prevZoom;
+        if (darkPage) document.documentElement.classList.add('page-dark');
+        delete editor.dataset.exporting;
+        console.error('Export Word interrompu : image non conservable', e);
+        const error = new Error('Export Word annulé : une image ne peut pas être conservée.');
+        error.userMessage = 'Le document Word n’a pas été enregistré : une image est manquante ou illisible. Vérifiez les images du document puis réessayez. Aucun fichier incomplet n’a été créé.';
+        throw error;
+      }
     }
 
     const numbering = { abstracts: [], nums: [] };
