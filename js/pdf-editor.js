@@ -272,11 +272,17 @@ const PdfEditor = (() => {
     document.querySelector('#main').append(root);
     document.body.classList.add('pdf-mode');
     selectMode('read');
-    for (let index = 0; index < pdf.numPages; index++) {
-      const page = await pdf.getPage(index + 1);
-      await renderPage(index, page, pages);
+    try {
+      for (let index = 0; index < pdf.numPages; index++) {
+        const page = await pdf.getPage(index + 1);
+        await renderPage(index, page, pages);
+      }
+      setStatus(pdf.numPages + ' page(s) PDF chargée(s) sans reconstitution de mise en page.');
+    } catch (error) {
+      // Ne jamais laisser un lecteur partiellement ouvert après une erreur.
+      close();
+      throw error;
     }
-    setStatus(pdf.numPages + ' page(s) PDF chargée(s) sans reconstitution de mise en page.');
   }
   function close() {
     if (pdf) try { pdf.destroy(); } catch { /* document déjà fermé */ }
