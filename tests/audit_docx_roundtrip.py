@@ -56,6 +56,7 @@ def read_package(path):
         if required not in result["parts"]:
             result["errors"].append(f"Partie requise absente : {required}")
     result["errors"].extend(broken_relationships(result["parts"]))
+    result["errors"].extend(content_type_errors(result["parts"]))
     return result
 
 
@@ -104,6 +105,51 @@ def broken_relationships(parts):
     return problems
 
 
+def content_type_errors(parts):
+    """Vérifie que chaque partie a un type MIME déclaré dans OPC."""
+    raw = parts.get("[Content_Types].xml")
+    if not raw:
+        return []
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return []  # déjà signalée par read_package
+    namespace = "{http://schemas.openxmlformats.org/package/2006/content-types}"
+    defaults = {e.get("Extension", "").lower() for e in root.findall(f"{namespace}Default")}
+    overrides = {e.get("PartName", "").lstrip("/") for e in root.findall(f"{namespace}Override")}
+    errors = []
+    for name in parts:
+        if name == "[Content_Types].xml":
+            continue
+        extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        if name not in overrides and extension not in defaults:
+            errors.append(f"Type de contenu absent : {name}")
+    return errors
+
+
+def semantic_inventory(parts):
+    """Indicateurs OOXML : pour orienter la comparaison, pas juger les éditions."""
+    ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    tags = {
+        "paragraphes": "p", "tableaux": "tbl", "sections": "sectPr",
+        "images_et_formes": "drawing", "commentaires": "commentRangeStart",
+        "insertions_suivies": "ins", "suppressions_suivies": "del",
+        "hyperliens": "hyperlink", "notes": "footnoteReference",
+        "champs": "fldChar",
+    }
+    found = {key: 0 for key in tags}
+    xml = parts.get("word/document.xml")
+    if not xml:
+        return found
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        return found
+    for key, name in tags.items():
+        found[key] = sum(1 for _ in root.iter(f"{ns}{name}"))
+    return found
+
+
 def is_protected(name):
     return name.startswith(PROTECTED_PREFIXES) or name.endswith(PROTECTED_EXTENSIONS)
 
@@ -125,11 +171,18 @@ def audit(original, output):
     for name in sorted(set(before_parts) & set(after_parts)):
         if before_parts[name] != after_parts[name] and is_protected(name):
             warnings.append(f"Contenu opaque/protégé changé : {name}")
+    semantic_before = semantic_inventory(before_parts)
+    semantic_after = semantic_inventory(after_parts)
+    for key, count in semantic_before.items():
+        if semantic_after[key] < count:
+            warnings.append(f"Éléments {key} : {count} -> {semantic_after[key]} (vérifier si édition volontaire)")
     return {
         "original": str(original),
         "export": str(output),
         "parts_before": len(before_parts),
         "parts_after": len(after_parts),
+        "structure_before": semantic_before,
+        "structure_after": semantic_after,
         "sha256_export": hashlib.sha256(Path(output).read_bytes()).hexdigest(),
         "errors": failures,
         "warnings": warnings,
