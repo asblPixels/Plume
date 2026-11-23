@@ -209,6 +209,11 @@ const PdfEditor = (() => {
       btn.addEventListener('click', () => selectMode(tool));
       toolBar.append(btn);
     }
+    const open = $new('button', 'pdf-tool', 'Ouvrir un autre document');
+    open.addEventListener('click', () => App.openPicker());
+    const create = $new('button', 'pdf-tool', 'Nouveau document');
+    create.addEventListener('click', () => App.newDoc('blank'));
+    toolBar.append(open, create);
     const undo = $new('button', 'pdf-tool', 'Annuler le dernier changement');
     undo.addEventListener('click', () => {
       if (!edits.length) return;
