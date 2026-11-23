@@ -758,3 +758,18 @@ body.pdf-export #editor .pl-merge, body.pdf-export #editor .pl-field { backgroun
 #updateBar button { border: 1px solid #3a444c; background: transparent; color: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 #updateBar button.primary { background: #26EFC5; border-color: #26EFC5; color: #0d1013; font-weight: 600; }
 #updateBar button.x { border: 0; font-size: 18px; padding: 2px 6px; opacity: .7; }
+
+/* Parcours de découverte : identité Plume, lisibilité et accès clavier. */
+.learn-home { margin: 24px 0 20px; padding: 18px 22px; display:flex; align-items:center; justify-content:space-between; gap:18px; border:1px solid var(--ui-line,#c5dad4); border-radius:16px; background:var(--ui-bg-2,rgba(38,239,197,.06)); }
+.learn-home p { margin:6px 0 0; line-height:1.5; }
+.learn-intro { max-width:720px; line-height:1.6; }
+.learn-steps { display:grid; grid-template-columns: repeat(2,minmax(220px,1fr)); gap:14px; max-width:1000px; margin:24px 0 30px; }
+.learn-step { min-width:0; display:flex; gap:14px; align-items:flex-start; padding:18px; text-align:left; color:var(--ui-fg,#1c2925); background:var(--ui-bg,#fff); border:1px solid var(--ui-line,#c5dad4); border-radius:16px; cursor:pointer; transition:border-color .15s,transform .15s; }
+.learn-step:hover,.learn-step:focus-visible { border-color:#0b9c7f; transform:translateY(-1px); outline-offset:2px; }
+.learn-number { display:flex; flex:0 0 34px; align-items:center; justify-content:center; height:34px; border-radius:11px; color:#0d1013; font-weight:800; background:#26efc5; }
+.learn-copy { display:flex; flex:1; flex-direction:column; gap:7px; line-height:1.4; }
+.learn-copy b { font-size:15px; }
+.learn-where { font-weight:600; color:#087d69; }
+[data-theme="dark"] .learn-where { color:#26efc5; }
+@media(max-width:740px) { .learn-steps { grid-template-columns:1fr; }.learn-home { flex-direction:column; align-items:flex-start; } }
+@media(prefers-reduced-motion:reduce) { .learn-step { transition:none; }.learn-step:hover { transform:none; } }
