@@ -23,6 +23,7 @@ function registerCommands() {
   cmd('saveAs', 'Enregistrer sous…', 'download', () => App.save(true), { kbd: 'F12' });
   cmd('new', 'Nouveau document', 'file-plus', () => App.newDoc(), { kbd: 'Ctrl+N' });
   cmd('open', 'Ouvrir…', 'folder-open', () => App.openPicker(), { kbd: 'Ctrl+O' });
+  cmd('quit', 'Quitter Plume', 'log-out', () => App.requestQuit(), { kbd: 'Ctrl+Q' });
   cmd('print', 'Imprimer', 'printer', () => App.print(), { kbd: 'Ctrl+P' });
   cmd('exportPdf', 'Exporter en PDF', 'file-down', () => App.saveAs('pdf'), { kbd: 'Ctrl+Maj+P' });
   cmd('paste', 'Coller', 'clipboard-paste', async () => {
