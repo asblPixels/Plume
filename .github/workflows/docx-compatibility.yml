@@ -2,6 +2,7 @@ name: Compatibilité DOCX (audit structurel)
 on:
   pull_request:
     paths:
+      - "js/docx-export.js"
       - "tests/audit_docx_roundtrip.py"
       - "tests/test_audit_docx_roundtrip.py"
       - ".github/workflows/docx-compatibility.yml"
@@ -24,6 +25,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Vérifier la syntaxe JavaScript du moteur DOCX
+        run: node --check js/docx-export.js
       - name: Vérifier les scripts Python
         run: python -m py_compile tests/audit_docx_roundtrip.py tests/test_audit_docx_roundtrip.py
       - name: Tester la validité OOXML et les pertes
