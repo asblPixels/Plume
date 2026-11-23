@@ -45,7 +45,7 @@ const Backstage = {
     const side = el('div', { class: 'bs-side' });
     const main = el('div', { class: 'bs-main' });
     const nav = [['home', 'Accueil', 'feather'], ['learn', 'Découvrir Plume', 'book-open'], ['new', 'Nouveau', 'file-plus'], ['open', 'Ouvrir', 'folder-open'], ['info', 'Informations', 'info'],
-      ['save', 'Enregistrer', 'save'], ['export', 'Exporter / Télécharger', 'file-down'], ['print', 'Imprimer', 'printer'], ['quit', 'Quitter Plume', 'log-out']];
+      ['save', 'Enregistrer', 'save'], ['export', 'Exporter / Télécharger', 'file-down'], ['print', 'Imprimer', 'printer'], ['quit', 'Quitter Plume', 'x']];
     side.append(el('button', { class: 'bs-back', onclick: () => this.close(), title: 'Retour au document (Échap)' }, [icon('arrow-left'), el('span', { class: 't' }, ['Retour'])]));
     for (const [id, l, ic] of nav) side.append(el('button', { class: section === id ? 'on' : '', onclick: () => this.go(id) }, [icon(ic), el('span', { class: 't' }, [l])]));
     side.append(el('div', { class: 'sp' }), el('button', { class: section === 'about' ? 'on' : '', onclick: () => this.go('about') }, [icon('sparkles'), el('span', { class: 't' }, ['À propos'])]));
