@@ -19,8 +19,8 @@
   },
   {
    "path": "css/plume.css",
-   "size": 56062,
-   "sha256": "49d3bd73df53029f4f9d3b590e619fd6da8127a84e0ff9e0f2921ca90afabb8f"
+   "size": 56209,
+   "sha256": "ea703702ef6b0ccbb231e8d8d14b57d731eec993ca9a5fe94504a7c2a6459207"
   },
   {
    "path": "js/app.js",
@@ -89,8 +89,8 @@
   },
   {
    "path": "js/pdf-editor.js",
-   "size": 17898,
-   "sha256": "3ad2b60383f8445c9a1feef6d668f6b177459b550424c9cba76f2ddbc2131567"
+   "size": 20200,
+   "sha256": "e33b8c1c5e7f84abb430961a247c0534de96d32d1b46ac3a156d6ca8999a9ba0"
   },
   {
    "path": "js/ribbon.js",
