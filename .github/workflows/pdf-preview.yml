@@ -1,7 +1,7 @@
 name: PDF - test Windows et Linux
 on:
   pull_request:
-    branches: [compat/word-roundtrip-audit]
+    branches: [compat/word-roundtrip-audit, feat/pdf-fidelity-editor]
     paths:
       - "js/**"
       - "css/**"
@@ -9,6 +9,7 @@ on:
       - "vendor/pdf-lib.min.js"
       - "desktop/**"
       - ".github/workflows/pdf-preview.yml"
+      - "tests/quit_flow.test.cjs"
   workflow_dispatch:
 permissions:
   contents: read
@@ -27,6 +28,12 @@ jobs:
           node --check js/pdf-editor.js
           node tests/pdf_editor.test.cjs
           node tests/pdf_native_real.test.cjs
+          node tests/quit_flow.test.cjs
+          node --check desktop/main.js
+          node --check desktop/preload.js
+          node --check js/app.js
+          node --check js/native.js
+          node --check js/backstage.js
       - name: Compiler Plume Windows
         shell: pwsh
         working-directory: desktop
@@ -56,6 +63,13 @@ jobs:
         with: { node-version: '22' }
       - name: Paquets Linux
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
+      - name: Vérifier la fermeture sur toutes plateformes
+        run: |
+          node tests/quit_flow.test.cjs
+          node --check desktop/main.js
+          node --check desktop/preload.js
+          node --check js/app.js
+          node --check js/native.js
       - name: Compiler Plume Linux
         working-directory: desktop
         run: |
