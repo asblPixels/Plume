@@ -51,7 +51,7 @@ const App = {
     }
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !window.plumeDesktop && !(window.Native && Native.on)) navigator.serviceWorker.register('sw.js').catch(() => { });
     this.initUpdates();
-    window.addEventListener('beforeunload', e => { if (this.dirty && !(this.savedLocally && this.keepLocal())) { e.preventDefault(); e.returnValue = ''; } });
+    window.addEventListener('beforeunload', e => { if (!this._quitAllowed && this.dirty && !(this.savedLocally && this.keepLocal())) { e.preventDefault(); e.returnValue = ''; } });
     Ed.editor.focus();
     if (!localStorage.getItem('plume-guide-vu') && !navigator.webdriver) { localStorage.setItem('plume-guide-vu', '1'); setTimeout(() => Guide.open(), 600); }
     // petits écrans : la page s'adapte à la largeur
@@ -141,7 +141,14 @@ const App = {
         }
       }
       if (window.plumeDesktop && window.plumeDesktop.quit) {
-        await window.plumeDesktop.quit();
+        this._quitAllowed = true;
+        try {
+          const approved = await window.plumeDesktop.quit();
+          if (!approved) this._quitAllowed = false;
+        } catch (error) {
+          this._quitAllowed = false;
+          throw error;
+        }
       } else if (window.Native && Native.on) {
         const appPlugin = Native.plugin('App');
         if (appPlugin && appPlugin.exitApp) await appPlugin.exitApp();
