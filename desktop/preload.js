@@ -5,7 +5,10 @@ contextBridge.exposeInMainWorld('plumeDesktop', {
   platform: process.platform,
   onOpenFile: cb => ipcRenderer.on('plume:open-file', (e, f) => cb(f)),
   quit: () => ipcRenderer.invoke('plume:quit'),
-  onQuitRequested: cb => ipcRenderer.on('plume:request-quit', () => cb()),
+  onQuitRequested: cb => ipcRenderer.on('plume:request-quit', () => {
+    ipcRenderer.send('plume:quit-ack');
+    cb();
+  }),
   writeFile: (path, data) => ipcRenderer.invoke('plume:write-file', { path, data }),
   saveDialog: (name, ext, label) => ipcRenderer.invoke('plume:save-dialog', { name, ext, label }),
   printToPdf: () => ipcRenderer.invoke('plume:print-pdf'),
