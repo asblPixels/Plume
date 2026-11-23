@@ -776,6 +776,7 @@ body.pdf-export #editor .pl-merge, body.pdf-export #editor .pl-field { backgroun
 
 /* Mode PDF natif : aucune conversion du document en HTML modifiable. */
 body.pdf-mode #canvas, body.pdf-mode #navpane, body.pdf-mode #rulerWrap,
+body.pdf-mode #tabbar, body.pdf-mode #ribbon, body.pdf-mode #statusbar,
 body.pdf-mode #exitReading { display:none !important; }
 body.pdf-mode #main { position:relative; overflow:hidden; }
 .pdf-workspace { position:absolute; inset:0; display:flex; flex-direction:column;
