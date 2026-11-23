@@ -801,6 +801,7 @@ body.pdf-mode #main { position:relative; overflow:hidden; }
   cursor:text; white-space:pre; user-select:text; font-family:Arial,sans-serif; }
 .pdf-mode .pdf-selectable-text::selection { background:#26efc577; color:transparent; }
 .pdf-preview-layer { z-index:3; pointer-events:none; }
+.pdf-drag-selection { position:absolute; z-index:8; pointer-events:none; border:2px dashed #ba2020; background:#e85b5b35; box-sizing:border-box; }
 .pdf-edit-preview { position:absolute; box-sizing:border-box; outline:1px dashed #3078a3;
   color:#0f3b72; line-height:1.12; white-space:pre-wrap; overflow-wrap:anywhere; }
 .pdf-edit-preview.note { background:#f5fbffdd; }
