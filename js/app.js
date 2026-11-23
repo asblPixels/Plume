@@ -31,6 +31,7 @@ const App = {
     $('#fileInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) this.fileInputCb(f); });
     $('#exitReading').addEventListener('click', () => this.setReading(false));
     $('#themeBtn').addEventListener('click', () => this.toggleTheme());
+    $('#quitBtn').addEventListener('click', () => this.requestQuit());
 
     // Démarrage : toujours une page blanche, jamais le dernier document (ordinateurs partagés, écoles).
     // L'écran d'accueil propose un document vierge ou l'ouverture d'un fichier (ordinateur, clé USB…).
