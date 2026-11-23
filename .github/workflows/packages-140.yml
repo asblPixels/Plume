@@ -1,5 +1,7 @@
 name: Plume 1.4.0 - Paquets Windows et Linux (test)
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [compat/word-roundtrip-audit]
     paths: [".github/workflows/packages-140.yml"]
