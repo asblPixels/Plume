@@ -1,5 +1,7 @@
 name: Plume Windows - aperçu installable
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - compat/word-roundtrip-audit
