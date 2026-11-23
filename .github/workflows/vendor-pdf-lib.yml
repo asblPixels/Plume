@@ -1,0 +1,38 @@
+name: Préparer pdf-lib hors ligne
+on:
+  push:
+    branches: [feat/pdf-fidelity-editor]
+    paths:
+      - .github/workflows/vendor-pdf-lib.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Récupérer pdf-lib version fixe depuis npm
+        run: |
+          mkdir -p /tmp/plume-pdf-lib vendor
+          cd /tmp/plume-pdf-lib
+          npm pack pdf-lib@1.17.1 --silent
+          tar xzf pdf-lib-1.17.1.tgz
+          cp package/dist/pdf-lib.min.js "$GITHUB_WORKSPACE/vendor/pdf-lib.min.js"
+          cp package/LICENSE.md "$GITHUB_WORKSPACE/vendor/pdf-lib-LICENSE.md"
+      - name: Version et syntaxe JavaScript
+        run: |
+          test -s vendor/pdf-lib.min.js
+          node --check vendor/pdf-lib.min.js
+      - name: Enregistrer la dépendance libre dans la branche
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/pdf-lib.min.js vendor/pdf-lib-LICENSE.md
+          git diff --cached --quiet || git commit -m "vendor(pdf): ajouter pdf-lib 1.17.1 et sa licence MIT"
+          git push
