@@ -12,9 +12,9 @@ const start = app.indexOf('  async requestQuit() {');
 const end = app.indexOf('  /* ---------- Documents ---------- */', start);
 assert.ok(start > -1 && end > start, 'La méthode requestQuit est introuvable');
 const method = app.slice(start,end);
-let calls, answer, savingWorks, mobile;
+let calls, answer, mobile;
 function build(dirty) {
-  calls = []; answer = 'cancel'; savingWorks = false; mobile = false;
+  calls = []; answer = 'cancel'; mobile = false;
   const box = {
     window: { plumeDesktop: {
       quit: async () => { calls.push('quit-desktop'); return true; }
@@ -26,9 +26,10 @@ function build(dirty) {
     dialog: async () => { calls.push('dialog'); return answer; },
   };
   vm.createContext(box);
+  box.calls = calls;
   vm.runInContext('this.App = { dirty: ' + dirty + ', _quitAllowed: false,'+
-    ' async save() { this.dirty = !savingWorks; calls.push("save"); },'+
-    ' '+method+' };', { ...box, calls });
+    ' async save() { this.dirty = !this._testSavingWorks; calls.push("save"); },'+
+    ' '+method+' };', box);
   return box.App;
 }
 async function run() {
@@ -48,7 +49,7 @@ async function run() {
   assert.deepEqual(calls, ['dialog', 'save'], 'Un échec ou une annulation de sauvegarde empêche la sortie');
 
   target = build(true);
-  answer = 'save'; savingWorks = true;
+  answer = 'save'; target._testSavingWorks = true;
   await target.requestQuit();
   assert.deepEqual(calls, ['dialog', 'save', 'quit-desktop']);
 
@@ -61,7 +62,7 @@ async function run() {
   target = build(false);
   mobile = true; target._quitAllowed = false;
   // Si le pont de bureau est absent, le système mobile reçoit la fermeture.
-  const mobileBox = { window: {}, Native: {
+  const mobileBox = { window: { Native: true }, Native: {
     on: true, plugin: () => ({ exitApp: async () => calls.push('quit-mobile') })
   }, dialog: async () => 'cancel', calls: [] };
   vm.createContext(mobileBox);
