@@ -57,7 +57,7 @@ const Native = {
         const d = $('.dlg-back'); if (d) { d.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return; }
         if ($('#backstage.open')) { Backstage.close(); return; }
         if (Menus.el) { Menus.close(); return; }
-        AppPlugin.minimizeApp ? AppPlugin.minimizeApp() : AppPlugin.exitApp();
+        App.requestQuit();
       });
     }
   }
