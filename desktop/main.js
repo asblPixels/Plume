@@ -86,6 +86,26 @@ function sendFile(p) {
   } catch (e) { console.error('Ouverture impossible :', p, e); }
 }
 
+let exitApproved = false;
+// Le gestionnaire de fenêtre vaut sur Linux, Windows et macOS : la fermeture
+// native (Alt+F4, bouton X, Cmd+Q) passe par la même confirmation de Plume.
+function requestWindowClose(event) {
+  if (exitApproved) return;
+  event.preventDefault();
+  if (!win || win.isDestroyed()) return;
+  if (win.webContents.isLoading() || win.webContents.isDestroyed() || win.webContents.isCrashed()) {
+    const answer = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Quitter Plume',
+      message: 'Le document n’est pas accessible. Quitter Plume ?',
+      detail: 'Les modifications non enregistrées pourraient être perdues.',
+      buttons: ['Annuler', 'Quitter'], defaultId: 0, cancelId: 0
+    });
+    if (answer === 1) { exitApproved = true; win.destroy(); app.quit(); }
+    return;
+  }
+  win.webContents.send('plume:request-quit');
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 360, minHeight: 480,
@@ -93,7 +113,20 @@ function createWindow() {
     icon: path.join(APP_DIR, 'icons', 'icon-512.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true }
   });
-  Menu.setApplicationMenu(null);   // le ruban de Plume remplace la barre de menus
+  // Barre de menus native conservée en secours, y compris sous Wayland :
+  // l'utilisateur peut toujours quitter via le système d'exploitation.
+  const applicationMenu = Menu.buildFromTemplate([
+    { label: 'Fichier', submenu: [
+      { label: 'Quitter Plume', accelerator: process.platform === 'darwin' ? 'Command+Q' : 'Ctrl+Q',
+        click: () => win && !win.isDestroyed() && win.close() }
+    ] },
+    { label: 'Édition', submenu: [
+      { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
+      { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }
+    ] }
+  ]);
+  Menu.setApplicationMenu(applicationMenu);
+  win.on('close', requestWindowClose);
   const ses = win.webContents.session;
   const langs = ['fr', 'fr-FR', 'fr-BE', 'nl', 'en-GB'].filter(l => ses.availableSpellCheckerLanguages.includes(l));
   if (langs.length) ses.setSpellCheckerLanguages(langs.slice(0, 3));
@@ -133,6 +166,15 @@ else {
   });
   app.on('window-all-closed', () => app.quit());
 }
+
+/* ---------- Fermeture contrôlée pour toutes les plateformes de bureau ---------- */
+ipcMain.handle('plume:quit', event => {
+  if (!win || win.isDestroyed() || event.sender !== win.webContents) return false;
+  exitApproved = true;
+  win.close();
+  app.quit();
+  return true;
+});
 
 /* ---------- Fichiers ---------- */
 ipcMain.handle('plume:write-file', async (e, { path: p, data }) => { fs.writeFileSync(p, Buffer.from(data)); return true; });
