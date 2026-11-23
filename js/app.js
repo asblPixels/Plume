@@ -44,6 +44,7 @@ const App = {
     if (window.plumeDesktop) {
       document.documentElement.classList.add('desktop');
       window.plumeDesktop.onOpenFile(f => this.openFile(new File([f.data], f.name), null, f.path));
+      window.plumeDesktop.onQuitRequested(() => this.requestQuit());
     }
     if ('launchQueue' in window) {
       launchQueue.setConsumer(async p => { if (p.files && p.files.length) { this._launched = true; const h = p.files[0]; this.openFile(await h.getFile(), h); } });
@@ -115,6 +116,48 @@ const App = {
   },
 
   name() { return ($('#docTitle').value || 'Document').trim(); },
+
+  /* ---------- Fermeture partagée : Windows, Linux, macOS et mobile ---------- */
+  async requestQuit() {
+    if (this._closing) return;
+    this._closing = true;
+    try {
+      if (this.dirty) {
+        const action = await dialog({
+          title: 'Quitter Plume',
+          body: '<p>Ce document contient des modifications non enregistrées.</p><p>Que souhaitez-vous faire ?</p>',
+          buttons: [
+            { label: 'Annuler', value: 'cancel' },
+            { label: 'Quitter sans enregistrer', value: 'discard' },
+            { label: 'Enregistrer et quitter', value: 'save', primary: true }
+          ]
+        });
+        if (!action || action === 'cancel') return;
+        if (action === 'save') {
+          await this.save();
+          // L'enregistrement peut être annulé ou échouer. Ne jamais quitter
+          // tant que le document comporte des modifications non enregistrées.
+          if (this.dirty) return;
+        }
+      }
+      if (window.plumeDesktop && window.plumeDesktop.quit) {
+        await window.plumeDesktop.quit();
+      } else if (window.Native && Native.on) {
+        const appPlugin = Native.plugin('App');
+        if (appPlugin && appPlugin.exitApp) await appPlugin.exitApp();
+        else if (appPlugin && appPlugin.minimizeApp) await appPlugin.minimizeApp();
+      } else {
+        // Les navigateurs interdisent généralement window.close() sur un
+        // onglet ouvert par l'utilisateur. Proposer une instruction fiable.
+        await dialog({ title: 'Fermer Plume',
+          body: '<p>Vous pouvez fermer cet onglet ou cette fenêtre dans votre navigateur.</p>',
+          buttons: [{ label: 'OK', primary: true }]
+        });
+      }
+    } finally {
+      this._closing = false;
+    }
+  },
 
   /* ---------- Documents ---------- */
   async newDoc(tpl = 'blank', silent) {
@@ -631,6 +674,7 @@ const App = {
       const inField = e.target.closest && e.target.closest('input,textarea,select') && !e.target.closest('#editor');
       const run = id => { e.preventDefault(); CMD[id].run(); };
       if (e.altKey && k === 'q') { e.preventDefault(); $('#cmdSearch').focus(); return; }
+      if (mod && !e.shiftKey && !e.altKey && k === 'q') { e.preventDefault(); this.requestQuit(); return; }
       if (e.key === 'F12') return run('saveAs');
       if (e.key === 'F11') return run('fullscreen');
       if (e.key === 'F7') return run('spell');
