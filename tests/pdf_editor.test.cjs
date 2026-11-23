@@ -30,7 +30,7 @@ const pdfPage = {
   drawImage() { calls.push('image'); }
 };
 const base = {
-  embedFont: async () => ({}),
+  embedFont: async () => ({ encodeText(value) { return value; } }),
   getPage: () => pdfPage,
   addPage: () => pdfPage,
   copyPages: async () => [pdfPage],
