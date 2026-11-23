@@ -260,15 +260,36 @@ const PdfEditor = (() => {
         color: rgb(...PDF_COLORS.highlight), opacity: .32, borderWidth: 0 });
     } else if (note.kind === 'note') {
       const fontSize = clamp(note.font, 6, 36);
-      const max = Math.max(5, Math.floor(r.w / (fontSize * .6)));
-      const text = note.value.slice(0, max);
-      page.drawText(text, { x: r.x, y: r.y, font, size: fontSize, color: rgb(...PDF_COLORS.note) });
+      page.drawText(note.value, { x: r.x, y: r.y, font, size: fontSize,
+        maxWidth: Math.max(30, width - r.x - 8), lineHeight: fontSize * 1.2,
+        color: rgb(...PDF_COLORS.note) });
     }
+  }
+  function canvasText(ctx, value, x, y, size, maxWidth) {
+    ctx.font = Math.max(9, size) + 'px sans-serif';
+    ctx.textBaseline = 'top';
+    const lines = String(value).split('\\n');
+    let lineY = y;
+    for (const line of lines) {
+      const words = line.split(/\\s+/);
+      let current = '';
+      for (const word of words) {
+        const joined = current ? current + ' ' + word : word;
+        if (current && ctx.measureText && ctx.measureText(joined).width > maxWidth) {
+          ctx.fillText(current, x, lineY); lineY += size * 1.25; current = word;
+        } else current = joined;
+      }
+      ctx.fillText(current, x, lineY, maxWidth);
+      lineY += size * 1.25;
+    }
+  }
+  function supportsFont(font, value) {
+    try { font.encodeText(value); return true; } catch { return false; }
   }
   // Page modifiée : son contenu est reconstruit visuellement, sans texte source
   // caché dessous. Les autres pages restent des pages PDF natives.
   async function flattenedPage(doc, index, sourcePage, changes) {
-    const view = sourcePage.getViewport({ scale: 2 });
+    const view = sourcePage.getViewport({ scale: 3 });
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(view.width));
     canvas.height = Math.max(1, Math.round(view.height));
@@ -283,18 +304,14 @@ const PdfEditor = (() => {
         ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
         if (item.value) {
           ctx.fillStyle = '#111111';
-          ctx.font = Math.max(9, item.font * view.scale) + 'px sans-serif';
-          ctx.textBaseline = 'top';
-          ctx.fillText(item.value, x, y, Math.max(1, canvas.width - x - 5));
+          canvasText(ctx, item.value, x, y, item.font * view.scale, Math.max(1, canvas.width - x - 5));
         }
       } else if (item.kind === 'highlight') {
         ctx.fillStyle = 'rgba(255,211,64,.32)';
         ctx.fillRect(x,y,w,h);
       } else if (item.kind === 'note') {
         ctx.fillStyle = '#1155b8';
-        ctx.font = Math.max(9, item.font * view.scale) + 'px sans-serif';
-        ctx.textBaseline = 'top';
-        ctx.fillText(item.value, x, y, Math.max(1,canvas.width - x - 5));
+        canvasText(ctx, item.value, x, y, item.font * view.scale, Math.max(1, canvas.width - x - 5));
       }
     }
     const png = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Impossible de rasteriser la page PDF')), 'image/png'));
@@ -316,7 +333,10 @@ const PdfEditor = (() => {
     try {
       const { PDFDocument, StandardFonts } = window.PDFLib;
       const source = await PDFDocument.load(original, { ignoreEncryption: false });
-      const mustFlatten = edits.some(x => x.kind === 'redact' || (pageNodes[x.page] && pageNodes[x.page].needsFlatten));
+      const probeFont = await source.embedFont(StandardFonts.Helvetica);
+      const mustFlatten = edits.some(x => x.kind === 'redact' ||
+        (x.kind === 'note' && !supportsFont(probeFont, x.value)) ||
+        (pageNodes[x.page] && pageNodes[x.page].needsFlatten));
       let result;
       if (!mustFlatten) {
         // Conserve les pages, polices, images et dessins existants ; ajoute
@@ -332,7 +352,9 @@ const PdfEditor = (() => {
         const font = await result.embedFont(StandardFonts.Helvetica);
         for (let i = 0; i < pdf.numPages; i++) {
           const here = edits.filter(x => x.page === i);
-          if (here.some(x => x.kind === 'redact' || (pageNodes[x.page] && pageNodes[x.page].needsFlatten))) {
+          if (here.some(x => x.kind === 'redact' ||
+            (x.kind === 'note' && !supportsFont(probeFont, x.value)) ||
+            (pageNodes[x.page] && pageNodes[x.page].needsFlatten))) {
             await flattenedPage(result, i, await pdf.getPage(i + 1), here);
           } else {
             const [copied] = await result.copyPages(source, [i]);
