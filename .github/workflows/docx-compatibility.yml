@@ -1,0 +1,30 @@
+name: Compatibilité DOCX (audit structurel)
+on:
+  pull_request:
+    paths:
+      - "tests/audit_docx_roundtrip.py"
+      - "tests/test_audit_docx_roundtrip.py"
+      - ".github/workflows/docx-compatibility.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/audit_docx_roundtrip.py"
+      - "tests/test_audit_docx_roundtrip.py"
+      - ".github/workflows/docx-compatibility.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit-unitaire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le projet
+        uses: actions/checkout@v4
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Vérifier les scripts Python
+        run: python -m py_compile tests/audit_docx_roundtrip.py tests/test_audit_docx_roundtrip.py
+      - name: Tester la validité OOXML et les pertes
+        run: python -m unittest discover -s tests -p 'test_audit_docx_roundtrip.py' -v
