@@ -78,7 +78,10 @@ const Formats = (() => {
         if (z.file('index.xml') && ext === 'pages') return 'pages';
         if (/sun\.xml\.writer/.test(mt)) return 'sxw';
         if (mt === 'application/epub+zip') return 'epub';
-      } catch { /* pas un ZIP valide */ }
+      } catch (e) {
+        if (e && e.message === 'INVALID_WORD') throw e;
+        // ZIP endommagé : l'importeur produira une erreur explicite.
+      }
       return ext;
     }
     if (ext === 'fodt' || ext === 'xml') {
