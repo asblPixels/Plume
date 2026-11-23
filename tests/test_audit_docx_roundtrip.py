@@ -11,7 +11,13 @@ SPEC = importlib.util.spec_from_file_location(
 module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
 
-TYPES = b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>'
+TYPES = b'''<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+ <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+ <Default Extension="xml" ContentType="application/xml"/>
+ <Default Extension="png" ContentType="image/png"/>
+ <Default Extension="bin" ContentType="application/octet-stream"/>
+ <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+ </Types>'''
 ROOT_RELS = b'''<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>'''
@@ -75,6 +81,18 @@ class AuditTests(unittest.TestCase):
         package(self.original)
         package(self.export, {"word/document.xml": b"<broken"})
         self.assertTrue(any("XML invalide" in s for s in module.audit(self.original, self.export)["errors"]))
+
+    def test_missing_content_type_is_failure(self):
+        package(self.original)
+        package(self.export, {"word/media/illustration.xyz": b"image"})
+        self.assertTrue(any("Type de contenu absent" in e for e in module.audit(self.original, self.export)["errors"]))
+
+    def test_semantic_inventory_detects_sections(self):
+        package(self.original)
+        package(self.export, {"word/document.xml": DOC.replace(b"</w:body>", b"<w:sectPr/></w:body>")})
+        report = module.audit(self.original, self.export)
+        self.assertEqual(report["structure_before"]["sections"], 0)
+        self.assertEqual(report["structure_after"]["sections"], 1)
 
     def test_external_relation_not_resolved_as_part(self):
         package(self.original)
