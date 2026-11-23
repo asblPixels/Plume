@@ -1,0 +1,96 @@
+name: Plume 1.4.0 - Paquets Windows et Linux (test)
+on:
+  push:
+    branches: [compat/word-roundtrip-audit]
+    paths: [".github/workflows/packages-140.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Compiler Windows
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          npm ci --no-audit --no-fund
+          node prepare.js
+          npx electron-builder --win dir --x64 --publish never
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress | Out-Null }
+          $nsis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $nsis) { $nsis = "C:\Program Files (x86)\NSIS\makensis.exe" }
+          $v = node -p "require('./package.json').version"
+          $root = (Get-Location).Path
+          & $nsis "/DVERSION=$v" "/DSRC=$root\dist\win-unpacked" "/DOUT=$root\dist\Plume-Setup-$v-x64.exe" "/DICON=$root\build\icon.ico" installer\plume.nsi
+          if ($LASTEXITCODE -ne 0) { throw "NSIS a échoué" }
+          New-Item -ItemType Directory -Force ..\out | Out-Null
+          Copy-Item "dist\Plume-Setup-$v-x64.exe" ..\out\
+          Compress-Archive -Path dist\win-unpacked -DestinationPath "..\out\Plume-Portable-$v-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Plume-140-Windows
+          path: out/*
+          if-no-files-found: error
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Préparer Linux
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
+      - name: Compiler les paquets Linux
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          node prepare.js
+          npx electron-builder --linux dir AppImage deb rpm snap --x64 --publish never
+          mkdir -p ../out
+          cp dist/*.AppImage dist/*.deb dist/*.rpm dist/*.snap ../out/
+          tar czf ../out/Plume-Linux-1.4.0-x64.tar.gz -C dist/linux-unpacked .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Plume-140-Linux
+          path: out/*
+          if-no-files-found: error
+  publish:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Vérifier les paquets
+        run: |
+          ls -lh packages
+          test -f packages/Plume-Setup-1.4.0-x64.exe
+          test -f packages/Plume-Portable-1.4.0-x64.zip
+          find packages -name '*.AppImage' | grep .
+          find packages -name '*.deb' | grep .
+          find packages -name '*.rpm' | grep .
+          find packages -name '*.snap' | grep .
+          sha256sum packages/* > packages/SHA256SUMS.txt
+      - name: Publier la version d'essai 1.4.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG=v1.4.0-test
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" packages/* --clobber
+          else
+            gh release create "$TAG" packages/* --target "$GITHUB_SHA" --title "Plume 1.4.0 - version de test" --notes "Installateur Windows, version portable et paquets Linux. Version de test non signée, construite depuis la branche de compatibilité Word. Ne remplace pas la version stable." --prerelease
+          fi
