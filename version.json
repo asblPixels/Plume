@@ -4,8 +4,8 @@
  "files": [
   {
    "path": "index.html",
-   "size": 5710,
-   "sha256": "ea46a04945944025c48e45eeb9f154850189e284ced48de3fe45b339b80461ba"
+   "size": 5797,
+   "sha256": "97eee72a3c919b0546be52c6ceff0b2d2e68c1af2765d1298c88e537562d86c4"
   },
   {
    "path": "manifest.webmanifest",
@@ -19,23 +19,23 @@
   },
   {
    "path": "css/plume.css",
-   "size": 51304,
-   "sha256": "75ef4392429b17ff219e20bfc4c2e8b4e62486017f3eba4dcc960756b5726193"
+   "size": 56209,
+   "sha256": "ea703702ef6b0ccbb231e8d8d14b57d731eec993ca9a5fe94504a7c2a6459207"
   },
   {
    "path": "js/app.js",
-   "size": 59825,
-   "sha256": "eb8853d4b1ad43ba13a4302865d60a0abb11721f2775663a21488e118e874dc6"
+   "size": 62526,
+   "sha256": "7476d6d58302ecfd473e83b3fbdeb2e4b20fd4848361739924e3e3966ceaf0e3"
   },
   {
    "path": "js/backstage.js",
-   "size": 28366,
-   "sha256": "0edd09471155e0e407760245128e52044a1d68b24908eb947b7385531e9bb22c"
+   "size": 31337,
+   "sha256": "1e4d23e9921969308609ed0ac1fcc80307c22ab3c522b1ee6dbad807e220a304"
   },
   {
    "path": "js/docx-export.js",
-   "size": 74037,
-   "sha256": "8810e740a11fde4d998b978ab7b1c1386125ea6f1487873b49ac6898deef7d2b"
+   "size": 75013,
+   "sha256": "1e059fbbeecfd898be7bfc999e3da17178716de512337b0c27b7ad6c24746416"
   },
   {
    "path": "js/docx-import.js",
@@ -54,8 +54,8 @@
   },
   {
    "path": "js/formats.js",
-   "size": 21619,
-   "sha256": "9966201b2a8b6046459cf78112510f081ac6bd7f7539eafcf792b5c2475cce2f"
+   "size": 22470,
+   "sha256": "0c279a29a2b41419d4b580a367dfb050540f1ff1d5a7c3dc70b3d972057f7c45"
   },
   {
    "path": "js/icons.js",
@@ -86,6 +86,11 @@
    "path": "js/odt.js",
    "size": 61004,
    "sha256": "1a82bcc20d439838be1bb0e4f5ce8b788bf650e232d516dae52ca2e17e251ecb"
+  },
+  {
+   "path": "js/pdf-editor.js",
+   "size": 20360,
+   "sha256": "f65f231b2631c7b4538c896f498e7172e1aee7d2b2e1ff7dfc097835dc0b8063"
   },
   {
    "path": "js/ribbon.js",
@@ -356,6 +361,16 @@
    "path": "vendor/jszip.min.js",
    "size": 97781,
    "sha256": "7f839b2d4688b845c105ebf5d2f9803075f91ea0fe72bdaac176c3a04dd3d2c1"
+  },
+  {
+   "path": "vendor/pdf-lib-LICENSE.md",
+   "size": 1070,
+   "sha256": "f2c9fc00fdb66eb99ac156ba52d734af66d8d309f65753ae809ad34ee2883bcb"
+  },
+  {
+   "path": "vendor/pdf-lib.min.js",
+   "size": 525099,
+   "sha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f"
   },
   {
    "path": "vendor/pdfjs/LICENSE",

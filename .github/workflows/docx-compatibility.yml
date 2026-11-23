@@ -4,6 +4,9 @@ on:
     paths:
       - "js/docx-export.js"
       - "js/formats.js"
+      - "js/pdf-editor.js"
+      - "tests/pdf_editor.test.cjs"
+      - "tests/pdf_native_real.test.cjs"
       - "tests/formats_word.test.cjs"
       - "tests/audit_docx_roundtrip.py"
       - "tests/test_audit_docx_roundtrip.py"
@@ -28,9 +31,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Vérifier la syntaxe JavaScript du moteur DOCX
-        run: node --check js/docx-export.js && node --check js/formats.js
+        run: node --check js/docx-export.js && node --check js/formats.js && node --check js/pdf-editor.js
       - name: Tester la reconnaissance des formats Word
         run: node tests/formats_word.test.cjs
+      - name: Tester la conservation et l'édition PDF
+        run: node tests/pdf_editor.test.cjs && node tests/pdf_native_real.test.cjs
       - name: Vérifier les scripts Python
         run: python -m py_compile tests/audit_docx_roundtrip.py tests/test_audit_docx_roundtrip.py
       - name: Tester la validité OOXML et les pertes
