@@ -268,10 +268,10 @@ const PdfEditor = (() => {
   function canvasText(ctx, value, x, y, size, maxWidth) {
     ctx.font = Math.max(9, size) + 'px sans-serif';
     ctx.textBaseline = 'top';
-    const lines = String(value).split('\\n');
+    const lines = String(value).split('\n');
     let lineY = y;
     for (const line of lines) {
-      const words = line.split(/\\s+/);
+      const words = line.split(/\s+/);
       let current = '';
       for (const word of words) {
         const joined = current ? current + ' ' + word : word;
