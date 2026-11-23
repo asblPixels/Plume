@@ -36,6 +36,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add vendor/pdf-lib.min.js vendor/pdf-lib-LICENSE.md
-          git diff --cached --quiet || git commit -m "vendor(pdf): ajouter pdf-lib 1.17.1 et sa licence MIT"
+          node outils/version.js
+          git add vendor/pdf-lib.min.js vendor/pdf-lib-LICENSE.md version.json sw.js
+          git diff --cached --quiet || git commit -m "vendor(pdf): embarquer pdf-lib avec licence et manifeste hors ligne"
           git push origin HEAD:feat/pdf-fidelity-editor
