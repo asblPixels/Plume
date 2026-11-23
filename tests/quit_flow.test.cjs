@@ -63,7 +63,7 @@ async function run() {
   mobile = true; target._quitAllowed = false;
   // Si le pont de bureau est absent, le système mobile reçoit la fermeture.
   const mobileBox = { window: { Native: true }, Native: {
-    on: true, plugin: () => ({ exitApp: async () => calls.push('quit-mobile') })
+    on: true, plugin: () => ({ exitApp: async () => mobileBox.calls.push('quit-mobile') })
   }, dialog: async () => 'cancel', calls: [] };
   vm.createContext(mobileBox);
   vm.runInContext('this.App={dirty:false, '+method+'};',mobileBox);
