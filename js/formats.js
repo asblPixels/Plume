@@ -40,7 +40,7 @@ const Formats = (() => {
     txt: { label: 'Texte brut (.txt)', desc: 'Uniquement le texte, sans mise en forme.', mime: 'text/plain' }
   };
   /** Formats que Ctrl+S peut réécrire tels quels */
-  const SAVABLE = new Set(['docx', 'docm', 'dotx', 'dotm', 'odt', 'rtf', 'md', 'txt', 'html']);
+  const SAVABLE = new Set(['docx', 'docm', 'dotx', 'dotm', 'odt', 'rtf', 'md', 'txt', 'html', 'pdf']);
   /** Paquets Word (Office Open XML) */
   const WORD_XML = new Set(['docx', 'docm', 'dotx', 'dotm']);
 
@@ -200,7 +200,7 @@ const Formats = (() => {
       }
       case 'odt': case 'ott': case 'fodt': return { ...(await Odt.importOdt(buf, { registerImage: reg })), format: ext === 'odt' ? 'odt' : 'odt' };
       case 'rtf': return { ...Rtf.importRtf(buf, { registerImage: reg }), format: 'rtf' };
-      case 'pdf': return { ...(await importPdf(buf)), format: 'pdf', notice: 'PDF importé : le texte et la structure sont récupérés, la mise en page d’origine est simplifiée.' };
+      case 'pdf': return { pdfBytes: new Uint8Array(buf), format: 'pdf' };
       case 'html': case 'htm': case 'xhtml': return { html: Sanitize.html(decodeText(buf)), format: 'html' };
       case 'md': case 'markdown': return { html: Markdown.toHtml(decodeText(buf)), format: 'md' };
       case 'csv': {
@@ -272,6 +272,7 @@ const Formats = (() => {
         return new Blob([conv], { type: EXPORT.doc.mime });
       }
       case 'pdf': {
+        if (typeof PdfEditor !== 'undefined' && PdfEditor.active) return PdfEditor.exportPdf();
         // application de bureau : PDF vectoriel (texte sélectionnable) ; ailleurs : PDF direct page par page
         if (window.plumeDesktop && window.plumeDesktop.printToPdf) return new Blob([await window.plumeDesktop.printToPdf()], { type: 'application/pdf' });
         return rasterPdf(ctx);
