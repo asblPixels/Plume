@@ -1,5 +1,8 @@
 name: Plume 1.4.0 - paquet Windows et Linux
 on:
+  pull_request:
+    branches: [main]
+    paths: [".github/workflows/publish-desktop-1.4.0.yml"]
   push:
     branches: [compat/word-roundtrip-audit]
     paths: [".github/workflows/publish-desktop-1.4.0.yml"]
@@ -82,6 +85,7 @@ jobs:
         with: { name: flatpak-1.4.0, path: Plume.flatpak, if-no-files-found: error }
 
   release:
+    if: github.event_name == 'push' || github.head_ref == 'compat/word-roundtrip-audit'
     needs: [windows, linux, flatpak]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -104,10 +108,11 @@ jobs:
       - name: Publier Plume 1.4.0
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           if ! gh release view v1.4.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create v1.4.0 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Plume 1.4.0" --notes "Plume 1.4.0 Windows et Linux. EXE non signé : Windows peut afficher SmartScreen."
+            gh release create v1.4.0 --repo "$GITHUB_REPOSITORY" --target "$TARGET_SHA" --title "Plume 1.4.0" --notes "Plume 1.4.0 Windows et Linux. EXE non signé : Windows peut afficher SmartScreen."
           fi
           gh release upload v1.4.0 publish/* --repo "$GITHUB_REPOSITORY" --clobber
           gh release view v1.4.0 --repo "$GITHUB_REPOSITORY" --json url,assets --jq '{url: .url, files: [.assets[].name]}'
