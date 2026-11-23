@@ -119,6 +119,7 @@ const App = {
   /* ---------- Documents ---------- */
   async newDoc(tpl = 'blank', silent) {
     if (!silent && this.dirty) await this.flushAutosave();
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
     const t = TEMPLATES[tpl] || TEMPLATES.blank;
     this.docId = uid(); this.fileHandle = null; this.desktopPath = null; this.format = 'docx'; Ed.source = null;
     this.infoBar(null);
@@ -135,6 +136,7 @@ const App = {
     this.navRefresh(); this.drawRuler(); Ribbon.refresh(); this.updateStatus();
   },
   async openStored(id, silent) {
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
     const d = await Store.getDoc(id).catch(() => null);
     if (!d) return false;
     this.docId = d.id; this.fileHandle = null; this.desktopPath = null; this.format = d.format || 'docx';
@@ -168,6 +170,18 @@ const App = {
       if (this.dirty) await this.flushAutosave();
       this.setSaveState('Ouverture…');
       const r = await Formats.open(file, { registerImage: b => Ed.registerImage(b) });
+      if (r.pdfBytes) {
+        await PdfEditor.open(r.pdfBytes);
+        this.docId = uid(); this.format = 'pdf'; Ed.source = null;
+        this.fileHandle = handle; this.desktopPath = desktopPath;
+        $('#docTitle').value = base;
+        document.title = this.name() + ' — Plume PDF';
+        this.dirty = false; this.savedLocally = false;
+        this.setSaveState('PDF original');
+        this.infoBar({ icon: 'info', html: 'PDF affiché sans conversion. Les annotations conservent les pages originales. Modifier ou supprimer un texte aplatit uniquement sa page lors de l’export ; signatures numériques et éléments interactifs peuvent être affectés.' });
+        return;
+      }
+      if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
       Ed.source = r.source ? { zip: r.source, bytes: r.bytes || null } : null;
       this.docId = uid();
       this.format = r.format || 'docx';
@@ -225,6 +239,10 @@ const App = {
     return this.saveAs(fmt, asNew);
   },
   async saveAs(fmt = 'docx', asNew = true) {
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active && fmt !== 'pdf') {
+      dialog({ title: 'Document PDF', body: '<p>Ce document PDF conserve sa structure originale. Seul l’enregistrement au format PDF est disponible dans ce mode.</p>', buttons: [{ label: 'OK', primary: true }] });
+      return;
+    }
     // macros : un .docx ou .dotx ne peut pas les contenir → avertissement et choix
     if ((fmt === 'docx' || fmt === 'dotx') && this.hasMacros()) {
       const keep = fmt === 'dotx' ? 'dotm' : 'docm';
@@ -241,9 +259,9 @@ const App = {
       this.setSaveState('Enregistrement…');
       if (fmt === 'pdf' && !(window.plumeDesktop && window.plumeDesktop.printToPdf)) this.setSaveState('Création du PDF…');
       // PDF vectoriel (application de bureau) : rendu d'impression ; PDF direct : pages affichées telles quelles
-      const vector = fmt === 'pdf' && window.plumeDesktop && window.plumeDesktop.printToPdf;
+      const vector = fmt === 'pdf' && !(typeof PdfEditor !== 'undefined' && PdfEditor.active) && window.plumeDesktop && window.plumeDesktop.printToPdf;
       if (vector) this.preparePrint();
-      const blob = await Formats.build(fmt, this.exportCtx());
+      const blob = typeof PdfEditor !== 'undefined' && PdfEditor.active ? await PdfEditor.exportPdf() : await Formats.build(fmt, this.exportCtx());
       if (vector) this.endPrint();
       const fname = this.fileName(fmt);
       if (this.desktopPath && window.plumeDesktop && !asNew) {
@@ -277,6 +295,9 @@ const App = {
   autosave: debounce(function () { App.flushAutosave(); }, 1500),
   async flushAutosave(force) {
     if (!this.docId) return;
+    // En mode PDF, la source et ses modifications restent en mémoire : aucune
+    // copie de secours simplifiée susceptible de détruire la mise en page.
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) { this.savedLocally = false; return; }
     // mode confidentiel (par défaut) : rien n'est écrit sur l'appareil
     if (!this.keepLocal()) { this.savedLocally = false; return; }
     try {
@@ -336,6 +357,7 @@ const App = {
     Comments.highlight();
   },
   print() {
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) { window.print(); return; }
     if (Native.on) { dialog({ title: 'Imprimer', body: '<p style="line-height:1.55">Sur téléphone ou tablette, créez un <b>PDF</b> puis utilisez le bouton <b>Partager</b> pour l’envoyer à une imprimante ou à une autre application.</p>', buttons: [{ label: 'Créer le PDF', primary: true, onClick: () => { App.saveAs('pdf'); } }, { label: 'Fermer' }] }); return; }
     this.preparePrint();
     setTimeout(() => { window.print(); this.endPrint(); }, 50);
