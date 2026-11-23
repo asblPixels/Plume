@@ -118,6 +118,12 @@ const App = {
 
   /* ---------- Documents ---------- */
   async newDoc(tpl = 'blank', silent) {
+    if (!silent && this.dirty && typeof PdfEditor !== 'undefined' && PdfEditor.active) {
+      const answer = await dialog({ title: 'PDF non enregistré',
+        body: '<p>Des modifications du PDF ne sont pas encore enregistrées. Ouvrir un nouveau document les abandonnera.</p>',
+        buttons: [{ label: 'Continuer le PDF', value:false }, { label: 'Abandonner les modifications', value:true, primary:true }] });
+      if (!answer) return;
+    }
     if (!silent && this.dirty) await this.flushAutosave();
     if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
     const t = TEMPLATES[tpl] || TEMPLATES.blank;
@@ -167,6 +173,12 @@ const App = {
     if ($('#backstage').classList.contains('open')) Backstage.close();
     const base = file.name.replace(/\.[^.]+$/, '');
     try {
+      if (this.dirty && typeof PdfEditor !== 'undefined' && PdfEditor.active) {
+        const answer = await dialog({ title: 'PDF non enregistré',
+          body: '<p>Ce PDF contient des modifications non enregistrées. Ouvrir un autre fichier les abandonnera.</p>',
+          buttons: [{ label:'Annuler', value:false }, { label:'Abandonner les modifications', value:true, primary:true }] });
+        if (!answer) return;
+      }
       if (this.dirty) await this.flushAutosave();
       this.setSaveState('Ouverture…');
       const r = await Formats.open(file, { registerImage: b => Ed.registerImage(b) });
