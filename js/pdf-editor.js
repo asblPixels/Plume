@@ -53,7 +53,7 @@ const PdfEditor = (() => {
       note: 'Annotation : cliquez sur une page pour ajouter du texte.',
       highlight: 'Surlignage : cliquez sur un fragment de texte.',
       replace: 'Modifier : cliquez sur un fragment de texte à remplacer.',
-      erase: 'Supprimer : cliquez sur le texte à retirer.'
+      erase: 'Supprimer : cliquez sur un texte ou sélectionnez une zone à effacer, y compris dans un PDF scanné.'
     };
     setStatus(labels[mode]);
   }
@@ -184,6 +184,47 @@ const PdfEditor = (() => {
     } catch (err) {
       console.warn('PDF : couche de sélection indisponible sur cette page', err);
     }
+    // Une zone dessinée à la souris fonctionne aussi pour les PDF scannés,
+    // dont les caractères ne sont pas accessibles comme objets texte.
+    let drag = null;
+    const locate = event => {
+      const rect = frame.getBoundingClientRect();
+      return { x: clamp((event.clientX - rect.left) / rect.width, 0, 1),
+        y: clamp((event.clientY - rect.top) / rect.height, 0, 1) };
+    };
+    frame.addEventListener('pointerdown', event => {
+      if (mode !== 'erase' || event.button !== 0 || !canEdit() || event.target.closest('.pdf-edit-preview')) return;
+      drag = { start: locate(event), preview: $new('div', 'pdf-drag-selection') };
+      frame.append(drag.preview);
+      frame.setPointerCapture(event.pointerId);
+    });
+    frame.addEventListener('pointermove', event => {
+      if (!drag) return;
+      const now = locate(event);
+      const left = Math.min(now.x, drag.start.x), top = Math.min(now.y, drag.start.y);
+      drag.preview.style.left = (left * 100) + '%';
+      drag.preview.style.top = (top * 100) + '%';
+      drag.preview.style.width = (Math.abs(now.x - drag.start.x) * 100) + '%';
+      drag.preview.style.height = (Math.abs(now.y - drag.start.y) * 100) + '%';
+    });
+    frame.addEventListener('pointerup', async event => {
+      if (!drag) return;
+      const state = drag;
+      drag = null;
+      state.preview.remove();
+      if (frame.hasPointerCapture(event.pointerId)) frame.releasePointerCapture(event.pointerId);
+      const end = locate(event), dx = Math.abs(end.x - state.start.x), dy = Math.abs(end.y - state.start.y);
+      if (dx < .012 || dy < .008) return; // clic normal sur un fragment
+      event.preventDefault(); event.stopPropagation();
+      const ok = await confirmChange('Supprimer une zone du PDF',
+        'Cette zone sera effacée et la page concernée deviendra une image. Vérifiez toujours le résultat avant diffusion.');
+      if (!ok) return;
+      edits.push({ kind: 'redact', page: index,
+        x: Math.min(end.x, state.start.x), y: Math.min(end.y, state.start.y),
+        w: dx, h: dy, font: 12, value: '' });
+      showEdits(index); markChanged();
+    });
+    frame.addEventListener('pointercancel', () => { if (drag) drag.preview.remove(); drag = null; });
     frame.addEventListener('click', event => pageClick(event, index));
     wrap.append(frame);
   }
@@ -202,7 +243,7 @@ const PdfEditor = (() => {
     toolBar = $new('div', 'pdf-tools');
     toolBar.setAttribute('role', 'toolbar');
     toolBar.setAttribute('aria-label', 'Outils de modification PDF');
-    const tools = [['read','Lire'],['note','Annoter'],['highlight','Surligner'],['replace','Modifier le texte'],['erase','Supprimer du texte']];
+    const tools = [['read','Lire'],['note','Annoter'],['highlight','Surligner'],['replace','Modifier le texte'],['erase','Supprimer texte / zone']];
     for (const [tool, label] of tools) {
       const btn = $new('button', 'pdf-tool', label);
       btn.type = 'button'; btn.dataset.tool = tool;
