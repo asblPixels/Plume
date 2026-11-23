@@ -27,6 +27,19 @@ const PdfEditor = (() => {
     if (el) el.textContent = message;
   }
   function canEdit() { return !!original && !busy; }
+  async function inputText(title, initial = '') {
+    const field = $new('textarea', 'pdf-input');
+    field.value = initial;
+    field.rows = 3;
+    field.style.cssText = 'display:block;width:100%;min-width:250px;resize:vertical;font:inherit;padding:10px';
+    const value = await dialog({ title, body: field, width: 480,
+      buttons: [{ label:'Annuler', value:null }, { label:'Valider', value:'ok', primary:true }] });
+    return value === 'ok' ? field.value : null;
+  }
+  async function confirmChange(title, text) {
+    return await dialog({ title, body: $new('p', '', text),
+      buttons: [{ label:'Annuler', value:false }, { label:'Confirmer', value:true, primary:true }] }) === true;
+  }
   function selectMode(value) {
     mode = value;
     if (!toolBar) return;
@@ -51,7 +64,7 @@ const PdfEditor = (() => {
     const height = Math.max(4, (item.height || size / viewport.scale) * viewport.scale);
     return { x: tr[4], y: tr[5] - height, w: width, h: height, font: size };
   }
-  function selection(pageIndex, bbox, text) {
+  async function selection(pageIndex, bbox, text) {
     if (!canEdit() || mode === 'read') return;
     const pageNode = pageNodes[pageIndex];
     if (!pageNode) return;
@@ -66,14 +79,14 @@ const PdfEditor = (() => {
     if (mode === 'highlight') {
       edits.push({ kind: 'highlight', page: pageIndex, ...box });
     } else if (mode === 'erase') {
-      if (!confirm('Retirer réellement ce texte du PDF ? La page concernée sera aplatie lors de l’enregistrement, sans conserver son texte sélectionnable.')) return;
+      if (!await confirmChange('Supprimer du texte', 'Le texte sélectionné sera effacé lors de l’enregistrement. La page concernée deviendra une image non sélectionnable. Ne pas utiliser pour masquer des données sensibles sans vérification.')) return;
       edits.push({ kind: 'redact', page: pageIndex, ...box, value: '' });
     } else if (mode === 'replace') {
-      const value = prompt('Nouveau texte pour ce fragment (vide = supprimer) :', text);
+      const value = await inputText('Modifier le texte du PDF (vide = supprimer)', text);
       if (value === null || value === text) return;
       edits.push({ kind: 'redact', page: pageIndex, ...box, value: clean(value) });
     } else if (mode === 'note') {
-      const value = prompt('Texte de l’annotation :');
+      const value = await inputText('Ajouter une annotation');
       if (value === null || !clean(value)) return;
       edits.push({ kind: 'note', page: pageIndex, ...box, value: clean(value) });
     }
@@ -98,9 +111,9 @@ const PdfEditor = (() => {
       box.style.fontSize = Math.max(9, item.font * view.scale) + 'px';
     }
     box.title = 'Double-cliquez pour retirer cette modification.';
-    box.addEventListener('dblclick', event => {
+    box.addEventListener('dblclick', async event => {
       event.stopPropagation();
-      if (!confirm('Annuler cette modification ?')) return;
+      if (!await confirmChange('Annuler cette modification', 'Retirer cette modification du PDF en cours ?')) return;
       edits.splice(edits.indexOf(item), 1);
       showEdits(item.page);
       markChanged();
@@ -113,13 +126,13 @@ const PdfEditor = (() => {
     node.preview.replaceChildren();
     edits.filter(x => x.page === index).forEach(item => placePreview(node.preview, item, node.viewport));
   }
-  function pageClick(event, pageIndex) {
+  async function pageClick(event, pageIndex) {
     if (mode !== 'note' || !canEdit() || event.target.closest('.pdf-edit-preview')) return;
     const node = pageNodes[pageIndex];
     const rect = node.frame.getBoundingClientRect();
     const x = clamp((event.clientX - rect.left) / rect.width, 0, .98);
     const y = clamp((event.clientY - rect.top) / rect.height, 0, .98);
-    const value = prompt('Texte de l’annotation :');
+    const value = await inputText('Ajouter une annotation');
     if (value === null || !clean(value)) return;
     edits.push({ kind: 'note', page: pageIndex, x, y, w: .25, h: .03, font: 12, value: clean(value) });
     showEdits(pageIndex);
