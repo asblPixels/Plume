@@ -824,3 +824,9 @@ body.pdf-mode #main { position:relative; overflow:hidden; }
  body.pdf-mode .pdf-page { margin:0!important; box-shadow:none!important; break-after:page; }
  body.pdf-mode .pdf-text-hitboxes { display:none!important; }
 }
+
+/* Fermeture explicite disponible sur bureau et tablette, sans fenêtre externe. */
+.plume-quit-btn { width:auto; min-width:32px; height:30px; padding:0 10px; display:inline-flex; align-items:center; gap:6px; border-radius:6px; flex:none; }
+.plume-quit-btn:hover,.plume-quit-btn:focus-visible { background:#a32435; color:white; outline-offset:2px; }
+.plume-quit-btn .quit-label { font-weight:600; font-size:12px; }
+@media(max-width:720px) { .plume-quit-btn { padding:0 7px; } .plume-quit-btn .quit-label { display:none; } }

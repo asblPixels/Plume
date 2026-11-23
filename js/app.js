@@ -31,6 +31,7 @@ const App = {
     $('#fileInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) this.fileInputCb(f); });
     $('#exitReading').addEventListener('click', () => this.setReading(false));
     $('#themeBtn').addEventListener('click', () => this.toggleTheme());
+    $('#quitBtn').addEventListener('click', () => this.requestQuit());
 
     // Démarrage : toujours une page blanche, jamais le dernier document (ordinateurs partagés, écoles).
     // L'écran d'accueil propose un document vierge ou l'ouverture d'un fichier (ordinateur, clé USB…).
@@ -44,13 +45,14 @@ const App = {
     if (window.plumeDesktop) {
       document.documentElement.classList.add('desktop');
       window.plumeDesktop.onOpenFile(f => this.openFile(new File([f.data], f.name), null, f.path));
+      window.plumeDesktop.onQuitRequested(() => this.requestQuit());
     }
     if ('launchQueue' in window) {
       launchQueue.setConsumer(async p => { if (p.files && p.files.length) { this._launched = true; const h = p.files[0]; this.openFile(await h.getFile(), h); } });
     }
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !window.plumeDesktop && !(window.Native && Native.on)) navigator.serviceWorker.register('sw.js').catch(() => { });
     this.initUpdates();
-    window.addEventListener('beforeunload', e => { if (this.dirty && !(this.savedLocally && this.keepLocal())) { e.preventDefault(); e.returnValue = ''; } });
+    window.addEventListener('beforeunload', e => { if (!this._quitAllowed && this.dirty && !(this.savedLocally && this.keepLocal())) { e.preventDefault(); e.returnValue = ''; } });
     Ed.editor.focus();
     if (!localStorage.getItem('plume-guide-vu') && !navigator.webdriver) { localStorage.setItem('plume-guide-vu', '1'); setTimeout(() => Guide.open(), 600); }
     // petits écrans : la page s'adapte à la largeur
@@ -115,6 +117,55 @@ const App = {
   },
 
   name() { return ($('#docTitle').value || 'Document').trim(); },
+
+  /* ---------- Fermeture partagée : Windows, Linux, macOS et mobile ---------- */
+  async requestQuit() {
+    if (this._closing) return;
+    this._closing = true;
+    try {
+      if (this.dirty) {
+        const action = await dialog({
+          title: 'Quitter Plume',
+          body: '<p>Ce document contient des modifications non enregistrées.</p><p>Que souhaitez-vous faire ?</p>',
+          buttons: [
+            { label: 'Annuler', value: 'cancel' },
+            { label: 'Quitter sans enregistrer', value: 'discard' },
+            { label: 'Enregistrer et quitter', value: 'save', primary: true }
+          ]
+        });
+        if (!action || action === 'cancel') return;
+        if (action === 'save') {
+          await this.save();
+          // L'enregistrement peut être annulé ou échouer. Ne jamais quitter
+          // tant que le document comporte des modifications non enregistrées.
+          if (this.dirty) return;
+        }
+      }
+      if (window.plumeDesktop && window.plumeDesktop.quit) {
+        this._quitAllowed = true;
+        try {
+          const approved = await window.plumeDesktop.quit();
+          if (!approved) this._quitAllowed = false;
+        } catch (error) {
+          this._quitAllowed = false;
+          throw error;
+        }
+      } else if (window.Native && Native.on) {
+        const appPlugin = Native.plugin('App');
+        if (appPlugin && appPlugin.exitApp) await appPlugin.exitApp();
+        else if (appPlugin && appPlugin.minimizeApp) await appPlugin.minimizeApp();
+      } else {
+        // Les navigateurs interdisent généralement window.close() sur un
+        // onglet ouvert par l'utilisateur. Proposer une instruction fiable.
+        await dialog({ title: 'Fermer Plume',
+          body: '<p>Vous pouvez fermer cet onglet ou cette fenêtre dans votre navigateur.</p>',
+          buttons: [{ label: 'OK', primary: true }]
+        });
+      }
+    } finally {
+      this._closing = false;
+    }
+  },
 
   /* ---------- Documents ---------- */
   async newDoc(tpl = 'blank', silent) {
@@ -292,7 +343,7 @@ const App = {
           const w = await h.createWritable(); await w.write(blob); await w.close();
           if (Formats.SAVABLE.has(fmt)) { this.fileHandle = h; this.desktopPath = null; this.format = fmt; $('#docTitle').value = h.name.replace(/\.[^.]+$/, ''); }
         } catch (e) { if (e.name === 'AbortError') { this.setSaveState('Modifié'); return; } throw e; }
-      } else downloadBlob(blob, fname);
+      } else await downloadBlob(blob, fname);
       await this.flushAutosave(true);
       this.dirty = false;
       this.setSaveState('Enregistré');
@@ -631,6 +682,7 @@ const App = {
       const inField = e.target.closest && e.target.closest('input,textarea,select') && !e.target.closest('#editor');
       const run = id => { e.preventDefault(); CMD[id].run(); };
       if (e.altKey && k === 'q') { e.preventDefault(); $('#cmdSearch').focus(); return; }
+      if (mod && !e.shiftKey && !e.altKey && k === 'q') { e.preventDefault(); this.requestQuit(); return; }
       if (e.key === 'F12') return run('saveAs');
       if (e.key === 'F11') return run('fullscreen');
       if (e.key === 'F7') return run('spell');
