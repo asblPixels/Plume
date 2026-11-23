@@ -343,7 +343,7 @@ const App = {
           const w = await h.createWritable(); await w.write(blob); await w.close();
           if (Formats.SAVABLE.has(fmt)) { this.fileHandle = h; this.desktopPath = null; this.format = fmt; $('#docTitle').value = h.name.replace(/\.[^.]+$/, ''); }
         } catch (e) { if (e.name === 'AbortError') { this.setSaveState('Modifié'); return; } throw e; }
-      } else downloadBlob(blob, fname);
+      } else await downloadBlob(blob, fname);
       await this.flushAutosave(true);
       this.dirty = false;
       this.setSaveState('Enregistré');
