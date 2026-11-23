@@ -16,7 +16,7 @@ conversion, repagination ni reconstruction n'est effectuée.
 - **Annoter et surligner** : ajout dans le PDF avec pdf-lib ; les pages
   non touchées ne sont pas rasterisées.
 - **Modifier ou supprimer du texte** : le fragment choisi est remplacé
-  visuellement. Pour ne pas laisser du texte accessible sous une zone blanche,
+  visuellement. Une zone rectangulaire peut aussi être effacée à la souris, y compris sur un PDF scanné sans texte extractible. Pour ne pas laisser du texte accessible sous une zone blanche,
   **la page modifiée est convertie en image** lors de l'export. Les pages
   non concernées restent des pages PDF natives.
 
