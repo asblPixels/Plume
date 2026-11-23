@@ -87,6 +87,7 @@ function sendFile(p) {
 }
 
 let exitApproved = false;
+let quitAcknowledgement = null;
 // Le gestionnaire de fenêtre vaut sur Linux, Windows et macOS : la fermeture
 // native (Alt+F4, bouton X, Cmd+Q) passe par la même confirmation de Plume.
 function requestWindowClose(event) {
@@ -104,7 +105,27 @@ function requestWindowClose(event) {
     return;
   }
   win.webContents.send('plume:request-quit');
+  // Secours quand le moteur JS ne répond pas : une app doit toujours
+  // pouvoir être fermée depuis le système, même après un plantage partiel.
+  if (quitAcknowledgement) clearTimeout(quitAcknowledgement);
+  quitAcknowledgement = setTimeout(() => {
+    quitAcknowledgement = null;
+    if (!win || win.isDestroyed() || exitApproved) return;
+    const answer = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Plume ne répond pas',
+      message: 'Plume n’a pas répondu à la demande de fermeture.',
+      detail: 'Forcer la fermeture peut perdre des modifications non enregistrées.',
+      buttons: ['Annuler', 'Forcer la fermeture'], defaultId: 0, cancelId: 0
+    });
+    if (answer === 1) { exitApproved = true; win.destroy(); app.quit(); }
+  }, 2500);
 }
+ipcMain.on('plume:quit-ack', event => {
+  if (win && !win.isDestroyed() && event.sender === win.webContents && quitAcknowledgement) {
+    clearTimeout(quitAcknowledgement);
+    quitAcknowledgement = null;
+  }
+});
 
 function createWindow() {
   win = new BrowserWindow({
@@ -171,6 +192,7 @@ else {
 ipcMain.handle('plume:quit', event => {
   if (!win || win.isDestroyed() || event.sender !== win.webContents) return false;
   exitApproved = true;
+  if (quitAcknowledgement) { clearTimeout(quitAcknowledgement); quitAcknowledgement = null; }
   win.close();
   app.quit();
   return true;
