@@ -1,0 +1,71 @@
+name: Plume Windows - aperçu installable
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - compat/word-roundtrip-audit
+    paths:
+      - "desktop/**"
+      - "js/**"
+      - "css/**"
+      - "index.html"
+      - ".github/workflows/windows-preview.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Récupérer Plume
+        uses: actions/checkout@v4
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Vérifier les scripts modifiés
+        shell: pwsh
+        run: |
+          node --check js/backstage.js
+          node --check js/docx-export.js
+          node --check js/formats.js
+      - name: Préparer l'application de bureau
+        shell: pwsh
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          node prepare.js
+          npx electron-builder --win dir --x64 --publish never
+      - name: Générer le programme d'installation EXE
+        shell: pwsh
+        working-directory: desktop
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress | Out-Null
+          }
+          $nsis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $nsis) { $nsis = "C:\Program Files (x86)\NSIS\makensis.exe" }
+          if (-not (Test-Path $nsis)) { throw "NSIS non disponible" }
+          $v = node -p "require('./package.json').version"
+          $root = (Get-Location).Path
+          & $nsis "/DVERSION=$v" "/DSRC=$root\dist\win-unpacked" "/DOUT=$root\dist\Plume-Setup-$v-x64.exe" "/DICON=$root\build\icon.ico" installer\plume.nsi
+          if ($LASTEXITCODE -ne 0) { throw "La compilation NSIS a échoué" }
+          New-Item -ItemType Directory -Force ..\out | Out-Null
+          Copy-Item "dist\Plume-Setup-$v-x64.exe" ..\out\
+      - name: Vérifier le fichier installable
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem out\*.exe)
+          if ($files.Count -ne 1 -or $files[0].Length -lt 1000000) { throw "Installateur manquant ou incomplet" }
+          Get-FileHash $files[0].FullName -Algorithm SHA256
+      - name: Fournir l'installateur Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: Plume-Windows-Installateur-Apercu
+          path: out/Plume-Setup-*.exe
+          retention-days: 30
+          if-no-files-found: error

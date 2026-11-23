@@ -57,16 +57,31 @@ const Formats = (() => {
         const z = await JSZip.loadAsync(buf);
         const mt = z.file('mimetype') ? (await z.file('mimetype').async('string')).trim() : '';
         if (/opendocument\.text/.test(mt)) return /template/.test(mt) ? 'ott' : 'odt';
-        if (z.file('word/document.xml') || z.file('[Content_Types].xml')) {
-          if (['docx', 'docm', 'dotx', 'dotm'].includes(ext)) return ext;
-          // extension inconnue : le type du document principal fait foi
+        // Ne pas traiter un classeur ou une présentation ZIP comme un document Word.
+        // Le contenu OOXML prime sur le nom de fichier, notamment pour les macros.
+        if (z.file('word/document.xml')) {
           const ct = z.file('[Content_Types].xml') ? await z.file('[Content_Types].xml').async('string') : '';
-          return /macroEnabledTemplate\.main/.test(ct) ? 'dotm' : /macroEnabled\.main/.test(ct) ? 'docm' : /wordprocessingml\.template\.main/.test(ct) ? 'dotx' : 'docx';
+          const main = [...ct.matchAll(/<Override\b[^>]*>/g)].find(m => /PartName=["']\/word\/document\.xml["']/i.test(m[0]));
+          const kind = main && /ContentType=["']([^"']+)/i.exec(main[0])?.[1] || '';
+          if (/macroEnabledTemplate\.main\+xml/i.test(kind)) return 'dotm';
+          if (/macroEnabled\.main\+xml/i.test(kind)) return 'docm';
+          if (/wordprocessingml\.template\.main\+xml/i.test(kind)) return 'dotx';
+          if (/wordprocessingml\.document\.main\+xml/i.test(kind)) return 'docx';
+          // Compatibilité avec les documents anciens sans type explicite.
+          return ['docx', 'docm', 'dotx', 'dotm'].includes(ext) ? ext : 'docx';
+        }
+        if (['docx', 'docm', 'dotx', 'dotm'].includes(ext)) {
+          const e = new Error('INVALID_WORD');
+          e.userMessage = 'Cette archive ne contient pas de document Word valide (word/document.xml absent).';
+          throw e;
         }
         if (z.file('index.xml') && ext === 'pages') return 'pages';
         if (/sun\.xml\.writer/.test(mt)) return 'sxw';
         if (mt === 'application/epub+zip') return 'epub';
-      } catch { /* pas un ZIP valide */ }
+      } catch (e) {
+        if (e && e.message === 'INVALID_WORD') throw e;
+        // ZIP endommagé : l'importeur produira une erreur explicite.
+      }
       return ext;
     }
     if (ext === 'fodt' || ext === 'xml') {
