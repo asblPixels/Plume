@@ -8,6 +8,7 @@ const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10]);
 const calls = [];
 const mockPage = {
   getViewport({ scale }) { return { width: 100 * scale, height: 200 * scale }; },
+  async getTextContent() { return { items: [] }; },
   render() { calls.push('render'); return { promise: Promise.resolve() }; }
 };
 function canvas() {
@@ -25,6 +26,8 @@ function canvas() {
 }
 const pdfPage = {
   getSize() { return { width: 100, height: 200 }; },
+  setSize() {},
+  setOrEmbedFont() { return { newFontKey: "F1" }; },
   drawRectangle() { calls.push('vector-rectangle'); },
   drawText() { calls.push('vector-text'); },
   drawImage() { calls.push('image'); }
@@ -32,6 +35,7 @@ const pdfPage = {
 const base = {
   embedFont: async () => ({ encodeText(value) { return value; } }),
   getPage: () => pdfPage,
+  getPageIndices: () => [0, 1],
   addPage: () => pdfPage,
   copyPages: async () => [pdfPage],
   embedPng: async data => {

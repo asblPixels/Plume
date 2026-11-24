@@ -2,7 +2,7 @@
  * PDF.js conserve la représentation d'origine à l'écran. Une ouverture suivie
  * d'un enregistrement sans édition restitue exactement les octets d'entrée.
  * Annotations : objets PDF vectoriels. Modification/suppression de texte :
- * seule la page modifiée est aplatie en image pour supprimer le texte source.
+ * le rendu de la page modifiée est aplati, avec une couche de sélection reconstruite.
  * Licence Plume inchangée ; dépendances : PDF.js (Apache-2.0), pdf-lib (MIT).
  */
 'use strict';
@@ -79,7 +79,7 @@ const PdfEditor = (() => {
     if (mode === 'highlight') {
       edits.push({ kind: 'highlight', page: pageIndex, ...box });
     } else if (mode === 'erase') {
-      if (!await confirmChange('Supprimer du texte', 'Le texte sélectionné sera effacé lors de l’enregistrement. La page concernée deviendra une image non sélectionnable. Ne pas utiliser pour masquer des données sensibles sans vérification.')) return;
+      if (!await confirmChange('Supprimer du texte', 'Le texte sélectionné sera effacé lors de l’enregistrement. Le rendu de la page sera reconstruit et la sélection du texte pourra changer. Ne pas utiliser pour masquer des données sensibles sans vérification.')) return;
       edits.push({ kind: 'redact', page: pageIndex, ...box, value: '' });
     } else if (mode === 'replace') {
       const value = await inputText('Modifier le texte du PDF (vide = supprimer)', text);
@@ -217,7 +217,7 @@ const PdfEditor = (() => {
       if (dx < .012 || dy < .008) return; // clic normal sur un fragment
       event.preventDefault(); event.stopPropagation();
       const ok = await confirmChange('Supprimer une zone du PDF',
-        'Cette zone sera effacée et la page concernée deviendra une image. Vérifiez toujours le résultat avant diffusion.');
+        'Cette zone sera effacée et le rendu de la page sera reconstruit. Vérifiez toujours le résultat avant diffusion.');
       if (!ok) return;
       edits.push({ kind: 'redact', page: index,
         x: Math.min(end.x, state.start.x), y: Math.min(end.y, state.start.y),
@@ -333,15 +333,47 @@ const PdfEditor = (() => {
   function supportsFont(font, value) {
     try { font.encodeText(value); return true; } catch { return false; }
   }
-  // Page modifiée : son contenu est reconstruit visuellement, sans texte source
-  // caché dessous. Les autres pages restent des pages PDF natives.
-  async function flattenedPage(doc, index, sourcePage, changes) {
+  function addSelectableText(page, font, fontKey, value, box, height) {
+    if (!value.trim() || !supportsFont(font, value)) return;
+    const { beginText, endText, setFontAndSize, setTextMatrix, setTextRenderingMode,
+      showText, TextRenderingMode, pushGraphicsState, popGraphicsState } = window.PDFLib;
+    const size = Math.max(1, box.font);
+    const textWidth = font.widthOfTextAtSize(value, size);
+    if (!(textWidth > 0)) return;
+    page.pushOperators(pushGraphicsState(), beginText(), setFontAndSize(fontKey, size),
+      setTextRenderingMode(TextRenderingMode.Invisible),
+      setTextMatrix(box.w / textWidth, 0, 0, 1, box.x, height - box.y - box.h),
+      showText(font.encodeText(value)), endText(), popGraphicsState());
+  }
+  function restoreSelectableText(page, font, text, view, masks, changes) {
+    const { newFontKey: fontKey } = page.setOrEmbedFont(font);
+    for (const item of text.items) {
+      if (!item.str || !item.str.trim()) continue;
+      const box = bboxForItem(item, view);
+      // Exclure tout fragment qui touche l’effacement, même partiellement.
+      if (masks.some(mask => box.x < mask.x + mask.w && box.x + box.w > mask.x &&
+          box.y < mask.y + mask.h && box.y + box.h > mask.y)) continue;
+      addSelectableText(page, font, fontKey, item.str, box, view.height);
+    }
+    for (const item of changes) {
+      if ((item.kind !== 'redact' && item.kind !== 'note') || !item.value ||
+          !supportsFont(font, item.value)) continue;
+      const x = item.x * view.width;
+      addSelectableText(page, font, fontKey, item.value, {
+        x, y: item.y * view.height, font: item.font,
+        w: Math.min(view.width - x, font.widthOfTextAtSize(item.value, item.font)), h: item.font
+      }, view.height);
+    }
+  }
+  // Reconstruire le rendu sans recopier le flux de contenu original.
+  async function flattenedPage(doc, sourcePage, changes, font) {
     const view = sourcePage.getViewport({ scale: 3 });
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(view.width));
     canvas.height = Math.max(1, Math.round(view.height));
     const ctx = canvas.getContext('2d', { alpha: false });
     await sourcePage.render({ canvasContext: ctx, canvas, viewport: view }).promise;
+    const masks = [];
     for (const item of changes) {
       const x = item.x * canvas.width, y = item.y * canvas.height;
       const w = item.w * canvas.width, h = item.h * canvas.height;
@@ -349,6 +381,8 @@ const PdfEditor = (() => {
         // Opaque, pas une simple annotation masquant le texte d'origine.
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+        masks.push({ x: (x - 2) / canvas.width, y: (y - 2) / canvas.height,
+          w: (w + 4) / canvas.width, h: (h + 4) / canvas.height });
         if (item.value) {
           ctx.fillStyle = '#111111';
           canvasText(ctx, item.value, x, y, item.font * view.scale, Math.max(1, canvas.width - x - 5));
@@ -364,9 +398,14 @@ const PdfEditor = (() => {
     const png = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Impossible de rasteriser la page PDF')), 'image/png'));
     const image = await doc.embedPng(await png.arrayBuffer());
     const originalSize = sourcePage.getViewport({ scale: 1 });
-    const page = doc.addPage([originalSize.width, originalSize.height]);
+    const page = doc.addPage();
+    page.setSize(originalSize.width, originalSize.height);
     page.drawImage(image, { x: 0, y: 0, width: originalSize.width, height: originalSize.height });
-    return page;
+    const text = await sourcePage.getTextContent();
+    restoreSelectableText(page, font, text, originalSize, masks.map(mask => ({
+      x: mask.x * originalSize.width, y: mask.y * originalSize.height,
+      w: mask.w * originalSize.width, h: mask.h * originalSize.height
+    })), changes);
   }
   async function exportPdf() {
     if (!canEdit()) throw new Error('Aucun PDF ouvert');
@@ -380,33 +419,35 @@ const PdfEditor = (() => {
     try {
       const { PDFDocument, StandardFonts } = window.PDFLib;
       const source = await PDFDocument.load(original, { ignoreEncryption: false });
-      const probeFont = await source.embedFont(StandardFonts.Helvetica);
-      const mustFlatten = edits.some(x => x.kind === 'redact' ||
-        (x.kind === 'note' && !supportsFont(probeFont, x.value)) ||
-        (pageNodes[x.page] && pageNodes[x.page].needsFlatten));
-      let result;
-      if (!mustFlatten) {
-        // Conserve les pages, polices, images et dessins existants ; ajoute
-        // seulement les annotations vectorielles sélectionnées.
-        result = source;
-        const font = await result.embedFont(StandardFonts.Helvetica);
-        edits.forEach(e => applyVector(result.getPage(e.page), e, font));
+      const sourceFont = await source.embedFont(StandardFonts.Helvetica);
+      const byPage = new Map();
+      for (const edit of edits) {
+        if (!byPage.has(edit.page)) byPage.set(edit.page, []);
+        byPage.get(edit.page).push(edit);
+      }
+      const flattened = new Set();
+      for (const [index, changes] of byPage) {
+        if (pageNodes[index]?.needsFlatten || changes.some(edit => edit.kind === 'redact' ||
+            (edit.kind === 'note' && !supportsFont(sourceFont, edit.value)))) flattened.add(index);
+      }
+      let result = source;
+      if (!flattened.size) {
+        for (const [index, changes] of byPage) {
+          changes.forEach(edit => applyVector(source.getPage(index), edit, sourceFont));
+        }
       } else {
-        // Une vraie suppression ne peut pas consister à peindre un rectangle
-        // blanc par-dessus le texte : il resterait extractible. On remplace
-        // uniquement la page concernée par son rendu corrigé.
         result = await PDFDocument.create();
         const font = await result.embedFont(StandardFonts.Helvetica);
+        const nativeIndices = source.getPageIndices().filter(index => !flattened.has(index));
+        const nativePages = await result.copyPages(source, nativeIndices);
+        let nativeIndex = 0;
         for (let i = 0; i < pdf.numPages; i++) {
-          const here = edits.filter(x => x.page === i);
-          if (here.some(x => x.kind === 'redact' ||
-            (x.kind === 'note' && !supportsFont(probeFont, x.value)) ||
-            (pageNodes[x.page] && pageNodes[x.page].needsFlatten))) {
-            await flattenedPage(result, i, await pdf.getPage(i + 1), here);
+          const changes = byPage.get(i) || [];
+          if (flattened.has(i)) {
+            await flattenedPage(result, await pdf.getPage(i + 1), changes, font);
           } else {
-            const [copied] = await result.copyPages(source, [i]);
-            const page = result.addPage(copied);
-            here.forEach(e => applyVector(page, e, font));
+            const page = result.addPage(nativePages[nativeIndex++]);
+            changes.forEach(edit => applyVector(page, edit, font));
           }
         }
       }

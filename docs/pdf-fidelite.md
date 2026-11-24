@@ -20,11 +20,12 @@ conversion, repagination ni reconstruction n'est effectuée.
   **la page modifiée est convertie en image** lors de l'export. Les pages
   non concernées restent des pages PDF natives.
 
-Cette dernière technique a des limites essentielles : les textes de la
-page modifiée ne sont plus sélectionnables comme objets texte, les polices et
-l'espacement du texte ajouté ne sont pas nécessairement identiques à ceux de
-l'original, et l'édition ne redistribue pas automatiquement le texte voisin.
-Ce n'est **pas** encore une réécriture native des opérateurs de texte PDF.
+La page reconstruite reçoit une couche de sélection et de recherche pour les
+fragments extractibles hors des zones effacées et le texte ajouté, lorsque
+l’encodage de la police PDF le permet. Les fragments qui chevauchent une zone
+effacée sont exclus de cette couche. Le rendu de la page reste une image.
+Le texte ajouté peut différer de l’original par sa police et son espacement,
+et n’entraîne aucun déplacement du texte voisin.
 
 Les PDF signés numériquement perdent leur validité de signature après une
 édition ; des formulaires, signets ou métadonnées complexes peuvent aussi

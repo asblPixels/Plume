@@ -4,8 +4,8 @@
  "files": [
   {
    "path": "index.html",
-   "size": 5797,
-   "sha256": "97eee72a3c919b0546be52c6ceff0b2d2e68c1af2765d1298c88e537562d86c4"
+   "size": 6009,
+   "sha256": "f4f603f879e99420f9165be58a6e48f76bb229907af1ccbf205fc5271d671615"
   },
   {
    "path": "manifest.webmanifest",
@@ -19,18 +19,18 @@
   },
   {
    "path": "css/plume.css",
-   "size": 56209,
-   "sha256": "ea703702ef6b0ccbb231e8d8d14b57d731eec993ca9a5fe94504a7c2a6459207"
+   "size": 56734,
+   "sha256": "6421e912f348ba3f70993d91dff6a25722c1c37340e9960f18b73578c9d3393e"
   },
   {
    "path": "js/app.js",
-   "size": 62526,
-   "sha256": "7476d6d58302ecfd473e83b3fbdeb2e4b20fd4848361739924e3e3966ceaf0e3"
+   "size": 64767,
+   "sha256": "f39df692f79d4be6cfb8a4c361c5de3777b931943059d5baf7bba3e2504c3c5b"
   },
   {
    "path": "js/backstage.js",
-   "size": 31337,
-   "sha256": "1e4d23e9921969308609ed0ac1fcc80307c22ab3c522b1ee6dbad807e220a304"
+   "size": 31437,
+   "sha256": "a1f4728f2c0401bc4ead7da5571cba73749c609a88c6a6ba0ed2b5fbd965aaed"
   },
   {
    "path": "js/docx-export.js",
@@ -79,8 +79,8 @@
   },
   {
    "path": "js/native.js",
-   "size": 3272,
-   "sha256": "f756b9b05427a43ed41fc86a128e4cbd1a96eb8cef067c7b7c0efd2bac3f7aeb"
+   "size": 3253,
+   "sha256": "2bfdf4e516a5c49c875177b6bc4f16155c3a55bc9cf7dc89a0609448ada68120"
   },
   {
    "path": "js/odt.js",
@@ -89,13 +89,13 @@
   },
   {
    "path": "js/pdf-editor.js",
-   "size": 20360,
-   "sha256": "f65f231b2631c7b4538c896f498e7172e1aee7d2b2e1ff7dfc097835dc0b8063"
+   "size": 22419,
+   "sha256": "286bd9431d56ec605d092464f9738d7b79ac291c84dc5a841d85a60542d81ece"
   },
   {
    "path": "js/ribbon.js",
-   "size": 46302,
-   "sha256": "10b8d15e5d3984de628f8a9f0dc826c325e3f9cc90f67a4c87711ed7a32858d7"
+   "size": 46383,
+   "sha256": "b2c609cfe5b99873c3e56751a75ff42fd8c8732815a867a2dbef16598889220d"
   },
   {
    "path": "js/rtf.js",
@@ -114,8 +114,8 @@
   },
   {
    "path": "js/util.js",
-   "size": 8350,
-   "sha256": "3e4bc86b9abf2906d5e06d0b6bdbd85905cd12339ebf28869ef921e26fd5af39"
+   "size": 8363,
+   "sha256": "9f22c3d7061351efdeadf05ca04650d78b7a0cffe9d490ec6024f9ef03a6eb57"
   },
   {
    "path": "vendor/fonts/andika-latin-400-italic.woff2",
