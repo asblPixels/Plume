@@ -72,3 +72,28 @@ compatibilité réelle avec Word nécessitent un corpus de tests,
 des captures de comparaison, puis des corrections ciblées des moteurs
 d'import/export et de pagination. Aucune validation complète dans
 Microsoft Word n'est revendiquée à cette étape.
+
+## Recette du candidat Windows
+
+Le [candidat Windows](https://github.com/asblPixels/Plume/pull/5) est vérifié par
+le workflow **Plume Windows - aperçu installable**. Le runner exécute les
+tests Node et vérifie le manifeste avant de compiler l’installateur NSIS.
+Il vérifie ensuite l’installation par utilisateur, l’ouverture de la
+fenêtre, le refus d’une mise à jour pendant une session active, la fermeture
+normale et la désinstallation. Un nouveau commit annule la recette
+précédente de la même PR lorsqu’elle tourne encore. L’installateur non
+signé est disponible dans les artefacts du run réussi.
+
+Pour la recette dans Microsoft Word, utiliser des copies et vérifier ces cas :
+
+| Cas | Résultat attendu à la réouverture dans Word |
+| --- | --- |
+| Champ texte Word simple dans un paragraphe | Le contrôle conserve son nom, sa balise et sa valeur. Tester également le texte indicatif et les retours à la ligne. |
+| Case à cocher Word moderne dans le corps | L’état choisi dans Plume est conservé, ainsi que les glyphes et les propriétés de verrouillage. |
+| Document .docm ou modèle .dotm | Le projet VBA est conservé. Plume affiche le code et les procédures détectées. L’exécution manuelle passe par Word sur Windows. |
+| PDF retouché | Le texte pris en charge reste extractible hors de la modification. Comparer le rendu dans un lecteur PDF indépendant. Les pages retouchées restent rasterisées. |
+
+Les listes déroulantes, les dates, l’exécution VBA dans Plume et la fidélité
+des PDF complexes restent à valider ou à développer avant la publication
+finale. L’audit DOCX en CI vérifie la structure du fichier. La réouverture
+dans Word vérifie le comportement du document et sa mise en page.

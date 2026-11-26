@@ -732,6 +732,14 @@ const DocxImport = (() => {
       }
 
       /** Contenu en ligne d'un paragraphe : renvoie des segments HTML séparés par les sauts de page */
+      const checkboxNs = 'http://schemas.microsoft.com/office/word/2010/wordml';
+      const checkboxChild = (parent, name) => kids(parent).find(el =>
+        el.namespaceURI === checkboxNs && el.localName === name);
+      const isOn = value => value == null || ['true', '1', 'on'].includes(value);
+      const controlAttr = (name, value) => value == null ? '' : ` data-sdt-${name}="${xmlEsc(value)}"`;
+      const controlProperties = new Set(['w:rPr', 'w:alias', 'w:tag', 'w:id', 'w:lock',
+        'w:placeholder', 'w:showingPlcHdr']);
+
       async function inline(p, styleR, part) {
         const segs = [''];
         segs.breaks = [];
@@ -775,19 +783,13 @@ const DocxImport = (() => {
         const inInstr = () => fields.some(f => f.phase === 'instr');
         const skipping = () => fields.some(f => f.skip && f.phase === 'result');
 
-        const checkboxNs = 'http://schemas.microsoft.com/office/word/2010/wordml';
-        const checkboxChild = (parent, name) => kids(parent).find(el =>
-          el.namespaceURI === checkboxNs && el.localName === name);
-        const isOn = value => value == null || ['true', '1', 'on'].includes(value);
-        const controlAttr = (name, value) => value == null ? '' : ` data-sdt-${name}="${xmlEsc(value)}"`;
         function isSimpleControl(props, content, type, multiline) {
-          const supported = new Set(['w:rPr', 'w:alias', 'w:tag', 'w:id', 'w:lock',
-            'w:placeholder', 'w:showingPlcHdr']);
           const normalBreak = item => multiline && (item.nodeName === 'w:cr' ||
             (item.nodeName === 'w:br' && [null, 'textWrapping'].includes(item.getAttribute('w:type'))));
-          return Array.from(props.children).every(child => child === type || supported.has(child.nodeName)) &&
+          return Array.from(props.children).every(child => child === type || controlProperties.has(child.nodeName)) &&
             Array.from(content.children).every(child => child.nodeName === 'w:r' &&
-              Array.from(child.children).every(item => ['w:rPr', 'w:t'].includes(item.nodeName) || normalBreak(item)));
+              Array.from(child.children).every(item => item.nodeName === 'w:rPr' ||
+                item.nodeName === 'w:t' || normalBreak(item)));
         }
         function checkboxAttrs(box) {
           const checked = checkboxChild(box, 'checked');

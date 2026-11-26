@@ -12,6 +12,9 @@ on:
       - "index.html"
       - ".github/workflows/windows-preview.yml"
   workflow_dispatch:
+concurrency:
+  group: plume-windows-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -98,14 +101,7 @@ jobs:
             } while ((Get-Date) -lt $deadline)
             if ($process.MainWindowHandle -eq [IntPtr]::Zero) { throw "Fenêtre Plume introuvable" }
             # Attendre que le document ait fini de charger avant d'envoyer WM_CLOSE.
-            $ready = $false
-            $deadline = (Get-Date).AddSeconds(30)
-            do {
-              try {
-                $tabs = Invoke-RestMethod http://127.0.0.1:9229/json/list -TimeoutSec 2
-                $tab = $tabs | Where-Object { $_.type -eq "page" -and $_.url -eq "plume://app/index.html" } | Select-Object -First 1
-                if ($tab) {
-                  $probe = @'
+            $probe = @'
           const socket = new WebSocket(process.argv[2]);
           const timer = setTimeout(() => process.exit(1), 1500);
           socket.addEventListener('open', () => socket.send(JSON.stringify({
@@ -122,6 +118,13 @@ jobs:
             socket.close();
           });
           '@
+            $ready = $false
+            $deadline = (Get-Date).AddSeconds(30)
+            do {
+              try {
+                $tabs = Invoke-RestMethod http://127.0.0.1:9229/json/list -TimeoutSec 2
+                $tab = $tabs | Where-Object { $_.type -eq "page" -and $_.url -eq "plume://app/index.html" } | Select-Object -First 1
+                if ($tab) {
                   $ready = ($probe | node - $tab.webSocketDebuggerUrl 2>$null) -eq 'ready'
                 }
               } catch {}
