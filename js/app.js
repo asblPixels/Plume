@@ -36,10 +36,6 @@ const App = {
     // Démarrage : toujours une page blanche, jamais le dernier document (ordinateurs partagés, écoles).
     // L'écran d'accueil propose un document vierge ou l'ouverture d'un fichier (ordinateur, clé USB…).
     this.newDoc('blank', true);
-    try { await Store.setKV('lastDoc', null); } catch { /* stockage indisponible */ }
-    const quiet = new URLSearchParams(location.search).has('new') || navigator.webdriver;
-    if (!quiet) setTimeout(() => { if (!this._launched) Backstage.open('home'); }, 50);
-
     // Ouverture depuis le système (application installée)
     // Application de bureau (Electron) : fichiers ouverts depuis l'Explorateur / le Finder
     if (window.plumeDesktop) {
@@ -47,6 +43,10 @@ const App = {
       window.plumeDesktop.onOpenFile(f => this.openFile(new File([f.data], f.name), null, f.path));
       window.plumeDesktop.onQuitRequested(() => this.requestQuit());
     }
+    try { await Store.setKV('lastDoc', null); } catch { /* stockage indisponible */ }
+    const quiet = new URLSearchParams(location.search).has('new') || navigator.webdriver;
+    if (!quiet) setTimeout(() => { if (!this._launched) Backstage.open('home'); }, 50);
+
     if ('launchQueue' in window) {
       launchQueue.setConsumer(async p => { if (p.files && p.files.length) { this._launched = true; const h = p.files[0]; this.openFile(await h.getFile(), h); } });
     }
