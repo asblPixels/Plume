@@ -1,0 +1,172 @@
+name: Plume Windows - aperçu installable
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - compat/word-roundtrip-audit
+    paths:
+      - "desktop/**"
+      - "js/**"
+      - "css/**"
+      - "index.html"
+      - ".github/workflows/windows-preview.yml"
+  workflow_dispatch:
+concurrency:
+  group: plume-windows-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Récupérer Plume
+        uses: actions/checkout@v4
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Vérifier le manifeste et les régressions
+        shell: pwsh
+        run: |
+          node outils/version.js --check
+          node --test tests/*.test.cjs
+          node --check desktop/main.js
+          node --check desktop/preload.js
+      - name: Préparer l'application de bureau
+        shell: pwsh
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          node prepare.js
+          npx electron-builder --win dir --x64 --publish never
+      - name: Générer le programme d'installation EXE
+        shell: pwsh
+        working-directory: desktop
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress | Out-Null
+          }
+          $nsis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $nsis) { $nsis = "C:\Program Files (x86)\NSIS\makensis.exe" }
+          if (-not (Test-Path $nsis)) { throw "NSIS non disponible" }
+          $v = node -p "require('./package.json').version"
+          $root = (Get-Location).Path
+          & $nsis "/DVERSION=$v" "/DSRC=$root\dist\win-unpacked" "/DOUT=$root\dist\Plume-Setup-$v-x64.exe" "/DICON=$root\build\icon.ico" installer\plume.nsi
+          if ($LASTEXITCODE -ne 0) { throw "La compilation NSIS a échoué" }
+          New-Item -ItemType Directory -Force ..\out | Out-Null
+          Copy-Item "dist\Plume-Setup-$v-x64.exe" ..\out\
+      - name: Vérifier le fichier installable
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem out\*.exe)
+          if ($files.Count -ne 1 -or $files[0].Length -lt 1000000) { throw "Installateur manquant ou incomplet" }
+          Get-FileHash $files[0].FullName -Algorithm SHA256
+      - name: Installer, lancer, fermer et désinstaller Plume
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem out\Plume-Setup-*.exe).FullName
+          $installDir = Join-Path $env:RUNNER_TEMP "Plume-recette"
+          $uninstaller = Join-Path $installDir "Desinstaller Plume.exe"
+          $exe = Join-Path $installDir "Plume.exe"
+          $process = $null
+          # La version locale du candidat doit servir au test.
+          $env:PLUME_NO_UPDATE = "1"
+          try {
+            $install = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDir" -PassThru
+            if (-not $install.WaitForExit(120000)) {
+              $install.Kill()
+              throw "L'installation silencieuse dépasse deux minutes"
+            }
+            if ($install.ExitCode -ne 0 -or -not (Test-Path $exe) -or -not (Test-Path $uninstaller)) {
+              throw "L'installation silencieuse n'a pas installé Plume"
+            }
+            $reg = Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Plume
+            $version = node -p "require('./desktop/package.json').version"
+            if ($reg.DisplayVersion -ne $version -or $reg.InstallLocation -ne $installDir) {
+              throw "L'enregistrement Windows de Plume ne correspond pas au candidat"
+            }
+            $profileDir = Join-Path $env:RUNNER_TEMP "Plume-profil-recette"
+            $process = Start-Process -FilePath $exe -ArgumentList "--remote-debugging-port=9229 --user-data-dir=`"$profileDir`"" -PassThru
+            $deadline = (Get-Date).AddSeconds(45)
+            do {
+              if ($process.HasExited) { throw "Plume a quitté avant d'afficher une fenêtre" }
+              $process.Refresh()
+              if ($process.MainWindowHandle -ne [IntPtr]::Zero) { break }
+              Start-Sleep -Milliseconds 250
+            } while ((Get-Date) -lt $deadline)
+            if ($process.MainWindowHandle -eq [IntPtr]::Zero) { throw "Fenêtre Plume introuvable" }
+            # Attendre que le document ait fini de charger avant d'envoyer WM_CLOSE.
+            $probe = @'
+          const socket = new WebSocket(process.argv[2]);
+          const timer = setTimeout(() => process.exit(1), 1500);
+          socket.addEventListener('open', () => socket.send(JSON.stringify({
+            id: 1, method: 'Runtime.evaluate', params: {
+              expression: "document.readyState === 'complete' && document.documentElement.classList.contains('desktop') && typeof App !== 'undefined' && App.docId !== null && !App.dirty",
+              returnByValue: true
+            }
+          })));
+          socket.addEventListener('message', event => {
+            const reply = JSON.parse(event.data);
+            if (reply.id !== 1) return;
+            clearTimeout(timer);
+            console.log(reply.result?.result?.value === true ? 'ready' : 'waiting');
+            socket.close();
+          });
+          '@
+            $ready = $false
+            $deadline = (Get-Date).AddSeconds(30)
+            do {
+              try {
+                $tabs = Invoke-RestMethod http://127.0.0.1:9229/json/list -TimeoutSec 2
+                $tab = $tabs | Where-Object { $_.type -eq "page" -and $_.url -eq "plume://app/index.html" } | Select-Object -First 1
+                if ($tab) {
+                  $ready = ($probe | node - $tab.webSocketDebuggerUrl 2>$null) -eq 'ready'
+                }
+              } catch {}
+              if (-not $ready) { Start-Sleep -Milliseconds 250 }
+            } while (-not $ready -and (Get-Date) -lt $deadline)
+            if (-not $ready) { throw "Le document Plume ne s’est pas chargé" }
+            # Une mise à jour silencieuse doit préserver la session ouverte.
+            $retryInstall = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDir" -PassThru
+            if (-not $retryInstall.WaitForExit(30000)) {
+              $retryInstall.Kill()
+              throw "La mise à jour en présence d’une session ouverte ne s’est pas terminée"
+            }
+            if ($retryInstall.ExitCode -ne 2 -or $process.HasExited) {
+              throw "La mise à jour n’a pas protégé la session Plume ouverte"
+            }
+            $process.Refresh()
+            if (-not $process.CloseMainWindow()) {
+              throw "Windows a refusé la demande de fermeture de la fenêtre $($process.MainWindowTitle)"
+            }
+            if (-not $process.WaitForExit(15000)) {
+              $process.Refresh()
+              throw "Plume est toujours actif après WM_CLOSE : $($process.MainWindowTitle)"
+            }
+            if ($process.ExitCode -ne 0) { throw "Plume s'est terminé avec le code $($process.ExitCode)" }
+          } finally {
+            if ($process -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+            if (Test-Path $uninstaller) {
+              $remove = Start-Process -FilePath $uninstaller -ArgumentList "/S _?=$installDir" -PassThru
+              if (-not $remove.WaitForExit(120000)) {
+                $remove.Kill()
+                throw "La désinstallation dépasse deux minutes"
+              }
+              if ($remove.ExitCode -ne 0 -or (Test-Path $exe) -or
+                  (Test-Path HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Plume)) {
+                throw "La désinstallation est incomplète"
+              }
+            }
+          }
+      - name: Fournir l'installateur Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: Plume-Windows-Installateur-Apercu
+          path: out/Plume-Setup-*.exe
+          retention-days: 30
+          if-no-files-found: error

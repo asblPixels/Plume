@@ -34,18 +34,18 @@
   },
   {
    "path": "js/docx-export.js",
-   "size": 77035,
-   "sha256": "6aacaecfb0d1b922e21d0644cb73ca2f90bb19ceb68a5258c84c1f8c0d2dcc50"
+   "size": 77552,
+   "sha256": "5712c7999d299fedf4e5b65b73a8a7df48cb530f7e42bdf1c097405e6e926afb"
   },
   {
    "path": "js/docx-import.js",
-   "size": 74552,
-   "sha256": "da4c908f62cf846cbfa77cfdb79bdb7e93d77bdbae8506c3e2b64ca91b422b51"
+   "size": 75525,
+   "sha256": "4543ec7fdd6bc0a5cc89ae7d83d9b0a7ad0d8aa16ed2ce07ea8d003128f2c386"
   },
   {
    "path": "js/editor.js",
-   "size": 87745,
-   "sha256": "bbe6bf6e20763ec4c7d04ddc3dcf37e0ec8635481b60c3cb3148ec63eafd27cf"
+   "size": 89263,
+   "sha256": "806bc2a080128f69d50afe4ead5af5326ce3bf7a4b5e1c998dee44b9db8dd3f9"
   },
   {
    "path": "js/embed-fonts.js",

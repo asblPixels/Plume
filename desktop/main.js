@@ -10,7 +10,7 @@ const { app, BrowserWindow, ipcMain, shell, Menu, dialog, protocol, net } = requ
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 
 const BUNDLED_DIR = path.join(__dirname, 'app');
@@ -86,6 +86,47 @@ function sendFile(p) {
   } catch (e) { console.error('Ouverture impossible :', p, e); }
 }
 
+let exitApproved = false;
+let quitAcknowledgement = null;
+// Le gestionnaire de fenêtre vaut sur Linux, Windows et macOS : la fermeture
+// native (Alt+F4, bouton X, Cmd+Q) passe par la même confirmation de Plume.
+function requestWindowClose(event) {
+  if (exitApproved) return;
+  event.preventDefault();
+  if (!win || win.isDestroyed()) return;
+  if (win.webContents.isLoading() || win.webContents.isDestroyed() || (typeof win.webContents.isCrashed === 'function' && win.webContents.isCrashed())) {
+    const answer = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Quitter Plume',
+      message: 'Le document n’est pas accessible. Quitter Plume ?',
+      detail: 'Les modifications non enregistrées pourraient être perdues.',
+      buttons: ['Annuler', 'Quitter'], defaultId: 0, cancelId: 0
+    });
+    if (answer === 1) { exitApproved = true; win.destroy(); app.quit(); }
+    return;
+  }
+  win.webContents.send('plume:request-quit');
+  // Secours quand le moteur JS ne répond pas : une app doit toujours
+  // pouvoir être fermée depuis le système, même après un plantage partiel.
+  if (quitAcknowledgement) clearTimeout(quitAcknowledgement);
+  quitAcknowledgement = setTimeout(() => {
+    quitAcknowledgement = null;
+    if (!win || win.isDestroyed() || exitApproved) return;
+    const answer = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Plume ne répond pas',
+      message: 'Plume n’a pas répondu à la demande de fermeture.',
+      detail: 'Forcer la fermeture peut perdre des modifications non enregistrées.',
+      buttons: ['Annuler', 'Forcer la fermeture'], defaultId: 0, cancelId: 0
+    });
+    if (answer === 1) { exitApproved = true; win.destroy(); app.quit(); }
+  }, 2500);
+}
+ipcMain.on('plume:quit-ack', event => {
+  if (win && !win.isDestroyed() && event.sender === win.webContents && quitAcknowledgement) {
+    clearTimeout(quitAcknowledgement);
+    quitAcknowledgement = null;
+  }
+});
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 360, minHeight: 480,
@@ -93,7 +134,20 @@ function createWindow() {
     icon: path.join(APP_DIR, 'icons', 'icon-512.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true }
   });
-  Menu.setApplicationMenu(null);   // le ruban de Plume remplace la barre de menus
+  // Barre de menus native conservée en secours, y compris sous Wayland :
+  // l'utilisateur peut toujours quitter via le système d'exploitation.
+  const applicationMenu = Menu.buildFromTemplate([
+    { label: 'Fichier', submenu: [
+      { label: 'Quitter Plume', accelerator: process.platform === 'darwin' ? 'Command+Q' : 'Ctrl+Q',
+        click: () => win && !win.isDestroyed() && win.close() }
+    ] },
+    { label: 'Édition', submenu: [
+      { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
+      { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }
+    ] }
+  ]);
+  Menu.setApplicationMenu(applicationMenu);
+  win.on('close', requestWindowClose);
   const ses = win.webContents.session;
   const langs = ['fr', 'fr-FR', 'fr-BE', 'nl', 'en-GB'].filter(l => ses.availableSpellCheckerLanguages.includes(l));
   if (langs.length) ses.setSpellCheckerLanguages(langs.slice(0, 3));
@@ -134,7 +188,43 @@ else {
   app.on('window-all-closed', () => app.quit());
 }
 
+/* ---------- Fermeture contrôlée pour toutes les plateformes de bureau ---------- */
+ipcMain.handle('plume:quit', event => {
+  if (!win || win.isDestroyed() || event.sender !== win.webContents) return false;
+  exitApproved = true;
+  if (quitAcknowledgement) { clearTimeout(quitAcknowledgement); quitAcknowledgement = null; }
+  win.close();
+  app.quit();
+  return true;
+});
+
 /* ---------- Fichiers ---------- */
+ipcMain.handle('plume:open-in-word', async (event, file) => {
+  if (process.platform !== 'win32' || !win || event.sender !== win.webContents ||
+      event.senderFrame !== win.webContents.mainFrame ||
+      typeof file !== 'string' || !/^[a-z]:[\\/]/i.test(file) || !/\.(docm|dotm)$/i.test(file)) {
+    throw new Error('Sélectionnez un document Word avec macros enregistré sur ce PC.');
+  }
+  if (!(await fs.promises.stat(file)).isFile()) throw new Error('Le document enregistré est introuvable.');
+  const programs = [process.env.ProgramW6432, process.env.ProgramFiles, process.env['ProgramFiles(x86)']];
+  const word = programs.filter(Boolean).flatMap(dir => [
+    path.join(dir, 'Microsoft Office', 'root', 'Office16', 'WINWORD.EXE'),
+    path.join(dir, 'Microsoft Office', 'Office16', 'WINWORD.EXE')
+  ]).find(candidate => fs.existsSync(candidate));
+  if (!word) throw new Error('Microsoft Word n’a pas été trouvé dans les dossiers d’installation standard.');
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question', title: 'Ouvrir dans Microsoft Word',
+    message: path.basename(file), detail: file,
+    buttons: ['Annuler', 'Ouvrir dans Word'], defaultId: 0, cancelId: 0
+  });
+  if (response !== 1) return false;
+  await new Promise((resolve, reject) => {
+    const child = spawn(word, [file], { detached: true, stdio: 'ignore' });
+    child.once('error', reject);
+    child.once('spawn', () => { child.unref(); resolve(); });
+  });
+  return true;
+});
 ipcMain.handle('plume:write-file', async (e, { path: p, data }) => { fs.writeFileSync(p, Buffer.from(data)); return true; });
 ipcMain.handle('plume:save-dialog', async (e, { name, ext, label }) => {
   const r = await dialog.showSaveDialog(win, { title: 'Enregistrer sous', defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: label, extensions: [ext] }, { name: 'Tous les fichiers', extensions: ['*'] }] });

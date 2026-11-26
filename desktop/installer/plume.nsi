@@ -37,6 +37,7 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "© 2026 ${COMPANY}"
 
 !include "MUI2.nsh"
+!include "LogicLib.nsh"
 !define MUI_ICON "${ICON}"
 !define MUI_UNICON "${ICON}"
 !define MUI_ABORTWARNING
@@ -62,10 +63,28 @@ VIAddVersionKey "LegalCopyright" "© 2026 ${COMPANY}"
   DeleteRegValue HKCU "Software\Classes\.${EXT}\OpenWithProgids" "${PROGID}"
 !macroend
 
+!macro RequirePlumeClosed
+  nsExec::ExecToStack '"$SYSDIR\tasklist.exe" /FI "IMAGENAME eq Plume.exe" /FO CSV /NH'
+  Pop $0
+  Pop $1
+  StrCpy $1 $1 11
+  ${If} $0 != "0"
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "Impossible de vérifier si Plume est ouvert. Réessayez après avoir fermé Plume."
+    SetErrorLevel 2
+    Abort
+  ${EndIf}
+  ${If} $1 == '"Plume.exe"'
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONEXCLAMATION "Enregistrez vos documents et fermez Plume avant de continuer."
+    SetErrorLevel 2
+    Abort
+  ${EndIf}
+!macroend
+
 Section "Plume" SecMain
+  !insertmacro RequirePlumeClosed
   SetOutPath "$INSTDIR"
-  ; ferme une instance ouverte avant de remplacer les fichiers
-  nsExec::Exec 'taskkill /F /IM Plume.exe'
   File /r "${SRC}${SEP}*.*"
   WriteUninstaller "$INSTDIR\Desinstaller Plume.exe"
 
@@ -123,7 +142,7 @@ Section "Plume" SecMain
 SectionEnd
 
 Section "Uninstall"
-  nsExec::Exec 'taskkill /F /IM Plume.exe'
+  !insertmacro RequirePlumeClosed
   Delete "$SMPROGRAMS\Plume.lnk"
   Delete "$DESKTOP\Plume.lnk"
   RMDir /r "$INSTDIR"
