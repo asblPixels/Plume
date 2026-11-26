@@ -1347,7 +1347,8 @@ const Ed = {
   async editFootnote(span) {
     const ta = el('textarea', { rows: 4, style: 'width:100%' });
     ta.value = span.dataset.note || '';
-    const r = await dialog({ title: 'Note de bas de page', body: ta, buttons: [{ label: 'Supprimer la note', value: 'del' }, { label: 'Annuler', value: null }, { label: 'OK', primary: true, value: 'ok' }] });
+    const title = span.dataset.noteKind === 'endnote' ? 'Note de fin' : 'Note de bas de page';
+    const r = await dialog({ title, body: ta, buttons: [{ label: 'Supprimer la note', value: 'del' }, { label: 'Annuler', value: null }, { label: 'OK', primary: true, value: 'ok' }] });
     if (r === 'ok') { span.dataset.note = ta.value; this.changed(false); }
     if (r === 'del') { span.remove(); this.changed(false); }
   },

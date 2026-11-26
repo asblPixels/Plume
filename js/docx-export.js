@@ -247,7 +247,7 @@ const DocxExport = (() => {
     const srcStyleIds = new Set(srcStylesXml ? Array.from(srcStylesXml.matchAll(/w:styleId="([^"]+)"/g), m => m[1]) : []);
     const srcNumXml = src ? await srcRead('word/numbering.xml') : null;
     const srcNumIds = new Set(srcNumXml ? Array.from(srcNumXml.matchAll(/<w:num\b[^>]*w:numId="(\d+)"/g), m => m[1]) : []);
-    const footnotes = [];
+    const notes = { footnote: [], endnote: [] };
     const usedTableStyles = new Set();
     let docPrId = 1, bookmarkId = 0;
 
@@ -523,8 +523,10 @@ const DocxExport = (() => {
           }
           if (n.classList.contains('pl-fn')) {
             flush();
-            footnotes.push(n.dataset.note || '');
-            out += `<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:footnoteReference w:id="${footnotes.length}"/></w:r>`;
+            const kind = n.dataset.noteKind === 'endnote' ? 'endnote' : 'footnote';
+            const style = kind === 'endnote' ? 'EndnoteReference' : 'FootnoteReference';
+            notes[kind].push(n.dataset.note || '');
+            out += `<w:r><w:rPr><w:rStyle w:val="${style}"/></w:rPr><w:${kind}Reference w:id="${notes[kind].length}"/></w:r>`;
             continue;
           }
           if (tag === 'A' && n.getAttribute('href')) {
@@ -797,9 +799,11 @@ const DocxExport = (() => {
     stylesXml += `<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="34"/><w:qFormat/><w:pPr><w:ind w:left="720"/><w:contextualSpacing/></w:pPr></w:style>`;
     stylesXml += `<w:style w:type="paragraph" w:styleId="TOCHeading"><w:name w:val="TOC Heading"/><w:basedOn w:val="Heading1"/><w:next w:val="Normal"/><w:uiPriority w:val="39"/><w:unhideWhenUsed/><w:qFormat/><w:pPr><w:outlineLvl w:val="9"/></w:pPr></w:style>`;
     for (let i = 1; i <= 3; i++) stylesXml += `<w:style w:type="paragraph" w:styleId="TOC${i}"><w:name w:val="toc ${i}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="39"/><w:unhideWhenUsed/><w:pPr><w:spacing w:after="100"/><w:ind w:left="${(i - 1) * 220}"/></w:pPr></w:style>`;
-    stylesXml += `<w:style w:type="paragraph" w:styleId="FootnoteText"><w:name w:val="footnote text"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>`;
     stylesXml += `<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont"><w:name w:val="Default Paragraph Font"/><w:uiPriority w:val="1"/><w:semiHidden/><w:unhideWhenUsed/></w:style>`;
-    stylesXml += `<w:style w:type="character" w:styleId="FootnoteReference"><w:name w:val="footnote reference"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style>`;
+    for (const kind of ['Footnote', 'Endnote']) {
+      stylesXml += `<w:style w:type="paragraph" w:styleId="${kind}Text"><w:name w:val="${kind.toLowerCase()} text"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>`;
+      stylesXml += `<w:style w:type="character" w:styleId="${kind}Reference"><w:name w:val="${kind.toLowerCase()} reference"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style>`;
+    }
     stylesXml += `<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:uiPriority w:val="99"/><w:unhideWhenUsed/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style>`;
     stylesXml += `<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>`;
     stylesXml += `<w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:basedOn w:val="TableNormal"/><w:uiPriority w:val="39"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr></w:style>`;
@@ -847,18 +851,22 @@ const DocxExport = (() => {
       numberingXml = x;
     } else if (absXml) numberingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:numbering ${NS}>${absXml}${numXml}</w:numbering>`;
 
-    /* ---------- footnotes.xml ---------- */
-    let footnotesXml = null;
-    if (footnotes.length) {
-      footnotesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:footnotes ${NS}>` +
-        '<w:footnote w:type="separator" w:id="-1"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:separator/></w:r></w:p></w:footnote>' +
-        '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>';
-      footnotes.forEach((t, i) => {
-        const paras = String(t).split('\n');
-        footnotesXml += `<w:footnote w:id="${i + 1}">` + paras.map((p, k) => `<w:p><w:pPr><w:pStyle w:val="FootnoteText"/></w:pPr>${k === 0 ? '<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> </w:t></w:r>' : ''}<w:r><w:t xml:space="preserve">${xmlEsc(p)}</w:t></w:r></w:p>`).join('') + '</w:footnote>';
+    /* ---------- footnotes.xml / endnotes.xml ---------- */
+    const noteSeparator = (kind, type, id) =>
+      `<w:${kind} w:type="${type}" w:id="${id}"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:${type}/></w:r></w:p></w:${kind}>`;
+    const noteXml = (kind) => {
+      const style = kind === 'endnote' ? 'Endnote' : 'Footnote';
+      const mark = `<w:r><w:rPr><w:rStyle w:val="${style}Reference"/></w:rPr><w:${kind}Ref/></w:r><w:r><w:t xml:space="preserve"> </w:t></w:r>`;
+      const body = notes[kind].map((text, i) => {
+        const paras = text.split('\n').map((p, k) =>
+          `<w:p><w:pPr><w:pStyle w:val="${style}Text"/></w:pPr>${k === 0 ? mark : ''}<w:r><w:t xml:space="preserve">${xmlEsc(p)}</w:t></w:r></w:p>`);
+        return `<w:${kind} w:id="${i + 1}">${paras.join('')}</w:${kind}>`;
       });
-      footnotesXml += '</w:footnotes>';
-    }
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:${kind}s ${NS}>` +
+        noteSeparator(kind, 'separator', -1) + noteSeparator(kind, 'continuationSeparator', 0) + body.join('') + `</w:${kind}s>`;
+    };
+    const noteSettings = kind => notes[kind].length
+      ? `<w:${kind}Pr><w:${kind} w:id="-1"/><w:${kind} w:id="0"/></w:${kind}Pr>` : '';
 
     /* ---------- comments.xml (+ fils de discussion : commentsExtended, commentsIds, commentsExtensible, people) ---------- */
     let commentsXml = null, commentsExXml = null, commentsIdsXml = null, commentsCexXml = null, peopleXml = null;
@@ -895,7 +903,7 @@ const DocxExport = (() => {
     }
 
     const hasToc = !!editor.querySelector('.pl-toc');
-    const settingsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:settings ${NS}>${hasToc ? '<w:updateFields w:val="true"/>' : ''}<w:defaultTabStop w:val="708"/><w:hyphenationZone w:val="425"/><w:characterSpacingControl w:val="doNotCompress"/>${footnotesXml ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ''}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="fr-BE"/></w:settings>`;
+    const settingsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:settings ${NS}>${hasToc ? '<w:updateFields w:val="true"/>' : ''}<w:defaultTabStop w:val="708"/><w:hyphenationZone w:val="425"/><w:characterSpacingControl w:val="doNotCompress"/>${noteSettings('footnote')}${noteSettings('endnote')}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="fr-BE"/></w:settings>`;
 
     /* ---------- Assemblage du paquet ---------- */
     const zip = new JSZip();
@@ -908,7 +916,6 @@ const DocxExport = (() => {
       { id: 'rId1', type: REL + '/styles', target: 'styles.xml' },
       { id: 'rId2', type: REL + '/settings', target: 'settings.xml' }];
     if (numberingXml) docRels.push({ id: 'rId3', type: REL + '/numbering', target: 'numbering.xml' });
-    if (footnotesXml) docRels.push({ id: 'rId4', type: REL + '/footnotes', target: 'footnotes.xml' });
     if (commentsXml) {
       docRels.push({ id: 'rId5', type: REL + '/comments', target: 'comments.xml' },
         { id: 'rId7', type: 'http://schemas.microsoft.com/office/2011/relationships/commentsExtended', target: 'commentsExtended.xml' },
@@ -941,19 +948,18 @@ const DocxExport = (() => {
       }
       for (const p of pendingCopies) await copyPart(p);
     }
-    // réglages d'origine qui annoncent des notes : les parties correspondantes doivent exister
-    const sep = tag => `<w:${tag} w:type="separator" w:id="-1"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:separator/></w:r></w:p></w:${tag}><w:${tag} w:type="continuationSeparator" w:id="0"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:continuationSeparator/></w:r></w:p></w:${tag}>`;
-    let endnotesXml = null;
-    if (useSrcSettings) {
-      const st = await srcRead('word/settings.xml') || '';
-      if (/<w:footnotePr/.test(st) && !footnotesXml) {
-        footnotesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:footnotes ${NS}>${sep('footnote')}</w:footnotes>`;
-        docRels.push({ id: 'rId4', type: REL + '/footnotes', target: 'footnotes.xml' });
-      }
-      if (/<w:endnotePr/.test(st)) {
-        endnotesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:endnotes ${NS}>${sep('endnote')}</w:endnotes>`;
-        docRels.push({ id: 'rId6', type: REL + '/endnotes', target: 'endnotes.xml' });
-      }
+    // Un réglage d'origine peut référencer les séparateurs même après la suppression des notes.
+    const srcSettings = useSrcSettings ? await srcRead('word/settings.xml') || '' : '';
+    const noteParts = [];
+    for (const [kind, id, properties] of [
+      ['footnote', 'rId4', /<w:footnotePr\b/],
+      ['endnote', 'rId6', /<w:endnotePr\b/],
+    ]) {
+      if (!notes[kind].length && !properties.test(srcSettings)) continue;
+      const name = kind + 's';
+      noteParts.push(name);
+      docRels.push({ id, type: REL + '/' + name, target: name + '.xml' });
+      zip.file('word/' + name + '.xml', noteXml(kind));
     }
     const GENERATED = new Set(['word/endnotes.xml', 'word/document.xml', 'word/styles.xml', 'word/numbering.xml', 'word/footnotes.xml', 'word/comments.xml', 'word/commentsExtended.xml', 'word/commentsIds.xml', 'word/commentsExtensible.xml', 'word/people.xml', '[Content_Types].xml', '_rels/.rels', 'word/_rels/document.xml.rels', 'docProps/core.xml', 'docProps/app.xml']);
     if (!useSrcSettings) copied.delete('word/settings.xml');
@@ -967,19 +973,18 @@ const DocxExport = (() => {
       '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
       '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>',
       numberingXml ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' : '',
-      footnotesXml ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : '',
+      ...noteParts.map(name => `<Override PartName="/word/${name}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${name}+xml"/>`),
       headerXml ? `<Override PartName="/word/${stories.header.name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>` : '',
       footerXml ? `<Override PartName="/word/${stories.footer.name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>` : '',
       '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
       '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>',
-      '%%NOTES%%',
       commentsXml ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
         '<Override PartName="/word/commentsExtended.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml"/>' +
         '<Override PartName="/word/commentsIds.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml"/>' +
         '<Override PartName="/word/commentsExtensible.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml"/>' +
         '<Override PartName="/word/people.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml"/>' : '',
       '</Types>'].join('');
-    let ctFinal = ct.replace('%%NOTES%%', (footnotesXml && !ct.includes('/word/footnotes.xml') ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : '') + (endnotesXml ? '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' : ''));
+    let ctFinal = ct;
     if (srcCT) {
       const have = new Set(Array.from(ctFinal.matchAll(/Extension="([^"]+)"/g), m => m[1].toLowerCase()));
       let extra = '';
@@ -1018,9 +1023,7 @@ const DocxExport = (() => {
       zip.file('word/commentsExtensible.xml', commentsCexXml);
       zip.file('word/people.xml', peopleXml);
     }
-    if (endnotesXml) zip.file('word/endnotes.xml', endnotesXml);
     if (numberingXml) zip.file('word/numbering.xml', numberingXml);
-    if (footnotesXml) zip.file('word/footnotes.xml', footnotesXml);
     for (const [kind, root] of [['header', 'hdr'], ['footer', 'ftr']]) {
       const { name, part, xml } = stories[kind];
       if (!xml) continue;

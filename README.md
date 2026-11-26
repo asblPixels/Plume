@@ -244,7 +244,7 @@ Résultat : un document ouvert puis réenregistré par Plume se rouvre dans Word
 | Images en ligne PNG, JPEG, GIF | ✅ | ✅ | WebP, SVG et BMP convertis en PNG à l'export |
 | Liens hypertextes (externes et internes) et signets | ✅ | ✅ | |
 | En-tête et pied de page, champs PAGE / NUMPAGES | ✅ | ✅ | Variantes de section, de première page et de pages paires conservées |
-| Notes de bas de page et de fin | ✅ | ✅ | Les notes de fin deviennent des notes de bas de page |
+| Notes de bas de page et de fin | ✅ | ✅ | Le .docx conserve le type des notes et leur texte simple. Dans Plume, les notes s’affichent sous la page qui contient l’appel |
 | Table des matières (champ TOC) | ✅ | ✅ | Mise à jour automatique à l'ouverture dans Word |
 | Sauts de page, de colonne et de section | ✅ | ✅ | |
 | **Sections multiples** (format, orientation, marges, colonnes propres) | ✅ affichées | ✅ | Page paysage au milieu d'un document, etc. |

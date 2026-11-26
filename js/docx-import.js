@@ -902,7 +902,7 @@ const DocxImport = (() => {
               case 'w:footnoteReference': case 'w:endnoteReference': {
                 const kind = nm === 'w:footnoteReference' ? 'footnote' : 'endnote';
                 const txt = notes[kind][c.getAttribute('w:id')] || '';
-                pushRaw(`<span class="pl-fn" contenteditable="false" data-note="${xmlEsc(txt)}">*</span>`);
+                pushRaw(`<span class="pl-fn" contenteditable="false" data-note-kind="${kind}" data-note="${xmlEsc(txt)}">*</span>`);
                 break;
               }
               case 'w:drawing': await drawing(c, rp); break;
