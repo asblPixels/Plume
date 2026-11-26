@@ -208,9 +208,9 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }
-      - uses: actions/checkout@v4
       - name: Contrôler et publier les téléchargements
         env:
           GH_TOKEN: ${{ github.token }}
@@ -218,7 +218,7 @@ jobs:
           set -euo pipefail
           VERSION=$(node -p "require('./desktop/package.json').version")
           test "$VERSION" = "1.4.1"
-          rm dist/plume-linux-x64.tar.gz
+          rm -f dist/plume-linux-x64.tar.gz
           test "$(find dist -maxdepth 1 -name '*.dmg' | wc -l)" -eq 2
           for extension in exe zip AppImage deb rpm snap flatpak apk ipa dmg; do
             find dist -maxdepth 1 -name "*.$extension" -size +0 | grep .

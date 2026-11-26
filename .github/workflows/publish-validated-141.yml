@@ -1,0 +1,33 @@
+name: Publier les paquets validés de Plume 1.4.1
+
+on:
+  push:
+    branches: [publish/v1.4.1]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publier les artefacts du candidat vérifié
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: '45866548336'
+          SOURCE_SHA: c9955a069791076e67fec0bf49fc11f9aa576abb
+        run: |
+          set -euo pipefail
+          test "$(gh run view "$SOURCE_RUN" --json headSha --jq .headSha)" = "$SOURCE_SHA"
+          mkdir dist
+          for name in windows linux-paquets flatpak macos android ios; do
+            gh run download "$SOURCE_RUN" --name "$name" --dir dist
+          done
+          for extension in exe zip AppImage deb rpm snap flatpak apk ipa dmg; do
+            find dist -maxdepth 1 -name "*.$extension" -size +0 | grep .
+          done
+          test "$(find dist -maxdepth 1 -name '*.dmg' | wc -l)" -eq 2
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          gh release create v1.4.1 dist/* --target "$SOURCE_SHA" --title "Plume 1.4.1" --notes-file docs/notes-de-version/v1.4.1.md
