@@ -68,7 +68,7 @@ async function checkUpdate() {
 }
 ipcMain.handle('plume:update-state', () => updateState);
 ipcMain.handle('plume:update-restart', () => { app.relaunch(); app.exit(0); });
-const OPENABLE = /\.(docx|docm|dotx|dotm|doc|dot|odt|ott|fodt|rtf|pdf|html?|xhtml|md|markdown|txt|csv|tsv|wpd|wps|pages|sxw|stw|abw|zabw|lwp|hwp|wri|xml|epub|cwk|sdw|uot|602|gdoc)$/i;
+const OPENABLE = /\.(docx|docm|dotx|dotm|doc|dot|odt|ott|fodt|rtf|pdf|html?|xhtml|md|markdown|txt|csv|tsv|wpd|wps|pages|sxw|stw|abw|zabw|lwp|hwp|wri|xml|epub|mw|mcw|cwk|sdw|uot|602|uof|dbk|docbook|gdoc)$/i;
 
 let win = null;
 const pending = [];
@@ -158,27 +158,38 @@ function findSoffice() {
   }
   return cands.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || null;
 }
+// Identifiants des filtres Writer déclarés dans LibreOffice/core, filter/source/config/fragments.
+const writerExports = new Map([
+  ['docx', { ext: 'docx', name: 'MS Word 2007 XML' }],
+  ['doc', { ext: 'doc', name: 'MS Word 97' }],
+  ['dot', { ext: 'dot', name: 'MS Word 97 Vorlage' }],
+  ['fodt', { ext: 'fodt', name: 'OpenDocument Text Flat XML' }],
+  ['xml', { ext: 'xml', name: 'MS Word 2003 XML' }],
+  ['uot', { ext: 'uot', name: 'UOF text' }],
+  ['dbk', { ext: 'dbk', name: 'DocBook File' }],
+  ['xhtml', { ext: 'xhtml', name: 'XHTML Writer File' }],
+  ['pdfa', { ext: 'pdf', name: 'writer_pdf_Export', options: { SelectPdfVersion: { type: 'long', value: '2' } } }]
+]);
+const writerImports = new Map([['dbk', 'DocBook File'], ['docbook', 'DocBook File']]);
+
 ipcMain.handle('plume:converter-available', () => !!findSoffice());
 ipcMain.handle('plume:convert', async (e, { data, from, to }) => {
+  const filter = writerExports.get(to);
+  if (!filter || typeof from !== 'string' || !/^[a-z0-9]+$/i.test(from) || from === filter.ext) return null;
   const soffice = findSoffice();
   if (!soffice) return null;
-  const filters = new Map([
-    ['docx', 'docx:MS Word 2007 XML'],
-    ['doc', 'doc:MS Word 97'],
-    ['fodt', 'fodt:OpenDocument Text Flat XML'],
-    ['xml', 'xml:MS Word 2003 XML'],
-    ['pdfa', 'pdf:writer_pdf_Export:{"SelectPdfVersion":{"type":"long","value":"2"}}']
-  ]);
-  const filter = filters.get(to);
-  if (!filter || typeof from !== 'string' || !/^[a-z0-9]+$/i.test(from) || from === to) return null;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plume-'));
   const input = path.join(dir, 'document.' + from);
   const profile = pathToFileURL(path.join(dir, 'profile')).toString();
   try {
     fs.writeFileSync(input, Buffer.from(data));
-    await new Promise((resolve, reject) => execFile(soffice, [`-env:UserInstallation=${profile}`, '--headless', '--norestore', '--nologo', '--convert-to', filter, '--outdir', dir, input], { timeout: 180000, windowsHide: true }, err => err ? reject(err) : resolve()));
-    const extension = to === 'pdfa' ? 'pdf' : to;
-    const out = path.join(dir, 'document.' + extension);
+    const importFilter = writerImports.get(from);
+    const exportFilter = [filter.ext, filter.name, ...(filter.options ? [JSON.stringify(filter.options)] : [])].join(':');
+    const args = [`-env:UserInstallation=${profile}`, '--headless', '--norestore', '--nologo'];
+    if (importFilter) args.push(`--infilter=${importFilter}`);
+    args.push('--convert-to', exportFilter, '--outdir', dir, input);
+    await new Promise((resolve, reject) => execFile(soffice, args, { timeout: 180000, windowsHide: true }, err => err ? reject(err) : resolve()));
+    const out = path.join(dir, 'document.' + filter.ext);
     if (!fs.existsSync(out)) return null;
     const buf = fs.readFileSync(out);
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);

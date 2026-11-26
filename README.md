@@ -104,7 +104,7 @@ Plume est un traitement de texte complet qui s'exécute entièrement dans le nav
 | Enregistrer | `.docx`. Sous Chrome et Edge, **Ctrl+S réécrit directement le fichier d'origine** (File System Access API). Ailleurs, le fichier est téléchargé. |
 | Mode confidentiel (par défaut) | **Aucune copie n'est gardée sur l'appareil** : on enregistre son document sur l'ordinateur ou une clé USB. Idéal à l'école et sur un ordinateur partagé. |
 | Copie de secours (option) | Case à cocher sur l'accueil : « Garder une copie de secours de mes documents sur cet appareil ». La décocher efface toutes les copies. |
-| Exporter | Word, OpenDocument, PDF, EPUB, RTF, HTML, Markdown, texte, CSV et TSV. PDF/A, FODT et anciens formats Word sur ordinateur avec LibreOffice. |
+| Exporter | Word, OpenDocument, PDF, EPUB, RTF, HTML, Markdown, texte, CSV et TSV. PDF/A, FODT, anciens formats Word, UOF, DocBook et XHTML sur ordinateur avec LibreOffice. |
 | Imprimer | Respect du format, des marges, de l'en-tête et du pied de page |
 | Informations | Titre, auteur, nombre de pages, de mots et de caractères, format de page |
 
@@ -193,6 +193,7 @@ Plume intègre des polices libres pensées pour l'école et l'accessibilité :
 | Markdown | `.md` `.markdown` | Éditeurs, wikis, GitHub | ✅ Titres, listes imbriquées, tableaux, citations, code, liens, images |
 | Page web | `.html` `.htm` `.xhtml` | Navigateurs, éditeurs web | ✅ Contenu nettoyé (scripts supprimés) |
 | Texte / données | `.txt` `.csv` `.tsv` | Bloc-notes, tableurs | Texte en UTF-8, UTF-16 ou Windows-1252. Les données tabulaires deviennent un tableau. |
+| DocBook et UOF | `.dbk` `.docbook` `.uot` `.uof` | Outils de documentation et suites bureautiques compatibles UOF | Application de bureau avec LibreOffice. |
 | Autres | `.wpd` `.wps` `.pages` `.sxw` `.abw` `.lwp` `.hwp` `.wri` `.xml` (Word 2003)… | WordPerfect, Works, Apple Pages, OpenOffice 1, AbiWord, Lotus… | ✅ Application de bureau avec **module de conversion LibreOffice** |
 
 Pour les principaux formats, Plume vérifie le contenu du fichier. Par exemple, un modèle Word `.dotx` renommé `.docx` reste identifiable comme modèle.
@@ -209,10 +210,15 @@ Pour les principaux formats, Plume vérifie le contenu du fichier. Par exemple, 
 | PDF (`.pdf`) | **Fichier PDF direct partout** (bouton PDF de la barre du haut, `Ctrl+Maj+P`, ou Fichier → Exporter) : polices, images, en-têtes et liens inclus. Dans l'application de bureau, le PDF est vectoriel (texte sélectionnable, signets). |
 | PDF d’archivage (PDF/A-2b, `.pdf`) | Application de bureau avec LibreOffice. Pour les documents à conserver à long terme. |
 | Texte enrichi (`.rtf`) | Lisible par tous les traitements de texte |
-| Word 97-2003 (`.doc`) | Application de bureau avec LibreOffice |
+| Word 97–2003 (`.doc`, `.dot`) | Document ou modèle pour les anciennes versions de Word. Application de bureau avec LibreOffice. |
+| UOF (`.uot`), DocBook (`.dbk`) et XHTML (`.xhtml`) | Application de bureau avec les filtres Writer correspondants. |
 | Page web (`.html`), Markdown (`.md`), texte (`.txt`) | |
 
-**Ctrl+S réenregistre dans le format d'origine** quand c'est possible (`.docx`, `.odt`, `.ott`, `.rtf`, `.md`, `.txt`, `.html`, et `.doc` dans l’application de bureau). Lorsqu’une conversion est nécessaire, Plume demande où enregistrer la nouvelle copie. Un export PDF, EPUB, CSV ou TSV laisse le document actif disponible pour l’enregistrer dans un format modifiable.
+**Ctrl+S réenregistre dans le format d'origine** quand c'est possible (`.docx`, `.odt`, `.ott`, `.rtf`, `.md`, `.txt`, `.html`, ainsi que `.doc` et `.dot` dans l’application de bureau). Lorsqu’une conversion est nécessaire, Plume demande où enregistrer la nouvelle copie. Un export PDF, EPUB, CSV ou TSV laisse le document actif disponible pour l’enregistrer dans un format modifiable.
+
+### Conversions avec LibreOffice Writer
+
+L’application de bureau utilise le LibreOffice installé sur l’ordinateur. Chaque conversion utilise un profil temporaire. Les formats proposés à l’export correspondent aux filtres d’écriture de Writer. WordPerfect et les anciens modèles OpenOffice `.stw` s’ouvrent via leurs filtres d’import. La disponibilité des filtres dépend de l’installation de LibreOffice. [Filtres dans LibreOffice/core](https://github.com/LibreOffice/core/tree/master/filter/source/config/fragments/filters) · [Documentation de développement de The Document Foundation](https://wiki.documentfoundation.org/Development/fr)
 
 ## Compatibilité .docx
 
@@ -612,7 +618,7 @@ Les tests de bout en bout pilotent Chromium en mode sans interface (Playwright) 
 | `tests/tableaux_docm_doc.py` | 60 vérifications : styles de tableau conditionnels, macros conservées, `.doc` Word 97-2003 |
 | `tests/ilots.py` | Modification des graphiques, SmartArt, formes et équations, export, contrôle XML, rendu LibreOffice, réimport |
 | `tests/polices.py` | Polices Marelle et Borel, incorporation `.odttf` dans le `.docx`, rendu LibreOffice sans police installée |
-| `tests/formats_etendus.py` | CSV et TSV, OTT, EPUB, identification Word, PDF/A-2b, FODT, Word XML et DOC via LibreOffice |
+| `tests/formats_etendus.py` | CSV et TSV, OTT, EPUB, identification Word, PDF/A-2b, FODT, anciens formats Word, UOF, DocBook et XHTML via LibreOffice |
 | `tests/modeles.py` | Modèles administratifs et pédagogiques, export Word et interface mobile |
 | `tests/demarrage.py` | Accueil au lancement, pas de réouverture du dernier document, mode confidentiel, ouverture successive de documents |
 

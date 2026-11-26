@@ -148,12 +148,20 @@ async def main():
             }
           } };
         }""")
-        for ext in ('fodt', 'xml', 'doc'):
+        for ext in ('fodt', 'xml', 'doc', 'dot', 'uot', 'dbk', 'xhtml'):
             result = await page.evaluate(EXPORT, ext)
-            if ext in ('fodt', 'xml'):
+            if ext in ('fodt', 'xml', 'dbk', 'xhtml'):
                 ET.fromstring(base64.b64decode(result))
             imported = await page.evaluate(OPEN, ['copie.' + ext, result])
             assert 'Texte témoin' in imported['html'], ext
+            if ext == 'dot':
+                assert imported['format'] == 'dot' and not imported.get('partial')
+            if ext == 'dbk':
+                alternate = await page.evaluate(OPEN, ['guide.xml', result])
+                assert 'Texte témoin' in alternate['html']
+            if ext == 'uot':
+                alternate = await page.evaluate(OPEN, ['copie.uof', result])
+                assert 'Texte témoin' in alternate['html']
         pdfa = base64.b64decode(await page.evaluate(EXPORT, 'pdfa'))
         assert pdfa.startswith(b'%PDF-')
         xmp = ET.fromstring(pdfa[pdfa.index(b'<x:xmpmeta'):pdfa.index(b'</x:xmpmeta>') + len(b'</x:xmpmeta>')])
@@ -178,7 +186,7 @@ async def main():
             assert 'Texte témoin' in imported['html']
         assert not errors, errors
         await browser.close()
-        print('CSV, TSV, OTT, EPUB, identification Word et 4 exports LibreOffice vérifiés')
+        print('CSV, TSV, OTT, EPUB, identification Word et 8 exports LibreOffice vérifiés')
 
 
 if __name__ == '__main__':

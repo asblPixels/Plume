@@ -19,8 +19,8 @@ const Formats = (() => {
   /** Formats confiés au module de conversion (LibreOffice, application de bureau) */
   const CONVERT = {
     wpd: 'WordPerfect (.wpd)', wps: 'Microsoft Works (.wps)', pages: 'Apple Pages (.pages)', sxw: 'OpenOffice 1.x (.sxw)', stw: 'Modèle OpenOffice 1.x (.stw)',
-    abw: 'AbiWord (.abw)', zabw: 'AbiWord (.zabw)', lwp: 'Lotus Word Pro (.lwp)', hwp: 'Hangul (.hwp)', wri: 'Write (.wri)', xml: 'Word 2003 XML (.xml)',
-    mw: 'MacWrite', cwk: 'ClarisWorks (.cwk)', sdw: 'StarWriter (.sdw)', uot: 'Uniform Office (.uot)', '602': 'T602 (.602)', pdb: 'Palm (.pdb)'
+    abw: 'AbiWord (.abw)', zabw: 'AbiWord (.zabw)', lwp: 'Lotus Word Pro (.lwp)', hwp: 'Hangul (.hwp)', wri: 'Write (.wri)', xml: 'Word 2003 XML (.xml)', dbk: 'DocBook (.dbk)', docbook: 'DocBook (.docbook)',
+    mw: 'MacWrite (.mw)', mcw: 'MacWrite (.mcw)', cwk: 'ClarisWorks (.cwk)', sdw: 'StarWriter (.sdw)', uot: 'Unified Office Format (.uot)', uof: 'Unified Office Format (.uof)', '602': 'T602 (.602)', pdb: 'Palm (.pdb)'
   };
   const ALL_EXT = [...Object.keys(OPEN), ...Object.keys(CONVERT)];
   const ACCEPT = ALL_EXT.map(e => '.' + e).join(',') + ',.gdoc';
@@ -40,6 +40,10 @@ const Formats = (() => {
     dotx: { label: 'Modèle Word (.dotx)', desc: 'Modèle réutilisable : Word crée un nouveau document à chaque ouverture.', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.template' },
     dotm: { label: 'Modèle Word avec macros (.dotm)', desc: 'Modèle qui conserve les macros d’origine (jamais exécutées par Plume).', mime: 'application/vnd.ms-word.template.macroEnabled.12', macros: true },
     doc: { label: 'Word 97-2003 (.doc)', desc: 'Pour les très anciennes versions de Word (application de bureau + LibreOffice).', mime: 'application/msword', desktop: true },
+    dot: { label: 'Modèle Word 97–2003 (.dot)', desc: 'Modèle réutilisable pour les anciennes versions de Word.', mime: 'application/msword', desktop: true },
+    uot: { label: 'Unified Office Format (.uot)', desc: 'Document modifiable dans les suites bureautiques compatibles UOF.', mime: 'application/vnd.uof.text', desktop: true },
+    dbk: { label: 'DocBook (.dbk)', desc: 'Document XML structuré pour les manuels et la documentation technique.', mime: 'application/docbook+xml', desktop: true },
+    xhtml: { label: 'Page web XHTML (.xhtml)', desc: 'Page web conforme à la syntaxe XML, pour les outils de publication.', mime: 'application/xhtml+xml', desktop: true },
     html: { label: 'Page web (.html)', desc: 'Un fichier unique, images incluses.', mime: 'text/html' },
     md: { label: 'Markdown (.md)', desc: 'Texte structuré pour le web et les wikis.', mime: 'text/markdown' },
     csv: { label: 'Tableau CSV (.csv)', desc: 'Exporte le premier tableau pour un tableur, sans mise en forme.', mime: 'text/csv' },
@@ -48,6 +52,7 @@ const Formats = (() => {
   };
   /** Formats que Ctrl+S peut réécrire tels quels */
   const SAVABLE = new Set(['docx', 'docm', 'dotx', 'dotm', 'odt', 'ott', 'rtf', 'md', 'txt', 'html']);
+  const canSave = format => SAVABLE.has(format) || (!!window.plumeDesktop && ['doc', 'dot'].includes(format));
   /** Paquets Word (Office Open XML) */
   const WORD_XML = new Set(['docx', 'docm', 'dotx', 'dotm']);
 
@@ -57,7 +62,7 @@ const Formats = (() => {
   async function sniff(buf, ext) {
     const b = new Uint8Array(buf.slice(0, 8));
     if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return 'pdf';
-    if (b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0) return ['doc', 'dot', 'wps', 'xls'].includes(ext) ? ext : 'doc';
+    if (b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0) return ['doc', 'dot', 'xls'].includes(ext) || Object.hasOwn(CONVERT, ext) ? ext : 'doc';
     if (b[0] === 0x7B && b[1] === 0x5C && b[2] === 0x72 && b[3] === 0x74) return 'rtf';
     if (b[0] === 0x50 && b[1] === 0x4B) {
       try {
@@ -79,11 +84,10 @@ const Formats = (() => {
             if (type && z.file(part.getAttribute('PartName')?.replace(/^\//, ''))) return type;
           }
         }
+        if (mt === 'application/epub+zip') return 'epub';
+        if (/sun\.xml\.writer/.test(mt)) return /template/.test(mt) ? 'stw' : 'sxw';
         if (z.file('word/document.xml')) return WORD_XML.has(ext) ? ext : 'docx';
         if (types || WORD_XML.has(ext)) throw new Error('UNSUPPORTED_PACKAGE');
-        if (z.file('index.xml') && ext === 'pages') return 'pages';
-        if (/sun\.xml\.writer/.test(mt)) return 'sxw';
-        if (mt === 'application/epub+zip') return 'epub';
       } catch (error) {
         if (error.message === 'UNSUPPORTED_PACKAGE') throw Object.assign(error, {
           userMessage: 'Ce fichier est un paquet Office, mais il ne contient pas de document Word. Pour un tableur ou une présentation, utilisez son application d’origine.'
@@ -92,19 +96,25 @@ const Formats = (() => {
       return ext;
     }
     if (ext === 'fodt' || ext === 'xml') {
-      const head = new TextDecoder().decode(new Uint8Array(buf.slice(0, 2000)));
+      const head = decodeText(buf.slice(0, 2000));
       if (/office:document/.test(head)) return 'fodt';
       if (/w:wordDocument/.test(head)) return 'xml';
+      if (/<!DOCTYPE\s+(?:article|book)\b[^>]*DocBook|https?:\/\/docbook\.org\/ns\/docbook/i.test(head)) return 'dbk';
     }
     return ext;
   }
 
   /* ---------- Module de conversion (bureau + LibreOffice) ---------- */
-  const converterAvailable = async () => !!(window.plumeDesktop && window.plumeDesktop.converter && await window.plumeDesktop.converter.available());
-  async function convertWithOffice(buf, fromExt, toExt) {
-    if (!(await converterAvailable())) return null;
-    const out = await window.plumeDesktop.converter.convert(buf, fromExt, toExt);
-    return out ? out : null;
+  async function converterAvailable() {
+    try { return !!(await window.plumeDesktop?.converter?.available()); }
+    catch { return false; }
+  }
+
+  async function openWithWriter(bytes, ext, registerImage) {
+    const converted = await window.plumeDesktop.converter.convert(bytes, ext, 'docx');
+    if (!converted) return null;
+    const result = await DocxImport.importDocx(converted, { registerImage });
+    return { ...result, bytes: new Uint8Array(converted) };
   }
 
   /* ---------- PDF (pdf.js) ---------- */
@@ -236,19 +246,23 @@ const Formats = (() => {
         return { html: `<table data-borders="all"><tbody>${body}</tbody></table><p><br></p>`, format: ext };
       }
       case 'doc': case 'dot': {
-        const conv = await convertWithOffice(buf, ext, 'docx');
-        if (conv) { const r = await DocxImport.importDocx(conv, { registerImage: reg }); return { ...r, format: 'doc', bytes: new Uint8Array(conv) }; }
+        const result = await converterAvailable() ? await openWithWriter(buf, ext, reg) : null;
+        if (result) return { ...result, format: ext };
         const r = LegacyDoc.importDoc(buf);
         const miss = r.missing.length ? ` <b>Non repris :</b> ${r.missing.join(', ')}.` : '';
-        return { ...r, format: 'doc', partial: true, notice: `<b>Word 97-2003</b> — Ouverture dans le navigateur : texte, titres, listes, tableaux et mise en forme simple récupérés.${miss} Pour une conversion complète, utilisez l’application de bureau Plume avec LibreOffice installé (conversion automatique).` };
+        return { ...r, format: ext, partial: true, notice: `<b>Word 97-2003</b> — Ouverture dans le navigateur : texte, titres, listes, tableaux et mise en forme simple récupérés.${miss} Pour une conversion complète, utilisez l’application de bureau Plume avec LibreOffice installé (conversion automatique).` };
       }
       case 'txt': case 'text': case '': default: {
-        if (CONVERT[ext]) {
-          const conv = await convertWithOffice(buf, ext, 'docx');
-          if (conv) { const r = await DocxImport.importDocx(conv, { registerImage: reg }); return { ...r, format: 'docx', bytes: new Uint8Array(conv), notice: `${CONVERT[ext]} converti par le module LibreOffice. Il sera enregistré au format .docx.` }; }
-          const e = new Error('CONVERTER');
-          e.userMessage = `Le format <b>${htmlEsc(CONVERT[ext])}</b> nécessite le module de conversion.<br><br>Utilisez l’<b>application de bureau Plume</b> (Windows ou Linux) avec <a href="https://fr.libreoffice.org/download/telecharger-libreoffice/" target="_blank" rel="noopener">LibreOffice</a> installé (gratuit) : Plume l’utilise automatiquement pour convertir ces fichiers.`;
-          throw e;
+        if (Object.hasOwn(CONVERT, ext)) {
+          const label = CONVERT[ext];
+          if (!await converterAvailable()) throw Object.assign(new Error('CONVERTER'), {
+            userMessage: `Pour ouvrir ${label}, utilisez Plume sur ordinateur avec <a href="https://fr.libreoffice.org/download/telecharger-libreoffice/" target="_blank" rel="noopener">LibreOffice</a> installé.`
+          });
+          const result = await openWithWriter(buf, ext, reg);
+          if (!result) throw Object.assign(new Error('CONVERSION_FAILED'), {
+            userMessage: `LibreOffice n’a pas pu ouvrir ce fichier ${label}. La prise en charge dépend du format exact et des filtres installés.`
+          });
+          return { ...result, format: 'docx', notice: `${label} ouvert avec LibreOffice. Plume enregistrera une copie au format .docx.` };
         }
         const t = decodeText(buf);
         if (/[\u0000-\u0008\u000E-\u001F]/.test(t.slice(0, 2000))) throw Object.assign(new Error('BIN'), { userMessage: 'Ce fichier n’est pas un document texte reconnu par Plume.' });
@@ -372,23 +386,23 @@ const Formats = (() => {
       case 'csv': case 'tsv': return exportDelimited(format, ctx.editor);
       case 'html': return new Blob([await App.htmlDocument()], { type: 'text/html;charset=utf-8' });
       case 'epub': return Epub.exportEpub(ctx);
-      case 'doc': case 'fodt': case 'xml': case 'pdfa': {
-        const label = EXPORT[format].label;
-        if (!await converterAvailable()) throw Object.assign(new Error('CONVERTER'), {
-          userMessage: `L’export ${label} nécessite l’application de bureau Plume et LibreOffice.`
-        });
-        const docx = await DocxExport.exportDocx(ctx);
-        const conv = await window.plumeDesktop.converter.convert(await docx.arrayBuffer(), 'docx', format);
-        if (!conv) throw Object.assign(new Error('CONVERSION_FAILED'), {
-          userMessage: `LibreOffice n’a pas pu créer le fichier ${label}.`
-        });
-        return new Blob([conv], { type: EXPORT[format].mime });
-      }
       case 'pdf': {
         // application de bureau : PDF vectoriel (texte sélectionnable) ; ailleurs : PDF direct page par page
         if (window.plumeDesktop && window.plumeDesktop.printToPdf) return new Blob([await window.plumeDesktop.printToPdf()], { type: 'application/pdf' });
         return rasterPdf(ctx);
       }
+    }
+    if (Object.hasOwn(EXPORT, format) && EXPORT[format].desktop) {
+      const { label, mime } = EXPORT[format];
+      if (!await converterAvailable()) throw Object.assign(new Error('CONVERTER'), {
+        userMessage: `L’export ${label} nécessite l’application de bureau Plume et LibreOffice.`
+      });
+      const docx = await DocxExport.exportDocx(ctx);
+      const conv = await window.plumeDesktop.converter.convert(await docx.arrayBuffer(), 'docx', format);
+      if (!conv) throw Object.assign(new Error('CONVERSION_FAILED'), {
+        userMessage: `LibreOffice n’a pas pu créer le fichier ${label}.`
+      });
+      return new Blob([conv], { type: mime });
     }
     throw new Error('Format d’export inconnu : ' + format);
   }
@@ -470,5 +484,5 @@ const Formats = (() => {
     return pdf.output('blob');
   }
 
-  return { rasterPdf, OPEN, CONVERT, EXPORT, SAVABLE, WORD_XML, ACCEPT, ALL_EXT, extOf, open, build, converterAvailable, importPdf, readDelimited };
+  return { rasterPdf, OPEN, CONVERT, EXPORT, canSave, WORD_XML, ACCEPT, ALL_EXT, extOf, open, build, converterAvailable, importPdf, readDelimited };
 })();

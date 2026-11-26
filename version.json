@@ -24,8 +24,8 @@
   },
   {
    "path": "js/app.js",
-   "size": 60250,
-   "sha256": "5edfc2b3cf96ab9305ee518fb073e7c7d05ed8577f6aaca7b66a0a6f7274c38c"
+   "size": 60124,
+   "sha256": "c3e73cb5f8c59efe2d2135442f6d7aba8e5b5de999fe060e585acad6766bb46c"
   },
   {
    "path": "js/backstage.js",
@@ -59,8 +59,8 @@
   },
   {
    "path": "js/formats.js",
-   "size": 27785,
-   "sha256": "bc409d5a99455c919b5c42ebbfef7f39662a80eb819d3a039947c0ecb69fae9b"
+   "size": 28821,
+   "sha256": "0b5c6189fac89c47c1d5bb409202729a5337592c73558ca1a9259b76aeddb74a"
   },
   {
    "path": "js/icons.js",

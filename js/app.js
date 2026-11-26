@@ -170,12 +170,12 @@ const App = {
       const r = await Formats.open(file, { registerImage: b => Ed.registerImage(b) });
       Ed.source = r.source ? { zip: r.source, bytes: r.bytes || null } : null;
       this.docId = uid();
-      this.format = r.format || 'docx';
+      this.format = r.partial ? 'docx' : (r.format || 'docx');
       // Ctrl+S réécrit le fichier d'origine seulement si son format est réinscriptible sans perte
       const nameFormat = Formats.extOf(file.name);
       const aliases = { markdown: 'md', htm: 'html', text: 'txt' };
       const sameFormat = (aliases[nameFormat] || nameFormat) === this.format;
-      const writable = !r.partial && sameFormat && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop));
+      const writable = !r.partial && sameFormat && Formats.canSave(this.format);
       this.fileHandle = writable ? handle : null;
       this.desktopPath = writable ? desktopPath : null;
       $('#docTitle').value = base;
@@ -224,7 +224,7 @@ const App = {
   },
   /** Ctrl+S : même format que le fichier ouvert s'il est réinscriptible, sinon .docx */
   async save(asNew = false) {
-    const fmt = (!asNew && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop))) ? this.format : 'docx';
+    const fmt = (!asNew && Formats.canSave(this.format)) ? this.format : 'docx';
     return this.saveAs(fmt, asNew);
   },
   async saveAs(fmt = 'docx', asNew = true) {
@@ -240,7 +240,7 @@ const App = {
       if (r !== fmt) { fmt = r; asNew = true; }
     }
     const info = Formats.EXPORT[fmt];
-    const editable = Formats.SAVABLE.has(fmt) || fmt === 'doc';
+    const editable = Formats.canSave(fmt);
     try {
       this.setSaveState('Enregistrement…');
       if (fmt === 'pdf' && !(window.plumeDesktop && window.plumeDesktop.printToPdf)) this.setSaveState('Création du PDF…');
@@ -264,7 +264,7 @@ const App = {
         try {
           const h = await showSaveFilePicker({ suggestedName: fname, types: [{ description: info.label, accept: { [info.mime]: ['.' + extension] } }] });
           const w = await h.createWritable(); await w.write(blob); await w.close();
-          if (Formats.SAVABLE.has(fmt)) { this.fileHandle = h; this.desktopPath = null; this.format = fmt; $('#docTitle').value = h.name.replace(/\.[^.]+$/, ''); }
+          if (editable) { this.fileHandle = h; this.desktopPath = null; this.format = fmt; $('#docTitle').value = h.name.replace(/\.[^.]+$/, ''); }
         } catch (e) { if (e.name === 'AbortError') { this.setSaveState('Modifié'); return; } throw e; }
       } else downloadBlob(blob, fname);
       await this.flushAutosave(true);
