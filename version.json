@@ -34,18 +34,18 @@
   },
   {
    "path": "js/docx-export.js",
-   "size": 74037,
-   "sha256": "8810e740a11fde4d998b978ab7b1c1386125ea6f1487873b49ac6898deef7d2b"
+   "size": 74032,
+   "sha256": "70dba19f85c0e4f054da652c0b7fc11246e64bd504665dfb0c854e488334add8"
   },
   {
    "path": "js/docx-import.js",
-   "size": 70465,
-   "sha256": "2ed614621bf459e345881b7b28dbee6dc32e6d8db6e59c9f30c8d7b98171d133"
+   "size": 70688,
+   "sha256": "b9adeb8259b84b3ec189630c952c6d09473bcaa54370f56d64762174fbe0107c"
   },
   {
    "path": "js/editor.js",
-   "size": 86582,
-   "sha256": "2afd5c71a245aaafed6046ea924d69f4e7d0868c6e46d1149bd17f1a79f8127a"
+   "size": 86741,
+   "sha256": "fe942c072b4e0d002f69ac97a87b814c532de2468404e8b6e8ea2bf2b4715dac"
   },
   {
    "path": "js/embed-fonts.js",
@@ -374,13 +374,13 @@
   },
   {
    "path": "icons/apple-touch-icon.png",
-   "size": 3152,
-   "sha256": "64cee72532eb8ec7979f4a869dc0a7f38b79b124e3e0e03a7f451767fc90de29"
+   "size": 2049,
+   "sha256": "8ddce0dcaefe4a6a60411b0e289559cffb3f8b78e2ceabfa03b8a2393ef49973"
   },
   {
    "path": "icons/favicon-32.png",
-   "size": 809,
-   "sha256": "433e5c20d522a3426acdbb084a3534b76297e00e435ff8422626614937551e2b"
+   "size": 665,
+   "sha256": "8ebfd47dcc8ef3075937e1ac2d17be70c65d6d526c2d9698655872aa5bc24fe2"
   },
   {
    "path": "icons/favicon.svg",
@@ -389,23 +389,23 @@
   },
   {
    "path": "icons/icon-192.png",
-   "size": 6774,
-   "sha256": "1c230c70a45451a3f9b420ff46b4dd2ded8dda9a10fa43ae43f09fc6633f0126"
+   "size": 4780,
+   "sha256": "f4cdb68f7eb4083c0faecac0da26a8d932547815882113b541e284fa8448156a"
   },
   {
    "path": "icons/icon-512.png",
-   "size": 27940,
-   "sha256": "99da98aa011f229949b85662fe430a1d62bab48fe158620a0effd7ab1fc3ea09"
+   "size": 17285,
+   "sha256": "ba14c4c30bf16b940d54d0186e3cbb6fcc1b90b3c2532db5fc5ffef9b77cd12d"
   },
   {
    "path": "icons/maskable-192.png",
-   "size": 3356,
-   "sha256": "da15ba6f16035374f432c65e494f52c6dfb2f9d888c06ce899f21ef12c37c235"
+   "size": 2180,
+   "sha256": "450c2d3af143e7ea0147f721d91fe733b6a7a01834f5eeea25acd3809d506b1a"
   },
   {
    "path": "icons/maskable-512.png",
-   "size": 15238,
-   "sha256": "96ed196ff0199c7a01d819950d747a244986b710db27c1faf00bb8e37263d37c"
+   "size": 8470,
+   "sha256": "66ea594ee86ed27d63398f37edc16c1171b83330236253867685b15de0a98086"
   },
   {
    "path": "icons/maskable.svg",

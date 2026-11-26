@@ -1,11 +1,18 @@
-import asyncio, base64
+import asyncio
+import os
+from pathlib import Path
+import shutil
 from playwright.async_api import async_playwright
 async def main():
+    browser_path = os.environ.get('PLUME_CHROME') or shutil.which('google-chrome') or shutil.which('chromium')
+    url = os.environ.get('PLUME_URL', 'http://localhost:8765')
+    captures = Path(__file__).resolve().parent.parent / 'test'
+    captures.mkdir(exist_ok=True)
     async with async_playwright() as p:
-        b=await p.chromium.launch(executable_path='/usr/bin/google-chrome')
+        b=await p.chromium.launch(executable_path=browser_path)
         pg=await b.new_page(viewport={'width':1440,'height':900})
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e))); pg.on('console', lambda m: errs.append(m.text) if m.type=='error' else None)
-        await pg.goto('http://localhost:8765/?new=1'); await pg.wait_for_timeout(700)
+        await pg.goto(url + '/?new=1'); await pg.wait_for_timeout(700)
         await pg.click('#editor'); await pg.keyboard.type('Bonjour le monde')
         # suivi des modifications
         await pg.evaluate("Track.toggle()")
@@ -35,8 +42,8 @@ async def main():
         # tous les onglets s'affichent sans erreur
         for t in ['accueil','insertion','creation','miseenpage','references','publipostage','revision','affichage','aide']:
             await pg.click(f'[data-tab={t}]'); await pg.wait_for_timeout(80)
-        await pg.click('[data-tab=publipostage]'); await pg.screenshot(path='test/pub.png')
-        await pg.evaluate("App.openBackstage('export')"); await pg.wait_for_timeout(300); await pg.screenshot(path='test/export.png')
+        await pg.click('[data-tab=publipostage]'); await pg.screenshot(path=captures / 'pub.png')
+        await pg.evaluate("App.openBackstage('export')"); await pg.wait_for_timeout(300); await pg.screenshot(path=captures / 'export.png')
         print('ERRORS', errs)
         await b.close()
 asyncio.run(main())
