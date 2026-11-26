@@ -1,6 +1,6 @@
 {
  "app": "Plume",
- "version": "1.4.0",
+ "version": "1.4.1",
  "files": [
   {
    "path": "index.html",
@@ -25,7 +25,7 @@
   {
    "path": "js/app.js",
    "size": 67867,
-   "sha256": "7a5cc12bf1990c40983cd29953b0f363524550d49176f1cd2df042e62a1739b2"
+   "sha256": "c2c6cc802b599367e11272beb23d2221edea5d6dec8c79231bee34a7f11a9417"
   },
   {
    "path": "js/backstage.js",
