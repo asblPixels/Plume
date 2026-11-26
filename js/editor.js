@@ -1673,7 +1673,10 @@ const Sanitize = {
   STYLES: ['font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line', 'color', 'background-color', 'text-align', 'margin-left', 'text-indent', 'line-height', 'vertical-align', 'width', 'height', 'list-style-type', 'text-transform', 'letter-spacing', 'font-variant'],
   html(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const body = doc.body;
+    this.clean(doc.body);
+    return doc.body.innerHTML;
+  },
+  clean(root) {
     // Word met les listes dans des paragraphes "MsoListParagraph" : on les garde comme paragraphes
     const walk = node => {
       for (const c of Array.from(node.childNodes)) {
@@ -1682,7 +1685,10 @@ const Sanitize = {
         if (c.hasAttribute('data-pl-artifact')) { c.remove(); continue; }
         const tag = c.tagName;
         if (['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'XML', 'O:P', 'IFRAME', 'OBJECT', 'EMBED', 'FORM', 'INPUT', 'BUTTON', 'SVG', 'MATH'].includes(tag) || tag.includes(':')) {
-          if (tag === 'O:P' || tag.includes(':')) c.replaceWith(...c.childNodes); else c.remove();
+          if (tag === 'O:P' || tag.includes(':')) {
+            walk(c);
+            c.replaceWith(...c.childNodes);
+          } else c.remove();
           continue;
         }
         walk(c);
@@ -1712,7 +1718,6 @@ const Sanitize = {
         if (tag === 'TABLE' && !c.dataset.borders) c.dataset.borders = 'all';
       }
     };
-    walk(body);
-    return body.innerHTML;
+    walk(root);
   }
 };

@@ -183,31 +183,35 @@ Plume intègre des polices libres pensées pour l'école et l'accessibilité :
 
 | Format | Extensions | Application d'origine | Prise en charge |
 |---|---|---|---|
-| Word | `.docx` `.docm` `.dotx` `.dotm` | Microsoft 365, Word 2007+ | ✅ Complète, avec conservation intégrale (voir plus bas) |
-| Word 97-2003 | `.doc` `.dot` | Word 97 à 2003 | ✅ Texte, paragraphes, tableaux ; **mise en forme complète** dans l'application de bureau avec LibreOffice |
+| Word | `.docx` `.docm` `.dotx` `.dotm` | Microsoft 365, Word 2007+ | Mise en page, styles et révisions. La fidélité dépend des éléments utilisés (voir plus bas). |
+| Word 97-2003 | `.doc` `.dot` | Word 97 à 2003 | ✅ Texte, paragraphes, tableaux ; mise en forme plus complète dans l’application de bureau avec LibreOffice |
 | OpenDocument | `.odt` `.ott` `.fodt` | LibreOffice, OpenOffice, Google Docs, Collabora | ✅ Styles, listes, tableaux, images, en-têtes, notes, commentaires, mise en page |
 | Google Docs | `.docx` / `.odt` téléchargés | Google Docs (*Fichier → Télécharger*) | ✅ ; un raccourci `.gdoc` affiche la marche à suivre |
 | Texte enrichi | `.rtf` | WordPad, TextEdit, tous traitements de texte | ✅ Mise en forme, tableaux, images, liens, notes, en-têtes |
-| PDF | `.pdf` | Tous | ✅ Texte et structure (titres, paragraphes, pages) ; mise en page simplifiée |
+| PDF | `.pdf` | Tous | Récupère le texte et les titres des PDF textuels. Les scans exigent une reconnaissance de caractères. |
+| Livre numérique | `.epub` | Liseuses, Calibre | Chapitres, texte et images intégrées. |
 | Markdown | `.md` `.markdown` | Éditeurs, wikis, GitHub | ✅ Titres, listes imbriquées, tableaux, citations, code, liens, images |
 | Page web | `.html` `.htm` `.xhtml` | Navigateurs, éditeurs web | ✅ Contenu nettoyé (scripts supprimés) |
-| Texte / données | `.txt` `.csv` | Bloc-notes, tableurs | ✅ Encodage détecté (UTF-8, UTF-16, Windows-1252) ; CSV converti en tableau |
+| Texte / données | `.txt` `.csv` `.tsv` | Bloc-notes, tableurs | Texte en UTF-8, UTF-16 ou Windows-1252. Les données tabulaires deviennent un tableau. |
 | Autres | `.wpd` `.wps` `.pages` `.sxw` `.abw` `.lwp` `.hwp` `.wri` `.xml` (Word 2003)… | WordPerfect, Works, Apple Pages, OpenOffice 1, AbiWord, Lotus… | ✅ Application de bureau avec **module de conversion LibreOffice** |
 
-Plume reconnaît un fichier à son contenu et pas seulement à son extension : un `.doc` qui est en réalité un `.docx` ou un `.rtf` s'ouvre correctement.
+Pour les principaux formats, Plume vérifie le contenu du fichier. Par exemple, un modèle Word `.dotx` renommé `.docx` reste identifiable comme modèle.
 
 ### Enregistrer et exporter
 
 | Format | Remarque |
 |---|---|
-| Word (`.docx`) | Format par défaut ; conservation intégrale des documents Word ouverts |
-| OpenDocument (`.odt`) | Validé par ouverture dans LibreOffice |
+| Word (`.docx`, `.docm`, `.dotx`, `.dotm`) | Le DOCX est le format par défaut. Les variantes avec macros conservent les macros d’origine. |
+| OpenDocument (`.odt`) et modèle (`.ott`) | Documents et modèles modifiables dans LibreOffice. |
+| OpenDocument XML (`.fodt`) et Word 2003 XML (`.xml`) | Export dans l’application de bureau avec LibreOffice installé. |
+| Livre numérique (`.epub`) | Livre à la mise en page adaptable, avec sommaire généré à partir des titres. |
+| Données (`.csv`, `.tsv`) | Exporte le premier tableau du document pour un tableur. |
 | PDF (`.pdf`) | **Fichier PDF direct partout** (bouton PDF de la barre du haut, `Ctrl+Maj+P`, ou Fichier → Exporter) : polices, images, en-têtes et liens inclus. Dans l'application de bureau, le PDF est vectoriel (texte sélectionnable, signets). |
 | Texte enrichi (`.rtf`) | Lisible par tous les traitements de texte |
 | Word 97-2003 (`.doc`) | Application de bureau avec LibreOffice |
 | Page web (`.html`), Markdown (`.md`), texte (`.txt`) | |
 
-**Ctrl+S réenregistre dans le format d'origine** quand c'est possible (`.docx`, `.odt`, `.rtf`, `.md`, `.txt`, `.html`, et `.doc` dans l'application de bureau). Un PDF ou un format ancien ouvert est enregistré en `.docx`.
+**Ctrl+S réenregistre dans le format d'origine** quand c'est possible (`.docx`, `.odt`, `.ott`, `.rtf`, `.md`, `.txt`, `.html`, et `.doc` dans l’application de bureau). Lorsqu’une conversion est nécessaire, Plume demande où enregistrer la nouvelle copie. Un export PDF, EPUB, CSV ou TSV laisse le document actif disponible pour l’enregistrer dans un format modifiable.
 
 ## Compatibilité .docx
 

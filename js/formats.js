@@ -12,15 +12,15 @@ const Formats = (() => {
     docx: 'Word (.docx)', docm: 'Word avec macros (.docm)', dotx: 'Modèle Word (.dotx)', dotm: 'Modèle Word (.dotm)',
     doc: 'Word 97-2003 (.doc)', dot: 'Modèle Word 97-2003 (.dot)',
     odt: 'OpenDocument (.odt)', ott: 'Modèle OpenDocument (.ott)', fodt: 'OpenDocument XML plat (.fodt)',
-    rtf: 'Texte enrichi (.rtf)', pdf: 'PDF (.pdf)',
+    rtf: 'Texte enrichi (.rtf)', pdf: 'PDF (.pdf)', epub: 'Livre numérique (.epub)',
     html: 'Page web (.html)', htm: 'Page web (.htm)', xhtml: 'Page web (.xhtml)',
-    md: 'Markdown (.md)', markdown: 'Markdown (.markdown)', txt: 'Texte (.txt)', text: 'Texte', csv: 'Données CSV (.csv)'
+    md: 'Markdown (.md)', markdown: 'Markdown (.markdown)', txt: 'Texte (.txt)', text: 'Texte', csv: 'Données CSV (.csv)', tsv: 'Données séparées par tabulations (.tsv)'
   };
   /** Formats confiés au module de conversion (LibreOffice, application de bureau) */
   const CONVERT = {
     wpd: 'WordPerfect (.wpd)', wps: 'Microsoft Works (.wps)', pages: 'Apple Pages (.pages)', sxw: 'OpenOffice 1.x (.sxw)', stw: 'Modèle OpenOffice 1.x (.stw)',
     abw: 'AbiWord (.abw)', zabw: 'AbiWord (.zabw)', lwp: 'Lotus Word Pro (.lwp)', hwp: 'Hangul (.hwp)', wri: 'Write (.wri)', xml: 'Word 2003 XML (.xml)',
-    epub: 'Livre numérique (.epub)', mw: 'MacWrite', cwk: 'ClarisWorks (.cwk)', sdw: 'StarWriter (.sdw)', uot: 'Uniform Office (.uot)', '602': 'T602 (.602)', pdb: 'Palm (.pdb)'
+    mw: 'MacWrite', cwk: 'ClarisWorks (.cwk)', sdw: 'StarWriter (.sdw)', uot: 'Uniform Office (.uot)', '602': 'T602 (.602)', pdb: 'Palm (.pdb)'
   };
   const ALL_EXT = [...Object.keys(OPEN), ...Object.keys(CONVERT)];
   const ACCEPT = ALL_EXT.map(e => '.' + e).join(',') + ',.gdoc';
@@ -29,6 +29,10 @@ const Formats = (() => {
   const EXPORT = {
     docx: { label: 'Document Word (.docx)', desc: 'Microsoft 365, Word 2007 et suivants, Google Docs, LibreOffice.', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
     odt: { label: 'OpenDocument (.odt)', desc: 'LibreOffice, OpenOffice, Google Docs, Word.', mime: 'application/vnd.oasis.opendocument.text' },
+    ott: { label: 'Modèle OpenDocument (.ott)', desc: 'Créez de nouveaux documents à partir de ce modèle dans LibreOffice.', mime: 'application/vnd.oasis.opendocument.text-template' },
+    fodt: { label: 'OpenDocument XML (.fodt)', desc: 'Document LibreOffice dans un seul fichier XML, via LibreOffice sur ordinateur.', mime: 'application/vnd.oasis.opendocument.text-flat-xml', desktop: true },
+    epub: { label: 'Livre numérique (.epub)', desc: 'Pour les liseuses. Le texte s’adapte à l’écran et les titres forment le sommaire.', mime: 'application/epub+zip' },
+    xml: { label: 'Word 2003 XML (.xml)', desc: 'Document XML pour Word 2003. Export via LibreOffice sur ordinateur.', mime: 'application/xml', desktop: true },
     pdf: { label: 'PDF (.pdf)', desc: 'Fichier PDF direct, prêt à envoyer ou imprimer. Polices, images et mise en page incluses.', mime: 'application/pdf' },
     rtf: { label: 'Texte enrichi (.rtf)', desc: 'Lisible partout, même par WordPad et TextEdit.', mime: 'application/rtf' },
     docm: { label: 'Word avec macros (.docm)', desc: 'Conserve les macros du document d’origine (jamais exécutées par Plume).', mime: 'application/vnd.ms-word.document.macroEnabled.12', macros: true },
@@ -37,10 +41,12 @@ const Formats = (() => {
     doc: { label: 'Word 97-2003 (.doc)', desc: 'Pour les très anciennes versions de Word (application de bureau + LibreOffice).', mime: 'application/msword', desktop: true },
     html: { label: 'Page web (.html)', desc: 'Un fichier unique, images incluses.', mime: 'text/html' },
     md: { label: 'Markdown (.md)', desc: 'Texte structuré pour le web et les wikis.', mime: 'text/markdown' },
+    csv: { label: 'Tableau CSV (.csv)', desc: 'Exporte le premier tableau pour un tableur, sans mise en forme.', mime: 'text/csv' },
+    tsv: { label: 'Tableau avec tabulations (.tsv)', desc: 'Exporte le premier tableau sous forme de texte séparé par des tabulations.', mime: 'text/tab-separated-values' },
     txt: { label: 'Texte brut (.txt)', desc: 'Uniquement le texte, sans mise en forme.', mime: 'text/plain' }
   };
   /** Formats que Ctrl+S peut réécrire tels quels */
-  const SAVABLE = new Set(['docx', 'docm', 'dotx', 'dotm', 'odt', 'rtf', 'md', 'txt', 'html']);
+  const SAVABLE = new Set(['docx', 'docm', 'dotx', 'dotm', 'odt', 'ott', 'rtf', 'md', 'txt', 'html']);
   /** Paquets Word (Office Open XML) */
   const WORD_XML = new Set(['docx', 'docm', 'dotx', 'dotm']);
 
@@ -57,16 +63,31 @@ const Formats = (() => {
         const z = await JSZip.loadAsync(buf);
         const mt = z.file('mimetype') ? (await z.file('mimetype').async('string')).trim() : '';
         if (/opendocument\.text/.test(mt)) return /template/.test(mt) ? 'ott' : 'odt';
-        if (z.file('word/document.xml') || z.file('[Content_Types].xml')) {
-          if (['docx', 'docm', 'dotx', 'dotm'].includes(ext)) return ext;
-          // extension inconnue : le type du document principal fait foi
-          const ct = z.file('[Content_Types].xml') ? await z.file('[Content_Types].xml').async('string') : '';
-          return /macroEnabledTemplate\.main/.test(ct) ? 'dotm' : /macroEnabled\.main/.test(ct) ? 'docm' : /wordprocessingml\.template\.main/.test(ct) ? 'dotx' : 'docx';
+        const types = z.file('[Content_Types].xml');
+        if (types) {
+          const xml = new DOMParser().parseFromString(await types.async('string'), 'application/xml');
+          const parts = xml.getElementsByTagNameNS('http://schemas.openxmlformats.org/package/2006/content-types', 'Override');
+          const wordTypes = {
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml': 'docx',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml': 'dotx',
+            'application/vnd.ms-word.document.macroenabled.main+xml': 'docm',
+            'application/vnd.ms-word.template.macroenabledtemplate.main+xml': 'dotm'
+          };
+          for (const part of parts) {
+            const type = wordTypes[part.getAttribute('ContentType')?.toLowerCase()];
+            if (type && z.file(part.getAttribute('PartName')?.replace(/^\//, ''))) return type;
+          }
         }
+        if (z.file('word/document.xml')) return WORD_XML.has(ext) ? ext : 'docx';
+        if (types || WORD_XML.has(ext)) throw new Error('UNSUPPORTED_PACKAGE');
         if (z.file('index.xml') && ext === 'pages') return 'pages';
         if (/sun\.xml\.writer/.test(mt)) return 'sxw';
         if (mt === 'application/epub+zip') return 'epub';
-      } catch { /* pas un ZIP valide */ }
+      } catch (error) {
+        if (error.message === 'UNSUPPORTED_PACKAGE') throw Object.assign(error, {
+          userMessage: 'Ce fichier est un paquet Office, mais il ne contient pas de document Word. Pour un tableur ou une présentation, utilisez son application d’origine.'
+        });
+      }
       return ext;
     }
     if (ext === 'fodt' || ext === 'xml') {
@@ -94,24 +115,35 @@ const Formats = (() => {
     pdfjs.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.mjs';
     return pdfjs;
   }
-  async function importPdf(buf, opts) {
+  async function importPdf(buf) {
     const lib = await loadPdfJs();
-    const doc = await lib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false }).promise;
+    const task = lib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false });
+    try {
+      return await readPdf(await task.promise);
+    } finally {
+      await task.destroy();
+    }
+  }
+
+  async function readPdf(doc) {
     const html = [];
     let first = null;
-    const sizes = [];
+    const sizes = new Map();
     const pages = [];
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p);
       if (!first) first = page.getViewport({ scale: 1 });
       const tc = await page.getTextContent();
       const items = tc.items.filter(it => it.str !== undefined).map(it => ({ s: it.str, x: it.transform[4], y: it.transform[5], h: Math.hypot(it.transform[2], it.transform[3]) || it.height || 10, w: it.width, eol: it.hasEOL, font: (tc.styles[it.fontName] || {}).fontFamily || '' }));
-      items.forEach(it => { if (it.s.trim()) sizes.push(Math.round(it.h)); });
+      for (const item of items) if (item.s.trim()) {
+        const size = Math.round(item.h);
+        sizes.set(size, (sizes.get(size) || 0) + 1);
+      }
+      page.cleanup();
       pages.push(items);
     }
     // taille du corps de texte = la plus fréquente
-    const freq = {}; sizes.forEach(s => freq[s] = (freq[s] || 0) + 1);
-    const body = +Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] || 11;
+    const body = [...sizes].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] || 11;
     pages.forEach((items, pi) => {
       // regroupement en lignes (même y à ±40 % de la hauteur)
       const lines = [];
@@ -145,8 +177,7 @@ const Formats = (() => {
         const center = first && Math.abs((minX + maxX) / 2 - first.width / 2) < 12 && (maxX - minX) < first.width * 0.6;
         const newPara = !para || gap > h * 1.75 || Math.abs(h - para.h) > 1.5 || /[.:!?»"]$/.test(para.text.trim()) && gap > h * 1.25;
         if (newPara) { flush(); para = { text: '', h, center }; }
-        para.text += (para.text && !/-$/.test(para.text) ? ' ' : '') + (para.text.endsWith('-') ? text : text);
-        if (para.text.endsWith('-') && false) para.text = para.text.slice(0, -1);
+        para.text += (para.text && !para.text.endsWith('-') ? ' ' : '') + text;
         lastY = l.y;
       }
       flush();
@@ -183,15 +214,25 @@ const Formats = (() => {
         const macros = DocxExport.hasMacros(r.source);
         return { ...r, format: ext, macros, bytes: new Uint8Array(buf) };
       }
-      case 'odt': case 'ott': case 'fodt': return { ...(await Odt.importOdt(buf, { registerImage: reg })), format: ext === 'odt' ? 'odt' : 'odt' };
+      case 'odt': case 'ott': case 'fodt': return { ...(await Odt.importOdt(buf, { registerImage: reg })), format: ext === 'ott' ? 'ott' : 'odt' };
       case 'rtf': return { ...Rtf.importRtf(buf, { registerImage: reg }), format: 'rtf' };
+      case 'epub': return { ...(await Epub.importEpub(buf, reg)), format: 'epub',
+        notice: 'EPUB importé : les chapitres, le texte et les images intégrées sont récupérés. La mise en page de la liseuse est simplifiée.' };
       case 'pdf': return { ...(await importPdf(buf)), format: 'pdf', notice: 'PDF importé : le texte et la structure sont récupérés, la mise en page d’origine est simplifiée.' };
       case 'html': case 'htm': case 'xhtml': return { html: Sanitize.html(decodeText(buf)), format: 'html' };
       case 'md': case 'markdown': return { html: Markdown.toHtml(decodeText(buf)), format: 'md' };
-      case 'csv': {
-        const rows = decodeText(buf).split(/\r?\n/).filter(l => l.trim()).map(l => parseCsvLine(l, l.split(';').length > l.split(',').length ? ';' : ','));
-        const n = Math.max(1, ...rows.map(r => r.length));
-        return { html: `<table data-borders="all"><tbody>${rows.map((r, i) => `<tr${i === 0 ? ' data-header="1"' : ''}>${Array.from({ length: n }, (x, k) => `<td><p>${htmlEsc(r[k] || '') || '<br>'}</p></td>`).join('')}</tr>`).join('')}</tbody></table><p><br></p>`, format: 'txt' };
+      case 'csv': case 'tsv': {
+        const rows = readDelimited(decodeText(buf), ext === 'tsv' ? '\t' : undefined);
+        if (!rows.length) return { html: '<p><br></p>', format: ext };
+        const n = rows.reduce((max, row) => Math.max(max, row.length), 0);
+        const body = rows.map((row, i) => {
+          const cells = Array.from({ length: n }, (_, col) => {
+            const cell = htmlEsc(row[col] || '').replace(/\n/g, '<br>');
+            return `<td><p>${cell || '<br>'}</p></td>`;
+          }).join('');
+          return `<tr${i === 0 ? ' data-header="1"' : ''}>${cells}</tr>`;
+        }).join('');
+        return { html: `<table data-borders="all"><tbody>${body}</tbody></table><p><br></p>`, format: ext };
       }
       case 'doc': case 'dot': {
         const conv = await convertWithOffice(buf, ext, 'docx');
@@ -221,20 +262,98 @@ const Formats = (() => {
     const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(b);
     return utf8.includes('�') ? new TextDecoder('windows-1252').decode(b) : utf8.replace(/^﻿/, '');
   }
-  function parseCsvLine(line, sep) {
-    const out = []; let cur = '', q = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
-      else if (c === '"') q = true; else if (c === sep) { out.push(cur); cur = ''; } else cur += c;
+  function parseDelimited(text, separator) {
+    const rows = [];
+    let row = [], value = '', quoted = false, started = false;
+    const endRow = () => {
+      if (row.length || value.trim() || (started && !value)) rows.push([...row, value]);
+      row = [];
+      value = '';
+      started = false;
+    };
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (quoted) {
+        if (char !== '"') value += char;
+        else if (text[i + 1] === '"') { value += '"'; i++; }
+        else quoted = false;
+      } else if (char === '"' && !started) {
+        quoted = started = true;
+      } else if (char === separator) {
+        row.push(value);
+        value = '';
+        started = false;
+      } else if (char === '\n') {
+        endRow();
+      } else {
+        value += char;
+        started = true;
+      }
     }
-    out.push(cur); return out;
+    endRow();
+    return rows;
+  }
+
+  function detectSeparator(text) {
+    const counts = new Map([[',', 0], [';', 0], ['\t', 0]]);
+    let quoted = false, started = false, nonblank = false;
+    for (const char of text) {
+      if (char === '"' && (quoted || !started)) {
+        quoted = !quoted;
+        nonblank = true;
+      } else if (!quoted && counts.has(char)) {
+        counts.set(char, counts.get(char) + 1);
+        started = false;
+        nonblank = true;
+      } else if (!quoted && char === '\n') {
+        if (nonblank) break;
+        started = false;
+      } else if (!quoted) {
+        started = true;
+        if (char.trim()) nonblank = true;
+      }
+    }
+    return [...counts].sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  // Une seule séparation pour tout le fichier, même dans les champs multilignes.
+  function readDelimited(text, separator) {
+    const clean = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+    return parseDelimited(clean, separator || detectSeparator(clean));
+  }
+
+  function exportDelimited(format, editor) {
+    const table = editor.querySelector('table');
+    if (!table?.rows.length) throw Object.assign(new Error('NO_TABLE'), {
+      userMessage: 'Ajoutez un tableau au document avant de l’exporter en CSV ou TSV.'
+    });
+    const separator = format === 'tsv' ? '\t' : ',';
+    const rows = Array.from(table.rows, () => []);
+    for (const [index, row] of Array.from(table.rows).entries()) {
+      let column = 0;
+      for (const cell of row.cells) {
+        while (rows[index][column] !== undefined) column++;
+        rows[index][column] = cell.innerText.replace(/\u200B/g, '');
+        const end = cell.rowSpan === 0
+          ? index + row.parentElement.rows.length - row.sectionRowIndex
+          : Math.min(rows.length, index + cell.rowSpan);
+        for (let r = index; r < end; r++)
+          for (let c = column; c < column + cell.colSpan; c++)
+            rows[r][c] ??= '';
+        column += cell.colSpan;
+      }
+    }
+    const width = rows.reduce((max, row) => Math.max(max, row.length), 0);
+    const quote = value => value.includes(separator) || /["\r\n]/.test(value)
+      ? '"' + value.replace(/"/g, '""') + '"' : value;
+    const text = rows.map(row => Array.from({ length: width }, (_, i) => quote(row[i] || '')).join(separator)).join('\r\n');
+    return new Blob(['\uFEFF', text, '\r\n'], { type: EXPORT[format].mime + ';charset=utf-8' });
   }
 
   /* ---------- Export ---------- */
   async function build(format, ctx) {
     // pendant l'export, les couleurs d'affichage des révisions ne doivent pas être lues comme mise en forme
-    const neutral = ['docx', 'odt', 'rtf', 'md', 'doc'].includes(format);
+    const neutral = WORD_XML.has(format) || EXPORT[format]?.desktop || ['odt', 'ott', 'rtf', 'md'].includes(format);
     if (neutral) document.body.classList.add('exporting-doc');
     try {
       // exports : document « propre » (sans artefacts de pagination ni décalages d'affichage)
@@ -245,16 +364,24 @@ const Formats = (() => {
   async function buildRaw(format, ctx) {
     switch (format) {
       case 'docx': case 'docm': case 'dotx': case 'dotm': return DocxExport.exportDocx(ctx, { kind: format });
-      case 'odt': return Odt.exportOdt(ctx);
+      case 'odt': case 'ott': return Odt.exportOdt(ctx, { template: format === 'ott' });
       case 'rtf': return Rtf.exportRtf(ctx);
       case 'md': return new Blob([Markdown.fromEditor(ctx.editor)], { type: 'text/markdown;charset=utf-8' });
       case 'txt': return new Blob([ctx.editor.innerText.replace(/​/g, '')], { type: 'text/plain;charset=utf-8' });
+      case 'csv': case 'tsv': return exportDelimited(format, ctx.editor);
       case 'html': return new Blob([await App.htmlDocument()], { type: 'text/html;charset=utf-8' });
-      case 'doc': {
+      case 'epub': return Epub.exportEpub(ctx);
+      case 'doc': case 'fodt': case 'xml': {
+        const label = EXPORT[format].label;
+        if (!await converterAvailable()) throw Object.assign(new Error('CONVERTER'), {
+          userMessage: `L’export ${label} nécessite l’application de bureau Plume et LibreOffice.`
+        });
         const docx = await DocxExport.exportDocx(ctx);
-        const conv = await convertWithOffice(await docx.arrayBuffer(), 'docx', 'doc');
-        if (!conv) throw Object.assign(new Error('CONVERTER'), { userMessage: 'L’export Word 97-2003 (.doc) nécessite l’application de bureau Plume et LibreOffice. Le format .docx est lu par toutes les versions de Word depuis 2007.' });
-        return new Blob([conv], { type: EXPORT.doc.mime });
+        const conv = await window.plumeDesktop.converter.convert(await docx.arrayBuffer(), 'docx', format);
+        if (!conv) throw Object.assign(new Error('CONVERSION_FAILED'), {
+          userMessage: `LibreOffice n’a pas pu créer le fichier ${label}.`
+        });
+        return new Blob([conv], { type: EXPORT[format].mime });
       }
       case 'pdf': {
         // application de bureau : PDF vectoriel (texte sélectionnable) ; ailleurs : PDF direct page par page
@@ -266,7 +393,21 @@ const Formats = (() => {
   }
 
   /* ---------- PDF direct (navigateur, tablette, téléphone) ---------- */
-  const loadScript = src => new Promise((res, rej) => { if (document.querySelector(`script[data-lib="${src}"]`)) return res(); const sc = document.createElement('script'); sc.src = src; sc.dataset.lib = src; sc.onload = res; sc.onerror = () => rej(new Error('Module PDF introuvable : ' + src)); document.head.append(sc); });
+  const scripts = new Map();
+  function loadScript(src) {
+    if (!scripts.has(src)) scripts.set(src, new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => {
+        script.remove();
+        scripts.delete(src);
+        reject(new Error('Module PDF introuvable : ' + src));
+      };
+      document.head.append(script);
+    }));
+    return scripts.get(src);
+  }
   /**
    * Fabrique un fichier PDF à partir des pages affichées : chaque page est rendue
    * en haute définition (≈ 200 ppp) avec ses en-têtes, pieds, images et polices.
@@ -328,5 +469,5 @@ const Formats = (() => {
     return pdf.output('blob');
   }
 
-  return { rasterPdf, OPEN, CONVERT, EXPORT, SAVABLE, WORD_XML, ACCEPT, ALL_EXT, extOf, open, build, converterAvailable, importPdf };
+  return { rasterPdf, OPEN, CONVERT, EXPORT, SAVABLE, WORD_XML, ACCEPT, ALL_EXT, extOf, open, build, converterAvailable, importPdf, readDelimited };
 })();

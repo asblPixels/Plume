@@ -424,12 +424,10 @@ const Merge = {
     const fi = $('#fileInput');
     fi.accept = '.csv,.txt,.tsv';
     App.fileInputCb = async f => {
-      const text = await f.text();
-      const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
-      if (lines.length < 2) { toast('Le fichier doit contenir une ligne d’en-têtes et au moins un destinataire.'); return; }
-      const sep = lines[0].includes('\t') ? '\t' : (lines[0].split(';').length > lines[0].split(',').length ? ';' : ',');
-      const parse = l => { const o = []; let c = '', q = false; for (let i = 0; i < l.length; i++) { const ch = l[i]; if (q) { if (ch === '"' && l[i + 1] === '"') { c += '"'; i++; } else if (ch === '"') q = false; else c += ch; } else if (ch === '"') q = true; else if (ch === sep) { o.push(c); c = ''; } else c += ch; } o.push(c); return o.map(x => x.trim()); };
-      this.data = { cols: parse(lines[0]), rows: lines.slice(1).map(parse) };
+      const separator = Formats.extOf(f.name) === 'tsv' ? '\t' : undefined;
+      const [cols, ...rows] = Formats.readDelimited(await f.text(), separator);
+      if (!rows.length) { toast('Le fichier doit contenir une ligne d’en-têtes et au moins un destinataire.'); return; }
+      this.data = { cols: cols.map(c => c.trim()), rows };
       this.index = 0;
       toast(`<b>${this.data.rows.length}</b> destinataires chargés (${this.data.cols.length} champs)`);
       Ribbon.refresh();

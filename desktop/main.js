@@ -68,7 +68,7 @@ async function checkUpdate() {
 }
 ipcMain.handle('plume:update-state', () => updateState);
 ipcMain.handle('plume:update-restart', () => { app.relaunch(); app.exit(0); });
-const OPENABLE = /\.(docx|docm|dotx|dotm|doc|dot|odt|ott|fodt|rtf|pdf|html?|xhtml|md|markdown|txt|csv|wpd|wps|pages|sxw|stw|abw|zabw|lwp|hwp|wri|xml|epub|cwk|sdw|uot|602|gdoc)$/i;
+const OPENABLE = /\.(docx|docm|dotx|dotm|doc|dot|odt|ott|fodt|rtf|pdf|html?|xhtml|md|markdown|txt|csv|tsv|wpd|wps|pages|sxw|stw|abw|zabw|lwp|hwp|wri|xml|epub|cwk|sdw|uot|602|gdoc)$/i;
 
 let win = null;
 const pending = [];
@@ -151,18 +151,30 @@ function findSoffice() {
     ? [process.env.ProgramFiles, process.env['ProgramFiles(x86)'], 'C:\\Program Files', 'C:\\Program Files (x86)'].filter(Boolean).flatMap(d => [path.join(d, 'LibreOffice', 'program', 'soffice.exe'), path.join(d, 'OpenOffice 4', 'program', 'soffice.exe')])
     : process.platform === 'darwin' ? ['/Applications/LibreOffice.app/Contents/MacOS/soffice']
       : ['/usr/bin/soffice', '/usr/bin/libreoffice', '/usr/local/bin/soffice', '/opt/libreoffice/program/soffice', '/snap/bin/libreoffice', '/var/lib/flatpak/exports/bin/org.libreoffice.LibreOffice'];
+  if (process.platform !== 'win32') {
+    for (const dir of (process.env.PATH || '').split(path.delimiter).filter(dir => path.isAbsolute(dir))) {
+      cands.push(path.join(dir, 'soffice'));
+    }
+  }
   return cands.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || null;
 }
 ipcMain.handle('plume:converter-available', () => !!findSoffice());
 ipcMain.handle('plume:convert', async (e, { data, from, to }) => {
   const soffice = findSoffice();
   if (!soffice) return null;
+  const filters = new Map([
+    ['docx', 'docx:MS Word 2007 XML'],
+    ['doc', 'doc:MS Word 97'],
+    ['fodt', 'fodt:OpenDocument Text Flat XML'],
+    ['xml', 'xml:MS Word 2003 XML']
+  ]);
+  const filter = filters.get(to);
+  if (!filter || typeof from !== 'string' || !/^[a-z0-9]+$/i.test(from) || from === to) return null;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plume-'));
-  const input = path.join(dir, 'document.' + String(from).replace(/[^a-z0-9]/gi, ''));
-  fs.writeFileSync(input, Buffer.from(data));
-  const filter = { docx: 'docx:MS Word 2007 XML', doc: 'doc:MS Word 97', odt: 'odt', pdf: 'pdf' }[to] || to;   // pas de guillemets : arguments passés sans shell
-  const profile = pathToFileURL(path.join(os.tmpdir(), 'plume-lo-profile')).toString();
+  const input = path.join(dir, 'document.' + from);
+  const profile = pathToFileURL(path.join(dir, 'profile')).toString();
   try {
+    fs.writeFileSync(input, Buffer.from(data));
     await new Promise((resolve, reject) => execFile(soffice, [`-env:UserInstallation=${profile}`, '--headless', '--norestore', '--nologo', '--convert-to', filter, '--outdir', dir, input], { timeout: 180000, windowsHide: true }, err => err ? reject(err) : resolve()));
     const out = path.join(dir, 'document.' + to);
     if (!fs.existsSync(out)) return null;

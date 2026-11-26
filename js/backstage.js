@@ -140,7 +140,7 @@ const Backstage = {
         if (window.plumeDesktop) {
           const st = el('p', { style: 'color:var(--ui-fg-2);margin-top:22px' }, ['Module de conversion LibreOffice : vérification…']);
           main.append(st);
-          Formats.converterAvailable().then(ok => { st.innerHTML = ok ? '✅ Module de conversion LibreOffice détecté : ouverture des .doc, .wpd, .wps, .pages… et export .doc disponibles.' : 'ℹ️ Installez <a href="https://fr.libreoffice.org/download/telecharger-libreoffice/" target="_blank" rel="noopener">LibreOffice</a> (gratuit) pour ouvrir les formats anciens (.doc avec mise en forme, WordPerfect, Works, Pages…) et exporter en .doc.'; });
+          Formats.converterAvailable().then(ok => { st.innerHTML = ok ? '✅ Module de conversion LibreOffice détecté : ouverture des .doc, .wpd, .wps, .pages… et exports .doc, .fodt et Word 2003 XML disponibles.' : 'ℹ️ Installez <a href="https://fr.libreoffice.org/download/telecharger-libreoffice/" target="_blank" rel="noopener">LibreOffice</a> (gratuit) pour ouvrir les formats anciens (.doc avec mise en forme, WordPerfect, Works, Pages…) et exporter en .doc, .fodt ou Word 2003 XML.'; });
         }
         break;
       }

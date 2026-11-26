@@ -478,7 +478,8 @@ const Odt = (() => {
   /* =====================================================================
      ÉCRITURE
      ===================================================================== */
-  async function exportOdt({ editor, headerEl, footerEl, page, props, settings }) {
+  async function exportOdt({ editor, headerEl, footerEl, page, props, settings }, { template = false } = {}) {
+    const mime = template ? MIME_ODT + '-template' : MIME_ODT;
     const autoP = new Map(), autoT = new Map(), autoOther = [];
     const pics = [];   // {name, bytes, mime}
     const picBySrc = new Map();
@@ -861,10 +862,10 @@ const Odt = (() => {
     const now = new Date().toISOString().replace(/\.\d+Z$/, '');
     const meta = `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-meta ${NSDECL} office:version="1.3"><office:meta><meta:generator>Plume/${(window.App && App.VERSION) || '1'} (Pixel's ASBL)</meta:generator><dc:title>${xmlEsc(props.title || '')}</dc:title><meta:initial-creator>${xmlEsc(props.author || '')}</meta:initial-creator><dc:creator>${xmlEsc(props.author || '')}</dc:creator><meta:creation-date>${xmlEsc((props.created || now).replace(/Z$/, ''))}</meta:creation-date><dc:date>${now}</dc:date><dc:language>fr-BE</dc:language></office:meta></office:document-meta>`;
     const settingsXml = `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-settings xmlns:office="${NS.office}" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" office:version="1.3"><office:settings/></office:document-settings>`;
-    const manifest = `<?xml version="1.0" encoding="UTF-8"?>\n<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:version="1.3" manifest:media-type="${MIME_ODT}"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="settings.xml" manifest:media-type="text/xml"/>${pics.map(p => `<manifest:file-entry manifest:full-path="${p.name}" manifest:media-type="${p.mime}"/>`).join('')}</manifest:manifest>`;
+    const manifest = `<?xml version="1.0" encoding="UTF-8"?>\n<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:version="1.3" manifest:media-type="${mime}"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="settings.xml" manifest:media-type="text/xml"/>${pics.map(p => `<manifest:file-entry manifest:full-path="${p.name}" manifest:media-type="${p.mime}"/>`).join('')}</manifest:manifest>`;
 
     const zip = new JSZip();
-    zip.file('mimetype', MIME_ODT, { compression: 'STORE', createFolders: false });
+    zip.file('mimetype', mime, { compression: 'STORE', createFolders: false });
     zip.file('content.xml', content, { createFolders: false });
     zip.file('styles.xml', stylesFinal, { createFolders: false });
     zip.file('meta.xml', meta, { createFolders: false });
@@ -872,7 +873,7 @@ const Odt = (() => {
     zip.file('META-INF/manifest.xml', manifest, { createFolders: false });
     for (const p of pics) zip.file(p.name, p.bytes, { createFolders: false });
     if (typeof EmbedFonts !== 'undefined') await EmbedFonts.applyOdt(zip);
-    return zip.generateAsync({ type: 'blob', mimeType: MIME_ODT, compression: 'DEFLATE' });
+    return zip.generateAsync({ type: 'blob', mimeType: mime, compression: 'DEFLATE' });
   }
 
   return { importOdt, exportOdt };

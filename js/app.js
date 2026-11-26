@@ -172,7 +172,10 @@ const App = {
       this.docId = uid();
       this.format = r.format || 'docx';
       // Ctrl+S réécrit le fichier d'origine seulement si son format est réinscriptible sans perte
-      const writable = Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop);
+      const nameFormat = Formats.extOf(file.name);
+      const aliases = { markdown: 'md', htm: 'html', text: 'txt' };
+      const sameFormat = (aliases[nameFormat] || nameFormat) === this.format;
+      const writable = !r.partial && sameFormat && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop));
       this.fileHandle = writable ? handle : null;
       this.desktopPath = writable ? desktopPath : null;
       $('#docTitle').value = base;
@@ -237,6 +240,7 @@ const App = {
       if (r !== fmt) { fmt = r; asNew = true; }
     }
     const info = Formats.EXPORT[fmt];
+    const editable = Formats.SAVABLE.has(fmt) || fmt === 'doc';
     try {
       this.setSaveState('Enregistrement…');
       if (fmt === 'pdf' && !(window.plumeDesktop && window.plumeDesktop.printToPdf)) this.setSaveState('Création du PDF…');
@@ -254,7 +258,7 @@ const App = {
         const path = await window.plumeDesktop.saveDialog(fname, fmt, info.label);
         if (!path) { this.setSaveState('Modifié'); return; }
         await window.plumeDesktop.writeFile(path, await blob.arrayBuffer());
-        if (Formats.SAVABLE.has(fmt) || fmt === 'doc') { this.desktopPath = path; this.format = fmt; $('#docTitle').value = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''); }
+        if (editable) { this.desktopPath = path; this.format = fmt; $('#docTitle').value = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''); }
       } else if (window.showSaveFilePicker) {
         try {
           const h = await showSaveFilePicker({ suggestedName: fname, types: [{ description: info.label, accept: { [info.mime]: ['.' + fmt] } }] });
@@ -263,9 +267,9 @@ const App = {
         } catch (e) { if (e.name === 'AbortError') { this.setSaveState('Modifié'); return; } throw e; }
       } else downloadBlob(blob, fname);
       await this.flushAutosave(true);
-      this.dirty = false;
-      this.setSaveState('Enregistré');
-      toast(`<b>${htmlEsc(fname)}</b> enregistré`);
+      if (editable) this.dirty = false;
+      this.setSaveState(editable ? 'Enregistré' : (this.dirty ? 'Modifié' : 'Export terminé'));
+      toast(`<b>${htmlEsc(fname)}</b> ${editable ? 'enregistré' : 'exporté'}`);
     } catch (e) {
       console.error(e);
       this.endPrint && this.endPrint();
