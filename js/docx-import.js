@@ -845,9 +845,15 @@ const DocxImport = (() => {
                 const props = kid(n, 'w:sdtPr');
                 const text = props && kid(props, 'w:text');
                 const checkbox = checkboxChild(props, 'checkbox');
+                const dropdown = props && kid(props, 'w:dropDownList');
+                const choices = dropdown && kids(dropdown).filter(item => item.nodeName === 'w:listItem').map(item => ({
+                  value: item.getAttribute('w:value') ?? item.getAttribute('w:displayText') ?? '',
+                  label: item.getAttribute('w:displayText')
+                }));
+                const supportedDropdown = choices?.length && choices.length === kids(dropdown).length;
                 const multilineValue = text?.getAttribute('w:multiLine');
                 const multiline = multilineValue != null && isOn(multilineValue);
-                if (!content || !(text || checkbox) || !isSimpleControl(props, content, text || checkbox, multiline)) {
+                if (!content || !(text || checkbox || supportedDropdown) || !isSimpleControl(props, content, text || checkbox || dropdown, multiline)) {
                   await walk(content || n);
                   break;
                 }
@@ -868,10 +874,15 @@ const DocxImport = (() => {
                     node => node.textContent).join(''));
                 }
                 const locked = lock === 'contentLocked' || lock === 'sdtContentLocked';
-                if (locked || checkbox) attrs += ' contenteditable="false"';
+                if (locked || checkbox || supportedDropdown) attrs += ' contenteditable="false"';
                 const inner = segs[index].slice(start);
                 const checkboxUi = checkbox ? ` role="checkbox" tabindex="0" aria-label="${xmlEsc(kid(props, 'w:alias')?.getAttribute('w:val') || 'Case à cocher')}" aria-disabled="${locked}"${checkboxAttrs(checkbox)}` : '';
-                const cls = checkbox ? 'pl-sdt-checkbox' : 'pl-sdt-text';
+                if (supportedDropdown) {
+                  attrs += controlAttr('choices', JSON.stringify(choices));
+                  attrs += controlAttr('last-value', dropdown.getAttribute('w:lastValue'));
+                  attrs += ` role="button" tabindex="0" aria-label="${xmlEsc(kid(props, 'w:alias')?.getAttribute('w:val') || 'Liste déroulante')}" aria-disabled="${locked}"`;
+                }
+                const cls = checkbox ? 'pl-sdt-checkbox' : supportedDropdown ? 'pl-sdt-dropdown' : 'pl-sdt-text';
                 segs[index] = segs[index].slice(0, start) + `<span class="${cls}"${attrs}${checkboxUi}>${inner}</span>`;
                 break;
               }

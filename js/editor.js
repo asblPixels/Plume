@@ -1519,7 +1519,27 @@ const Ed = {
     checkbox.replaceChildren(span);
     this.changed(false);
   },
+  async chooseWordDropdown(control) {
+    if (control.getAttribute('aria-disabled') === 'true' || this.editor.contentEditable === 'false') return;
+    const docId = App.docId;
+    const choices = JSON.parse(control.dataset.sdtChoices || '[]');
+    const select = el('select', { 'aria-label': 'Valeur du champ Word' },
+      choices.map(({ value, label }, index) => el('option', { value: String(index) }, label ?? value)));
+    const current = choices.findIndex(({ value }) => value === control.dataset.sdtLastValue);
+    if (current >= 0) select.selectedIndex = current;
+    const confirmed = await dialog({ title: control.dataset.sdtAlias || 'Liste déroulante Word', body: select,
+      buttons: [{ label: 'Annuler', value: false }, { label: 'Valider', value: true, primary: true }] });
+    const choice = choices[select.selectedIndex];
+    if (!confirmed || !choice || docId !== App.docId || !this.editor.contains(control) ||
+        this.editor.contentEditable === 'false') return;
+    control.dataset.sdtLastValue = choice.value;
+    delete control.dataset.sdtPlaceholderText;
+    control.textContent = choice.label ?? choice.value;
+    this.changed(false);
+  },
   onClick(e) {
+    const dropdown = e.target.closest('.pl-sdt-dropdown');
+    if (dropdown) { e.preventDefault(); this.chooseWordDropdown(dropdown); return; }
     const checkbox = e.target.closest('.pl-sdt-checkbox');
     if (checkbox) { e.preventDefault(); this.toggleWordCheckbox(checkbox); return; }
     if (e.target.tagName === 'IMG') { this.selectImage(e.target); const r = document.createRange(); r.selectNode(e.target); const s = getSelection(); s.removeAllRanges(); s.addRange(r); this.lastRange = r; }
@@ -1544,6 +1564,12 @@ const Ed = {
 
   /* ---------- Clavier ---------- */
   onKeyDown(e) {
+    const dropdown = e.target.closest('.pl-sdt-dropdown');
+    if (dropdown && (e.key === ' ' || e.key === 'Enter')) {
+      e.preventDefault();
+      this.chooseWordDropdown(dropdown);
+      return;
+    }
     const checkbox = e.target.closest('.pl-sdt-checkbox');
     if (checkbox) {
       if (e.key === ' ' || e.key === 'Enter') {

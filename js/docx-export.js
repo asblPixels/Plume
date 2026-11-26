@@ -528,7 +528,7 @@ const DocxExport = (() => {
           if (tag === 'BR') { emit(rPrXml(propsFor(n.parentElement), b), '<w:br/>'); continue; }
           if (tag === 'IMG') { flush(); out += drawing(n, part); continue; }
           if (n.classList.contains('pl-anchor')) { flush(); const id = bookmarkId++; out += `<w:bookmarkStart w:id="${id}" w:name="${xmlEsc(n.id || ('_pl' + id))}"/><w:bookmarkEnd w:id="${id}"/>`; continue; }
-          if (n.matches('.pl-sdt-text,.pl-sdt-checkbox')) {
+          if (n.matches('.pl-sdt-text,.pl-sdt-checkbox,.pl-sdt-dropdown')) {
             flush();
             const properties = [
               ['alias', n.dataset.sdtAlias], ['id', n.dataset.sdtId], ['tag', n.dataset.sdtTag]
@@ -549,6 +549,13 @@ const DocxExport = (() => {
               type = `<w14:checkbox><w14:checked w14:val="${checked}"/>` +
                 state('checked', n.dataset.sdtCheckedCode, n.dataset.sdtCheckedFont) +
                 state('unchecked', n.dataset.sdtUncheckedCode, n.dataset.sdtUncheckedFont) + '</w14:checkbox>';
+            }
+            if (n.classList.contains('pl-sdt-dropdown')) {
+              const choices = JSON.parse(n.dataset.sdtChoices || '[]');
+              const last = n.dataset.sdtLastValue;
+              type = `<w:dropDownList${last === undefined ? '' : ` w:lastValue="${xmlEsc(last)}"`}>` +
+                choices.map(({ value, label }) => `<w:listItem w:value="${xmlEsc(value)}"${label == null ? '' : ` w:displayText="${xmlEsc(label)}"`}/>`).join('') +
+                '</w:dropDownList>';
             }
             out += `<w:sdt><w:sdtPr>${properties}${lock}${placeholder}${showing}${type}</w:sdtPr><w:sdtContent>`;
             walk(Array.from(n.childNodes));
