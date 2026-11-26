@@ -10,7 +10,7 @@ const { app, BrowserWindow, ipcMain, shell, Menu, dialog, protocol, net } = requ
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 
 const BUNDLED_DIR = path.join(__dirname, 'app');
@@ -199,6 +199,32 @@ ipcMain.handle('plume:quit', event => {
 });
 
 /* ---------- Fichiers ---------- */
+ipcMain.handle('plume:open-in-word', async (event, file) => {
+  if (process.platform !== 'win32' || !win || event.sender !== win.webContents ||
+      event.senderFrame !== win.webContents.mainFrame ||
+      typeof file !== 'string' || !/^[a-z]:[\\/]/i.test(file) || !/\.(docm|dotm)$/i.test(file)) {
+    throw new Error('Sélectionnez un document Word avec macros enregistré sur ce PC.');
+  }
+  if (!(await fs.promises.stat(file)).isFile()) throw new Error('Le document enregistré est introuvable.');
+  const programs = [process.env.ProgramW6432, process.env.ProgramFiles, process.env['ProgramFiles(x86)']];
+  const word = programs.filter(Boolean).flatMap(dir => [
+    path.join(dir, 'Microsoft Office', 'root', 'Office16', 'WINWORD.EXE'),
+    path.join(dir, 'Microsoft Office', 'Office16', 'WINWORD.EXE')
+  ]).find(candidate => fs.existsSync(candidate));
+  if (!word) throw new Error('Microsoft Word n’a pas été trouvé dans les dossiers d’installation standard.');
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question', title: 'Ouvrir dans Microsoft Word',
+    message: path.basename(file), detail: file,
+    buttons: ['Annuler', 'Ouvrir dans Word'], defaultId: 0, cancelId: 0
+  });
+  if (response !== 1) return false;
+  await new Promise((resolve, reject) => {
+    const child = spawn(word, [file], { detached: true, stdio: 'ignore' });
+    child.once('error', reject);
+    child.once('spawn', () => { child.unref(); resolve(); });
+  });
+  return true;
+});
 ipcMain.handle('plume:write-file', async (e, { path: p, data }) => { fs.writeFileSync(p, Buffer.from(data)); return true; });
 ipcMain.handle('plume:save-dialog', async (e, { name, ext, label }) => {
   const r = await dialog.showSaveDialog(win, { title: 'Enregistrer sous', defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: label, extensions: [ext] }, { name: 'Tous les fichiers', extensions: ['*'] }] });

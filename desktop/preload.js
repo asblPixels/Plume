@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('plumeDesktop', {
   platform: process.platform,
   onOpenFile: cb => ipcRenderer.on('plume:open-file', (e, f) => cb(f)),
+  openInWord: path => ipcRenderer.invoke('plume:open-in-word', path),
   quit: () => ipcRenderer.invoke('plume:quit'),
   onQuitRequested: cb => ipcRenderer.on('plume:request-quit', () => {
     ipcRenderer.send('plume:quit-ack');

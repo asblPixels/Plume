@@ -528,6 +528,25 @@ const DocxExport = (() => {
           if (tag === 'BR') { emit(rPrXml(propsFor(n.parentElement), b), '<w:br/>'); continue; }
           if (tag === 'IMG') { flush(); out += drawing(n, part); continue; }
           if (n.classList.contains('pl-anchor')) { flush(); const id = bookmarkId++; out += `<w:bookmarkStart w:id="${id}" w:name="${xmlEsc(n.id || ('_pl' + id))}"/><w:bookmarkEnd w:id="${id}"/>`; continue; }
+          if (n.classList.contains('pl-sdt-text')) {
+            flush();
+            const properties = [
+              ['alias', n.dataset.sdtAlias], ['id', n.dataset.sdtId], ['tag', n.dataset.sdtTag]
+            ].filter(([name, value]) => value !== undefined &&
+              (name !== 'id' || (/^-?\d+$/.test(value) && Number(value) >= -2147483648 && Number(value) <= 2147483647)))
+              .map(([name, value]) => `<w:${name} w:val="${xmlEsc(value)}"/>`).join('');
+            const lock = ['sdtLocked', 'contentLocked', 'sdtContentLocked', 'unlocked'].includes(n.dataset.sdtLock)
+              ? `<w:lock w:val="${n.dataset.sdtLock}"/>` : '';
+            const placeholder = n.dataset.sdtPlaceholder
+              ? `<w:placeholder><w:docPart w:val="${xmlEsc(n.dataset.sdtPlaceholder)}"/></w:placeholder>` : '';
+            const showing = n.dataset.sdtPlaceholderText === n.textContent ? '<w:showingPlcHdr/>' : '';
+            const multiline = n.dataset.sdtMultiline === 'true' ? ' w:multiLine="1"' : '';
+            out += `<w:sdt><w:sdtPr>${properties}${lock}${placeholder}${showing}<w:text${multiline}/></w:sdtPr><w:sdtContent>`;
+            walk(Array.from(n.childNodes));
+            flush();
+            out += '</w:sdtContent></w:sdt>';
+            continue;
+          }
           if (n.classList.contains('pl-field') && n.dataset.field) {
             flush();
             const rp = rPrXml(propsFor(n), b);
@@ -920,7 +939,8 @@ const DocxExport = (() => {
       for (const r of Object.values(mr)) {
         const rk = r.type.split('/').pop();
         // macros : conservées (jamais exécutées) dans un .docm / .dotm, retirées sinon
-        if (!['theme', 'fontTable', 'webSettings', 'settings'].includes(rk) && !(K.macros && MACRO_RELS.includes(rk))) continue;
+        if (!['theme', 'fontTable', 'webSettings', 'settings', 'glossaryDocument'].includes(rk) && !(K.macros && MACRO_RELS.includes(rk))) continue;
+        if (r.mode === 'External') continue;
         const path = resolve('word/document.xml', r.target);
         if (rk === 'settings') { if (path !== 'word/settings.xml') continue; useSrcSettings = true; }
         await copyPart(path);

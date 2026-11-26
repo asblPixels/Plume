@@ -775,6 +775,16 @@ const DocxImport = (() => {
         const inInstr = () => fields.some(f => f.phase === 'instr');
         const skipping = () => fields.some(f => f.skip && f.phase === 'result');
 
+        function isPlainTextControl(props, content, multiline) {
+          const supported = new Set(['w:text', 'w:alias', 'w:tag', 'w:id', 'w:lock',
+            'w:placeholder', 'w:showingPlcHdr']);
+          const normalBreak = item => multiline && (item.nodeName === 'w:cr' ||
+            (item.nodeName === 'w:br' && [null, 'textWrapping'].includes(item.getAttribute('w:type'))));
+          return Array.from(props.children).every(child => supported.has(child.nodeName)) &&
+            Array.from(content.children).every(child => child.nodeName === 'w:r' &&
+              Array.from(child.children).every(item => ['w:rPr', 'w:t'].includes(item.nodeName) || normalBreak(item)));
+        }
+
         async function walk(node) {
           for (const n of node.children) {
             switch (n.nodeName) {
@@ -812,7 +822,39 @@ const DocxImport = (() => {
               case 'w:commentRangeEnd': if (!isReply(n.getAttribute('w:id'))) pushRaw(`<span class="pl-cend" data-cid="${xmlEsc(n.getAttribute('w:id'))}"></span>`); break;
               case 'w:smartTag': case 'w:customXml': case 'w:sdtContent': case 'w:dir': case 'w:bdo':
                 await walk(n); break;
-              case 'w:sdt': await walk(kid(n, 'w:sdtContent') || n); break;
+              case 'w:sdt': {
+                const content = kid(n, 'w:sdtContent');
+                const props = kid(n, 'w:sdtPr');
+                const text = props && kid(props, 'w:text');
+                const isOn = value => value == null || ['true', '1', 'on'].includes(value);
+                const multilineValue = text?.getAttribute('w:multiLine');
+                const multiline = multilineValue != null && isOn(multilineValue);
+                if (!content || !text || !isPlainTextControl(props, content, multiline)) {
+                  await walk(content || n);
+                  break;
+                }
+                flush();
+                const index = segs.length - 1;
+                const start = segs[index].length;
+                await walk(content);
+                flush();
+                const attr = (name, value) => value == null ? '' : ` data-sdt-${name}="${xmlEsc(value)}"`;
+                const lock = kid(props, 'w:lock')?.getAttribute('w:val');
+                const placeholder = kid(kid(props, 'w:placeholder') || props, 'w:docPart')?.getAttribute('w:val');
+                const showing = kid(props, 'w:showingPlcHdr');
+                let attrs = ['alias', 'tag', 'id'].map(name => attr(name,
+                  kid(props, 'w:' + name)?.getAttribute('w:val'))).join('');
+                attrs += attr('lock', lock) + attr('placeholder', placeholder);
+                if (multiline) attrs += attr('multiline', 'true');
+                if (showing && isOn(showing.getAttribute('w:val'))) {
+                  attrs += attr('placeholder-text', Array.from(content.getElementsByTagName('w:t'),
+                    node => node.textContent).join(''));
+                }
+                if (lock === 'contentLocked' || lock === 'sdtContentLocked') attrs += ' contenteditable="false"';
+                const inner = segs[index].slice(start);
+                segs[index] = segs[index].slice(0, start) + `<span class="pl-sdt-text"${attrs}>${inner}</span>`;
+                break;
+              }
               case 'w:bookmarkStart': {
                 const nm = n.getAttribute('w:name');
                 if (nm && !nm.startsWith('_GoBack')) pushRaw(`<span class="pl-anchor" id="${xmlEsc(nm)}"></span>`);

@@ -24,8 +24,8 @@
   },
   {
    "path": "js/app.js",
-   "size": 64767,
-   "sha256": "f39df692f79d4be6cfb8a4c361c5de3777b931943059d5baf7bba3e2504c3c5b"
+   "size": 67216,
+   "sha256": "7af9e581f0323340ac8ba22b6ef286cff0c69cbd7de2de96069542272e30ecd6"
   },
   {
    "path": "js/backstage.js",
@@ -34,13 +34,13 @@
   },
   {
    "path": "js/docx-export.js",
-   "size": 75013,
-   "sha256": "1e059fbbeecfd898be7bfc999e3da17178716de512337b0c27b7ad6c24746416"
+   "size": 76370,
+   "sha256": "f01ceac32421d623037a08e9de71fe8153b6b3e843c96e5f64810f72c27f2197"
   },
   {
    "path": "js/docx-import.js",
-   "size": 70465,
-   "sha256": "2ed614621bf459e345881b7b28dbee6dc32e6d8db6e59c9f30c8d7b98171d133"
+   "size": 73111,
+   "sha256": "d771f48aad7f907830530f789493f05e28cb6814d9a5e751a3be68cabaa6a784"
   },
   {
    "path": "js/editor.js",
@@ -69,8 +69,8 @@
   },
   {
    "path": "js/legacy.js",
-   "size": 30754,
-   "sha256": "8aceae2ef08691e66b2cb098092d6c0e7d240d18ec1e0f1996101233b7145c31"
+   "size": 31285,
+   "sha256": "d46e21da72eaa24e0bfd6817357cc3a446c7fc7be4c34dfec017fb131b1dc6d1"
   },
   {
    "path": "js/markdown.js",

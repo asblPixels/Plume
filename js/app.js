@@ -288,11 +288,55 @@ const App = {
     if (!info) { bar.hidden = true; bar.innerHTML = ''; return; }
     bar.innerHTML = '';
     bar.append(icon(info.icon || 'info'), el('span', { class: 'ib-text', html: info.html }), el('button', { class: 'ib-close', title: 'Fermer', onclick: () => this.infoBar(null) }, [icon('x')]));
+    if (info.action) bar.insertBefore(el('button', {
+      type: 'button', class: 'ib-action', onclick: info.action.run
+    }, info.action.label), bar.lastElementChild);
     bar.hidden = false;
+  },
+  async showMacros() {
+    const zip = Ed.source?.zip;
+    if (!zip || !this.hasMacros()) return;
+    const docId = this.docId;
+    const body = el('div');
+    try {
+      const project = zip.file(/(^|\/)vbaProject\.bin$/i)[0];
+      const bytes = await project.async('uint8array');
+      const stream = LegacyDoc.readCfb(bytes, new Set(['PROJECT'])).PROJECT;
+      if (!stream) throw new Error('Flux PROJECT absent.');
+      const projectText = new TextDecoder('windows-1252').decode(stream).split(/^\[/m)[0];
+      const modules = [...projectText.matchAll(/^(Module|Class|BaseClass|Document)=([^\r\n]+)/gm)];
+      if (modules.length) {
+        const types = { Module: 'Module', Class: 'Classe', BaseClass: 'Formulaire', Document: 'Objet Word' };
+        body.append(el('p', {}, 'Composants du projet VBA'), el('ul', {}, modules.map(([, type, name]) =>
+          el('li', {}, types[type] + ' · ' + name.split('/&H')[0]))));
+      } else body.append(el('p', {}, 'Le projet ne déclare aucun composant lisible.'));
+    } catch (err) {
+      console.warn('Projet VBA illisible', err);
+      body.append(el('p', {}, 'La liste des composants VBA est indisponible pour ce fichier.'));
+    }
+    if (this.docId !== docId) return;
+    const bridge = window.plumeDesktop;
+    const wordAvailable = bridge?.platform === 'win32' && bridge.openInWord;
+    const filePath = this.desktopPath;
+    const canOpen = wordAvailable && /\.(docm|dotm)$/i.test(filePath || '') && !this.dirty;
+    body.append(el('p', {}, canOpen
+      ? 'Dans Word, Alt+F11 affiche le code VBA et Alt+F8 ouvre la liste des macros exécutables.'
+      : wordAvailable
+        ? 'Enregistrez le document sur le disque en .docm ou .dotm, puis rouvrez ce panneau.'
+        : 'Pour consulter le code VBA ou exécuter une macro, ouvrez le fichier dans Microsoft Word pour ordinateur.'));
+    const buttons = [{ label: 'Fermer', value: false }];
+    if (canOpen) buttons.push({ label: 'Ouvrir dans Word', value: true, primary: true });
+    const open = await dialog({ title: 'Macros VBA', body, buttons });
+    if (!open || this.docId !== docId || this.desktopPath !== filePath || this.dirty) return;
+    try {
+      await bridge.openInWord(filePath);
+    } catch (err) {
+      toast(htmlEsc(err.message || String(err)), 6500);
+    }
   },
   macroBar() {
     const on = this.hasMacros();
-    if (on) this.infoBar({ icon: 'lock', html: '<b>Macros</b> — Ce document contient des macros : elles sont conservées mais jamais exécutées. Enregistrez-le en <b>.docm</b> (ou <b>.dotm</b> pour un modèle) pour les garder.' });
+    if (on) this.infoBar({ icon: 'lock', html: '<b>Macros VBA</b> — Enregistrez en <b>.docm</b> ou <b>.dotm</b> pour conserver le projet.', action: { label: 'Consulter les macros', run: () => this.showMacros() } });
     else this.infoBar(null);
     return on;
   },
