@@ -731,7 +731,12 @@ const DocxExport = (() => {
       const P = { w: 794, h: 1123, mt: 94.5, mr: 94.5, mb: 94.5, ml: 94.5, mh: 47, mf: 47, ...sd };
       const land = P.w > P.h;
       parts.push([3, `<w:pgSz w:w="${twip(P.w)}" w:h="${twip(P.h)}"${land ? ' w:orient="landscape"' : ''}/>`]);
-      parts.push([4, `<w:pgMar w:top="${twip(P.mt)}" w:right="${twip(P.mr)}" w:bottom="${twip(P.mb)}" w:left="${twip(P.ml)}" w:header="${twip(P.mh)}" w:footer="${twip(P.mf)}" w:gutter="0"/>`]);
+      const signedMargin = key => {
+        const value = twip(P[key]);
+        const original = P.signedMargins?.[key];
+        return original === -value ? original : value;
+      };
+      parts.push([4, `<w:pgMar w:top="${signedMargin('mt')}" w:right="${twip(P.mr)}" w:bottom="${signedMargin('mb')}" w:left="${twip(P.ml)}" w:header="${twip(P.mh)}" w:footer="${twip(P.mf)}" w:gutter="${twip(P.gutter || 0)}"/>`]);
       if (P.type && P.type !== 'nextPage') parts.push([2, `<w:type w:val="${xmlEsc(P.type)}"/>`]);
       const c = P.cols;
       if (c) {

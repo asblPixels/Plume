@@ -40,6 +40,12 @@ def fixture(multiple):
         last.header.is_linked_to_previous = False
         last.header.paragraphs[0].text = 'En-tête section 3'
         doc.add_paragraph('Troisième section')
+    if multiple:
+        last.start_type = WD_SECTION.NEW_COLUMN
+        margins = last._sectPr.find(W + 'pgMar')
+        margins.set(W + 'top', '-720')
+        margins.set(W + 'bottom', '-840')
+        margins.set(W + 'gutter', '360')
     output = BytesIO()
     doc.save(output)
     return base64.b64encode(output.getvalue()).decode()
@@ -102,6 +108,9 @@ async def main():
         await editable.fill('En-tête modifié')
         exported = await save_word(page)
         assert section_stories(exported) == [before[0], {}, {'header-default': 'En-tête modifié'}]
+        section = Document(BytesIO(exported)).sections[-1]
+        assert section.start_type == WD_SECTION.NEW_COLUMN
+        assert (section.top_margin.twips, section.bottom_margin.twips, section.gutter.twips) == (-720, -840, 360)
 
         await open_word(page, base64.b64encode(exported).decode())
         assert await editable.inner_text() == 'En-tête modifié'

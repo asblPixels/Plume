@@ -1233,10 +1233,18 @@ const DocxImport = (() => {
       const mg = kid(sect, 'w:pgMar');
       if (mg) {
         const g = a => Math.abs(U.twipToPx(+(mg.getAttribute(a) || 0)));
-        Object.assign(page, { mt: g('w:top'), mr: g('w:right'), mb: g('w:bottom'), ml: g('w:left'), mh: g('w:header'), mf: g('w:footer') });
+        Object.assign(page, { mt: g('w:top'), mr: g('w:right'), mb: g('w:bottom'), ml: g('w:left'), mh: g('w:header'), mf: g('w:footer'), gutter: g('w:gutter') });
+        // Word utilise le signe pour autoriser le texte à chevaucher l'en-tête ou le pied.
+        for (const [key, attr] of [['mt', 'w:top'], ['mb', 'w:bottom']]) {
+          const original = Number(mg.getAttribute(attr));
+          if (original < 0) {
+            page.signedMargins ||= {};
+            page.signedMargins[key] = original;
+          }
+        }
       }
       const ty = val(kid(sect, 'w:type'));
-      page.type = ['continuous', 'evenPage', 'oddPage', 'nextColumn'].includes(ty) ? (ty === 'nextColumn' ? 'nextPage' : ty) : 'nextPage';
+      page.type = ['continuous', 'evenPage', 'oddPage', 'nextColumn'].includes(ty) ? ty : 'nextPage';
       const cl = kid(sect, 'w:cols');
       if (cl) {
         const n = Math.max(1, parseInt(cl.getAttribute('w:num') || '1', 10) || 1);
