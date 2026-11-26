@@ -1,5 +1,5 @@
 /* Plume — service worker : l'application fonctionne hors ligne */
-const CACHE = 'plume-1.4.0';   // mis à jour par outils/version.js
+const CACHE = 'plume-1.4.1';   // mis à jour par outils/version.js
 /* liste des fichiers lue dans version.json : rien à maintenir à la main */
 const FILES = () => fetch('version.json', { cache: 'no-cache' }).then(r => r.json()).then(v => ['./', 'version.json', ...v.files.map(f => f.path).filter(p => !p.startsWith('vendor/fonts/ttf/'))]);
 self.addEventListener('install', e => { e.waitUntil(Promise.all([caches.open(CACHE), FILES()]).then(([c, f]) => c.addAll(f))); self.skipWaiting(); });
