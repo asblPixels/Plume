@@ -104,7 +104,7 @@ Plume est un traitement de texte complet qui s'exécute entièrement dans le nav
 | Enregistrer | `.docx`. Sous Chrome et Edge, **Ctrl+S réécrit directement le fichier d'origine** (File System Access API). Ailleurs, le fichier est téléchargé. |
 | Mode confidentiel (par défaut) | **Aucune copie n'est gardée sur l'appareil** : on enregistre son document sur l'ordinateur ou une clé USB. Idéal à l'école et sur un ordinateur partagé. |
 | Copie de secours (option) | Case à cocher sur l'accueil : « Garder une copie de secours de mes documents sur cet appareil ». La décocher efface toutes les copies. |
-| Exporter | **PDF direct**, Word, OpenDocument, RTF, Word 97-2003 (bureau), page web `.html`, Markdown, texte brut |
+| Exporter | Word, OpenDocument, PDF, EPUB, RTF, HTML, Markdown, texte, CSV et TSV. PDF/A, FODT et anciens formats Word sur ordinateur avec LibreOffice. |
 | Imprimer | Respect du format, des marges, de l'en-tête et du pied de page |
 | Informations | Titre, auteur, nombre de pages, de mots et de caractères, format de page |
 
@@ -207,6 +207,7 @@ Pour les principaux formats, Plume vérifie le contenu du fichier. Par exemple, 
 | Livre numérique (`.epub`) | Livre à la mise en page adaptable, avec sommaire généré à partir des titres. |
 | Données (`.csv`, `.tsv`) | Exporte le premier tableau du document pour un tableur. |
 | PDF (`.pdf`) | **Fichier PDF direct partout** (bouton PDF de la barre du haut, `Ctrl+Maj+P`, ou Fichier → Exporter) : polices, images, en-têtes et liens inclus. Dans l'application de bureau, le PDF est vectoriel (texte sélectionnable, signets). |
+| PDF d’archivage (PDF/A-2b, `.pdf`) | Application de bureau avec LibreOffice. Pour les documents à conserver à long terme. |
 | Texte enrichi (`.rtf`) | Lisible par tous les traitements de texte |
 | Word 97-2003 (`.doc`) | Application de bureau avec LibreOffice |
 | Page web (`.html`), Markdown (`.md`), texte (`.txt`) | |
@@ -217,7 +218,7 @@ Pour les principaux formats, Plume vérifie le contenu du fichier. Par exemple, 
 
 Plume lit et écrit directement le format **Office Open XML** (ISO/IEC 29500). Les fichiers produits sont reconnus par Microsoft Word 2007 et suivants (dont Microsoft 365), LibreOffice, Google Docs, Pages et OnlyOffice.
 
-### Conservation intégrale
+### Conservation des éléments Word
 
 Quand un document vient d'un fichier `.docx`, Plume garde en mémoire le paquet d'origine et applique trois règles :
 
@@ -225,7 +226,7 @@ Quand un document vient d'un fichier `.docx`, Plume garde en mémoire le paquet 
 2. **Ce que Plume ne sait pas éditer** (graphiques, SmartArt, formes, zones de texte, images flottantes, objets OLE, images EMF/WMF, équations) devient un *îlot* : un aperçu fidèle est affiché, et le XML d'origine est **réécrit à l'identique**, avec toutes les parties qu'il référence (données du graphique, classeur Excel incorporé, images…).
 3. **Les définitions du document** (styles personnalisés, numérotations, thème, polices, réglages de compatibilité, en-têtes de première page et de pages paires, colonnes, bordures de page, numérotation des lignes) sont **reprises depuis le fichier d'origine**. Plume n'ajoute que ce qui manque.
 
-Résultat : un document ouvert puis réenregistré par Plume se rouvre dans Word avec ses graphiques, ses styles et sa mise en page d'origine, y compris les éléments que Plume ne sait pas modifier.
+Ce mécanisme conserve les objets reconnus et leurs fichiers associés lors du réenregistrement. Le rendu exact peut varier selon les polices, les éléments du document et le logiciel qui l’ouvre.
 
 ### Éléments pris en charge
 
@@ -522,6 +523,7 @@ plume/
 │   ├── rtf.js              Rich Text Format : lecture et écriture
 │   ├── markdown.js         Markdown : lecture et écriture (CommonMark + tableaux)
 │   ├── legacy.js           Word 97-2003 (.doc) : conteneur OLE et table des pièces
+│   ├── epub.js             Livres EPUB : chapitres, images et sommaire
 │   ├── formats.js          Registre des formats, détection, PDF, module de conversion
 │   ├── tools.js            Suivi des modifications, correction auto, publipostage, dictée, légendes, filigrane
 │   ├── editor.js           Moteur : pagination, en-têtes/pieds, historique, commandes, tableaux
@@ -610,6 +612,8 @@ Les tests de bout en bout pilotent Chromium en mode sans interface (Playwright) 
 | `tests/tableaux_docm_doc.py` | 60 vérifications : styles de tableau conditionnels, macros conservées, `.doc` Word 97-2003 |
 | `tests/ilots.py` | Modification des graphiques, SmartArt, formes et équations, export, contrôle XML, rendu LibreOffice, réimport |
 | `tests/polices.py` | Polices Marelle et Borel, incorporation `.odttf` dans le `.docx`, rendu LibreOffice sans police installée |
+| `tests/formats_etendus.py` | CSV et TSV, OTT, EPUB, identification Word, PDF/A-2b, FODT, Word XML et DOC via LibreOffice |
+| `tests/modeles.py` | Modèles administratifs et pédagogiques, export Word et interface mobile |
 | `tests/demarrage.py` | Accueil au lancement, pas de réouverture du dernier document, mode confidentiel, ouverture successive de documents |
 
 Avant chaque version, nous recommandons aussi une vérification manuelle dans **Microsoft Word (Microsoft 365)** : ouverture sans message de réparation et mise à jour de la table des matières.

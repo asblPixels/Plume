@@ -249,19 +249,20 @@ const App = {
       if (vector) this.preparePrint();
       const blob = await Formats.build(fmt, this.exportCtx());
       if (vector) this.endPrint();
-      const fname = this.fileName(fmt);
+      const extension = info.extension || fmt;
+      const fname = this.fileName(extension);
       if (this.desktopPath && window.plumeDesktop && !asNew) {
         await window.plumeDesktop.writeFile(this.desktopPath, await blob.arrayBuffer());
       } else if (this.fileHandle && !asNew) {
         const w = await this.fileHandle.createWritable(); await w.write(blob); await w.close();
       } else if (window.plumeDesktop && window.plumeDesktop.saveDialog) {
-        const path = await window.plumeDesktop.saveDialog(fname, fmt, info.label);
+        const path = await window.plumeDesktop.saveDialog(fname, extension, info.label);
         if (!path) { this.setSaveState('Modifié'); return; }
         await window.plumeDesktop.writeFile(path, await blob.arrayBuffer());
         if (editable) { this.desktopPath = path; this.format = fmt; $('#docTitle').value = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''); }
       } else if (window.showSaveFilePicker) {
         try {
-          const h = await showSaveFilePicker({ suggestedName: fname, types: [{ description: info.label, accept: { [info.mime]: ['.' + fmt] } }] });
+          const h = await showSaveFilePicker({ suggestedName: fname, types: [{ description: info.label, accept: { [info.mime]: ['.' + extension] } }] });
           const w = await h.createWritable(); await w.write(blob); await w.close();
           if (Formats.SAVABLE.has(fmt)) { this.fileHandle = h; this.desktopPath = null; this.format = fmt; $('#docTitle').value = h.name.replace(/\.[^.]+$/, ''); }
         } catch (e) { if (e.name === 'AbortError') { this.setSaveState('Modifié'); return; } throw e; }

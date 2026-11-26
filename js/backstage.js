@@ -167,25 +167,36 @@ const Backstage = {
         break;
       }
       case 'export': {
-        const icons = { docm: 'file-text', dotx: 'file-text', dotm: 'file-text', docx: 'file-text', odt: 'file-text', pdf: 'printer', rtf: 'file', doc: 'file', html: 'file-down', md: 'file-down', txt: 'file' };
+        const icons = { docx: 'file-text', docm: 'file-text', dotx: 'file-text', dotm: 'file-text', odt: 'file-text', ott: 'file-text',
+          pdf: 'printer', pdfa: 'printer', html: 'file-down', md: 'file-down', epub: 'book-open' };
         const grid = el('div', { class: 'bs-actions' });
-        for (const [k, f] of Object.entries(Formats.EXPORT)) {
-          if (f.desktop && !window.plumeDesktop) continue;
-          if (f.macros && !App.hasMacros()) continue;   // .docm / .dotm : seulement si le document d'origine a des macros
-          grid.append(el('button', { class: 'bs-card', onclick: () => { this.close(); App.saveAs(k); } }, [icon(icons[k] || 'file', 'lg'), el('b', {}, [f.label]), el('span', {}, [f.desc])]));
+        const officeGrid = el('div', { class: 'bs-actions' });
+        const macros = App.hasMacros();
+        for (const [format, info] of Object.entries(Formats.EXPORT)) {
+          if ((info.desktop && !window.plumeDesktop) || (info.macros && !macros)) continue;
+          const card = el('button', { class: 'bs-card', onclick: () => { this.close(); App.saveAs(format); } },
+            [icon(icons[format] || 'file', 'lg'), el('b', {}, [info.label]), el('span', {}, [info.desc])]);
+          (info.desktop ? officeGrid : grid).append(card);
         }
         main.append(el('h1', {}, ['Exporter / Télécharger']), grid);
-        if (window.plumeDesktop) {
-          const st = el('p', { style: 'color:var(--ui-fg-2);margin-top:22px' }, ['Module de conversion LibreOffice : vérification…']);
-          main.append(st);
-          Formats.converterAvailable().then(ok => { st.innerHTML = ok ? '✅ Module de conversion LibreOffice détecté : ouverture des .doc, .wpd, .wps, .pages… et exports .doc, .fodt et Word 2003 XML disponibles.' : 'ℹ️ Installez <a href="https://fr.libreoffice.org/download/telecharger-libreoffice/" target="_blank" rel="noopener">LibreOffice</a> (gratuit) pour ouvrir les formats anciens (.doc avec mise en forme, WordPerfect, Works, Pages…) et exporter en .doc, .fodt ou Word 2003 XML.'; });
+        if (officeGrid.children.length) {
+          const status = el('p', {}, ['Recherche de LibreOffice sur cet ordinateur…']);
+          main.append(el('h2', {}, ['Exports avec LibreOffice']), status, officeGrid);
+          Formats.converterAvailable().then(ok => {
+            if (ok) status.textContent = 'LibreOffice est détecté. La conversion se fait sur cet ordinateur.';
+            else {
+              status.replaceChildren('Pour utiliser ces formats, installez ',
+                el('a', { href: 'https://fr.libreoffice.org/download/telecharger-libreoffice/', target: '_blank', rel: 'noopener' }, ['LibreOffice']), '.');
+              for (const button of officeGrid.children) button.disabled = true;
+            }
+          });
         }
         break;
       }
       case 'about':
         main.append(el('h1', {}, ['À propos de Plume']), el('div', {
           html: `<div style="display:flex;gap:18px;align-items:center;margin-bottom:18px"><svg viewBox="0 0 512 512" width="72" height="72"><use href="#plume-logo"/></svg>
-          <div><img src="icons/plume-wordmark-${document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'}.svg" alt="Plume" height="34" style="display:block;margin-bottom:6px"><div style="color:var(--ui-fg-2)">Traitement de texte libre de <b>Pixel's ASBL</b> — Boussu</div><div style="color:var(--ui-fg-2)">Version ${App.VERSION}</div></div></div>
+          <div><img src="icons/plume-wordmark-${document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'}.svg" alt="Plume" height="34" style="display:block;margin-bottom:6px"><div style="color:var(--ui-fg-2)">Traitement de texte gratuit de <b>Pixel's ASBL</b> — Boussu</div><div style="color:var(--ui-fg-2)">Version ${App.VERSION}</div></div></div>
           <p style="max-width:640px;line-height:1.6">Plume fonctionne dans le navigateur, hors ligne, sur Windows, macOS, Linux, Android et iOS. Vos documents restent sur votre appareil : rien n'est envoyé sur Internet.</p>
           <p style="line-height:1.6">Contact : <a href="mailto:info@asblpixels.be">info@asblpixels.be</a> · <a href="https://facebook.com/asblpixels" target="_blank" rel="noopener">facebook.com/asblpixels</a></p>
           <h2>Composants libres</h2><ul style="line-height:1.7"><li>JSZip — licence MIT (Stuart Knightley et contributeurs)</li><li>PDF.js — licence Apache 2.0 (Mozilla et contributeurs)</li><li>jsPDF et html2canvas — licence MIT</li><li>Polices scolaires Marelle (Ministère de l’Éducation nationale, L. Bourcellier, J. Fabreguettes, R. Wagner), Borel (R. Wagner), Playwrite FR, Andika, OpenDyslexic, Comic Neue, Atkinson Hyperlegible, Lexend — SIL Open Font License 1.1</li><li>Tracés d’icônes Lucide — licence ISC, restylés pour Plume</li><li>Police du logotype Outfit — SIL Open Font License 1.1</li></ul>

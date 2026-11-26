@@ -116,6 +116,9 @@ async def main():
         }""", b64(archive.getvalue()))
         assert rejected == 'UNSUPPORTED_PACKAGE'
 
+        await page.evaluate("""() => {
+          Ed.editor.insertAdjacentHTML('beforeend', '<p><img alt="Témoin" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+bTwQAAAAASUVORK5CYII="></p>');
+        }""")
         epub = await page.evaluate(EXPORT, 'epub')
         with ZipFile(BytesIO(base64.b64decode(epub))) as book:
             assert book.infolist()[0].filename == 'mimetype' and book.infolist()[0].compress_type == 0
@@ -123,8 +126,12 @@ async def main():
             for part in ('META-INF/container.xml', 'OEBPS/livre.opf', 'OEBPS/sommaire.xhtml', 'OEBPS/texte.xhtml'):
                 ET.fromstring(book.read(part))
             assert 'texte.xhtml#titre-1' in book.read('OEBPS/sommaire.xhtml').decode()
+            assert book.read('OEBPS/images/image-1.png').startswith(b'\x89PNG')
+            assert b'image-1.png' in book.read('OEBPS/livre.opf')
         imported = await page.evaluate(OPEN, ['livre.epub', epub])
         assert 'Texte témoin' in imported['html']
+        assert 'alt="Témoin"' in imported['html'] and 'src="blob:' in imported['html']
+        await page.evaluate("Ed.editor.querySelector('img').parentElement.remove()")
 
         await page.expose_binding('convertWithWriter', convert)
         await page.evaluate("""() => {
@@ -147,9 +154,31 @@ async def main():
                 ET.fromstring(base64.b64decode(result))
             imported = await page.evaluate(OPEN, ['copie.' + ext, result])
             assert 'Texte témoin' in imported['html'], ext
+        pdfa = base64.b64decode(await page.evaluate(EXPORT, 'pdfa'))
+        assert pdfa.startswith(b'%PDF-')
+        xmp = ET.fromstring(pdfa[pdfa.index(b'<x:xmpmeta'):pdfa.index(b'</x:xmpmeta>') + len(b'</x:xmpmeta>')])
+        pdfaid = '{http://www.aiim.org/pdfa/ns/id/}'
+        assert xmp.findtext('.//' + pdfaid + 'part') == '2'
+        assert xmp.findtext('.//' + pdfaid + 'conformance') == 'B'
+        # Le PDF d’archivage reste un export, avec l’extension .pdf.
+        await page.evaluate("""() => {
+          App.dirty = true;
+          window.plumeDesktop.saveDialog = async (name, ext) => {
+            window.lastExport = [name, ext];
+            return '/tmp/plume-test.pdf';
+          };
+          window.plumeDesktop.writeFile = async () => {};
+        }""")
+        await page.evaluate("App.saveAs('pdfa')")
+        assert await page.evaluate("lastExport[0].endsWith('.pdf') && lastExport[1] === 'pdf' && App.dirty")
+
+        pdf = base64.b64encode(pdfa).decode()
+        for _ in range(2):
+            imported = await page.evaluate(OPEN, ['archive.pdf', pdf])
+            assert 'Texte témoin' in imported['html']
         assert not errors, errors
         await browser.close()
-        print('CSV, TSV, OTT, EPUB, identification Word et 3 exports LibreOffice vérifiés')
+        print('CSV, TSV, OTT, EPUB, identification Word et 4 exports LibreOffice vérifiés')
 
 
 if __name__ == '__main__':

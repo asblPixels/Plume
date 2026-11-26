@@ -4,8 +4,8 @@
  "files": [
   {
    "path": "index.html",
-   "size": 5710,
-   "sha256": "ea46a04945944025c48e45eeb9f154850189e284ced48de3fe45b339b80461ba"
+   "size": 5745,
+   "sha256": "03a9dd8240c76da52f3f4b318dd4d9d77e0e0e581adad610cd3899e74f9a41cd"
   },
   {
    "path": "manifest.webmanifest",
@@ -24,13 +24,13 @@
   },
   {
    "path": "js/app.js",
-   "size": 59825,
-   "sha256": "eb8853d4b1ad43ba13a4302865d60a0abb11721f2775663a21488e118e874dc6"
+   "size": 60250,
+   "sha256": "5edfc2b3cf96ab9305ee518fb073e7c7d05ed8577f6aaca7b66a0a6f7274c38c"
   },
   {
    "path": "js/backstage.js",
-   "size": 31686,
-   "sha256": "b8fd9974c8795dec4eef86dcfcb00e0e0aee6eaa0c909d0289e51ee2efc8a5cb"
+   "size": 31911,
+   "sha256": "6473c626e3d52eea8feffafb7b803eed7e549e375561913caf22dae0fc50aabe"
   },
   {
    "path": "js/docx-export.js",
@@ -44,8 +44,8 @@
   },
   {
    "path": "js/editor.js",
-   "size": 86741,
-   "sha256": "fe942c072b4e0d002f69ac97a87b814c532de2468404e8b6e8ea2bf2b4715dac"
+   "size": 86812,
+   "sha256": "941d7eb40ee51076590ff8d773065a9ded0e0dec3bb3e9b7535151effcb51690"
   },
   {
    "path": "js/embed-fonts.js",
@@ -53,9 +53,14 @@
    "sha256": "5ab334e16c53c39f93c661ecb10ddd4253a288a195f4d7e387efd9e0486b3187"
   },
   {
+   "path": "js/epub.js",
+   "size": 9491,
+   "sha256": "53cd2c0eebacd9ef676d4868283a6171ff094d14b442c13bd264183f3b6c5db8"
+  },
+  {
    "path": "js/formats.js",
-   "size": 21619,
-   "sha256": "9966201b2a8b6046459cf78112510f081ac6bd7f7539eafcf792b5c2475cce2f"
+   "size": 27785,
+   "sha256": "bc409d5a99455c919b5c42ebbfef7f39662a80eb819d3a039947c0ecb69fae9b"
   },
   {
    "path": "js/icons.js",
@@ -84,8 +89,8 @@
   },
   {
    "path": "js/odt.js",
-   "size": 61004,
-   "sha256": "1a82bcc20d439838be1bb0e4f5ce8b788bf650e232d516dae52ca2e17e251ecb"
+   "size": 61082,
+   "sha256": "acc8c3ce3534150e4e4d53381d62b8fdde2e0cca74b7097eb720ca6d8fe9742d"
   },
   {
    "path": "js/ribbon.js",
@@ -104,8 +109,8 @@
   },
   {
    "path": "js/tools.js",
-   "size": 38848,
-   "sha256": "6d34779fa3f18baa8faaa8f96868f55e950c4aa005c9a6c98980f1a284824327"
+   "size": 38377,
+   "sha256": "c748deef23e45dba57d6fdab7287469786cd6d5f4972db5ce8420f2ff27a3be9"
   },
   {
    "path": "js/util.js",

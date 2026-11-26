@@ -34,6 +34,7 @@ const Formats = (() => {
     epub: { label: 'Livre numérique (.epub)', desc: 'Pour les liseuses. Le texte s’adapte à l’écran et les titres forment le sommaire.', mime: 'application/epub+zip' },
     xml: { label: 'Word 2003 XML (.xml)', desc: 'Document XML pour Word 2003. Export via LibreOffice sur ordinateur.', mime: 'application/xml', desktop: true },
     pdf: { label: 'PDF (.pdf)', desc: 'Fichier PDF direct, prêt à envoyer ou imprimer. Polices, images et mise en page incluses.', mime: 'application/pdf' },
+    pdfa: { label: 'PDF d’archivage (PDF/A-2b)', desc: 'Pour l’archivage à long terme. Export via LibreOffice sur ordinateur.', mime: 'application/pdf', desktop: true, extension: 'pdf' },
     rtf: { label: 'Texte enrichi (.rtf)', desc: 'Lisible partout, même par WordPad et TextEdit.', mime: 'application/rtf' },
     docm: { label: 'Word avec macros (.docm)', desc: 'Conserve les macros du document d’origine (jamais exécutées par Plume).', mime: 'application/vnd.ms-word.document.macroEnabled.12', macros: true },
     dotx: { label: 'Modèle Word (.dotx)', desc: 'Modèle réutilisable : Word crée un nouveau document à chaque ouverture.', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.template' },
@@ -228,7 +229,7 @@ const Formats = (() => {
         const body = rows.map((row, i) => {
           const cells = Array.from({ length: n }, (_, col) => {
             const cell = htmlEsc(row[col] || '').replace(/\n/g, '<br>');
-            return `<td><p>${cell || '<br>'}</p></td>`;
+            return `<td><p style="white-space:pre-wrap">${cell || '<br>'}</p></td>`;
           }).join('');
           return `<tr${i === 0 ? ' data-header="1"' : ''}>${cells}</tr>`;
         }).join('');
@@ -344,7 +345,7 @@ const Formats = (() => {
       }
     }
     const width = rows.reduce((max, row) => Math.max(max, row.length), 0);
-    const quote = value => value.includes(separator) || /["\r\n]/.test(value)
+    const quote = value => /[,;\t"\r\n]/.test(value) || (width === 1 && !value.trim())
       ? '"' + value.replace(/"/g, '""') + '"' : value;
     const text = rows.map(row => Array.from({ length: width }, (_, i) => quote(row[i] || '')).join(separator)).join('\r\n');
     return new Blob(['\uFEFF', text, '\r\n'], { type: EXPORT[format].mime + ';charset=utf-8' });
@@ -371,7 +372,7 @@ const Formats = (() => {
       case 'csv': case 'tsv': return exportDelimited(format, ctx.editor);
       case 'html': return new Blob([await App.htmlDocument()], { type: 'text/html;charset=utf-8' });
       case 'epub': return Epub.exportEpub(ctx);
-      case 'doc': case 'fodt': case 'xml': {
+      case 'doc': case 'fodt': case 'xml': case 'pdfa': {
         const label = EXPORT[format].label;
         if (!await converterAvailable()) throw Object.assign(new Error('CONVERTER'), {
           userMessage: `L’export ${label} nécessite l’application de bureau Plume et LibreOffice.`

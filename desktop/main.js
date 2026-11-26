@@ -166,7 +166,8 @@ ipcMain.handle('plume:convert', async (e, { data, from, to }) => {
     ['docx', 'docx:MS Word 2007 XML'],
     ['doc', 'doc:MS Word 97'],
     ['fodt', 'fodt:OpenDocument Text Flat XML'],
-    ['xml', 'xml:MS Word 2003 XML']
+    ['xml', 'xml:MS Word 2003 XML'],
+    ['pdfa', 'pdf:writer_pdf_Export:{"SelectPdfVersion":{"type":"long","value":"2"}}']
   ]);
   const filter = filters.get(to);
   if (!filter || typeof from !== 'string' || !/^[a-z0-9]+$/i.test(from) || from === to) return null;
@@ -176,7 +177,8 @@ ipcMain.handle('plume:convert', async (e, { data, from, to }) => {
   try {
     fs.writeFileSync(input, Buffer.from(data));
     await new Promise((resolve, reject) => execFile(soffice, [`-env:UserInstallation=${profile}`, '--headless', '--norestore', '--nologo', '--convert-to', filter, '--outdir', dir, input], { timeout: 180000, windowsHide: true }, err => err ? reject(err) : resolve()));
-    const out = path.join(dir, 'document.' + to);
+    const extension = to === 'pdfa' ? 'pdf' : to;
+    const out = path.join(dir, 'document.' + extension);
     if (!fs.existsSync(out)) return null;
     const buf = fs.readFileSync(out);
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
