@@ -411,6 +411,8 @@ html.page-dark .pl-colsep { border-color: #bbb; }
 #editor.pl-wlh, #editor.pl-wlh * { line-height: var(--pl-lhx, calc(var(--pl-lh) * var(--pl-fr))) !important; }
 #editor.pl-wlh .pl-fn { --pl-lhx: 0; }
 #editor .pl-tab { white-space: pre; }
+#editor .pl-sdt-checkbox { cursor: pointer; }
+#editor .pl-sdt-checkbox[aria-disabled='true'] { cursor: default; }
 #editor .pl-field { background: #eef1f3; border-radius: 2px; }
 #editor .pl-fn, .hf .pl-fn { color: var(--brand-ink); cursor: pointer; font-size: .75em; vertical-align: super; line-height: 0; padding: 0 1px; }
 #editor .pl-textbox { border: 1px solid #b8c2c9; padding: 4pt 6pt; margin: 0 0 8pt; border-radius: 2px; }

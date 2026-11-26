@@ -775,14 +775,30 @@ const DocxImport = (() => {
         const inInstr = () => fields.some(f => f.phase === 'instr');
         const skipping = () => fields.some(f => f.skip && f.phase === 'result');
 
-        function isPlainTextControl(props, content, multiline) {
-          const supported = new Set(['w:text', 'w:alias', 'w:tag', 'w:id', 'w:lock',
+        const checkboxNs = 'http://schemas.microsoft.com/office/word/2010/wordml';
+        const checkboxChild = (parent, name) => kids(parent).find(el =>
+          el.namespaceURI === checkboxNs && el.localName === name);
+        const isOn = value => value == null || ['true', '1', 'on'].includes(value);
+        const controlAttr = (name, value) => value == null ? '' : ` data-sdt-${name}="${xmlEsc(value)}"`;
+        function isSimpleControl(props, content, type, multiline) {
+          const supported = new Set(['w:rPr', 'w:alias', 'w:tag', 'w:id', 'w:lock',
             'w:placeholder', 'w:showingPlcHdr']);
           const normalBreak = item => multiline && (item.nodeName === 'w:cr' ||
             (item.nodeName === 'w:br' && [null, 'textWrapping'].includes(item.getAttribute('w:type'))));
-          return Array.from(props.children).every(child => supported.has(child.nodeName)) &&
+          return Array.from(props.children).every(child => child === type || supported.has(child.nodeName)) &&
             Array.from(content.children).every(child => child.nodeName === 'w:r' &&
               Array.from(child.children).every(item => ['w:rPr', 'w:t'].includes(item.nodeName) || normalBreak(item)));
+        }
+        function checkboxAttrs(box) {
+          const checked = checkboxChild(box, 'checked');
+          const attrs = ['checkedState', 'uncheckedState'].map((name, index) => {
+            const state = checkboxChild(box, name);
+            const attr = index === 0 ? 'checked' : 'unchecked';
+            const code = state?.getAttributeNS(checkboxNs, 'val');
+            return controlAttr(attr + '-code', /^[0-9a-f]{4}$/i.test(code || '') ? code : null) +
+              controlAttr(attr + '-font', state?.getAttributeNS(checkboxNs, 'font'));
+          }).join('');
+          return attrs + ` aria-checked="${checked != null && isOn(checked.getAttributeNS(checkboxNs, 'val'))}"`;
         }
 
         async function walk(node) {
@@ -826,10 +842,10 @@ const DocxImport = (() => {
                 const content = kid(n, 'w:sdtContent');
                 const props = kid(n, 'w:sdtPr');
                 const text = props && kid(props, 'w:text');
-                const isOn = value => value == null || ['true', '1', 'on'].includes(value);
+                const checkbox = checkboxChild(props, 'checkbox');
                 const multilineValue = text?.getAttribute('w:multiLine');
                 const multiline = multilineValue != null && isOn(multilineValue);
-                if (!content || !text || !isPlainTextControl(props, content, multiline)) {
+                if (!content || !(text || checkbox) || !isSimpleControl(props, content, text || checkbox, multiline)) {
                   await walk(content || n);
                   break;
                 }
@@ -838,21 +854,23 @@ const DocxImport = (() => {
                 const start = segs[index].length;
                 await walk(content);
                 flush();
-                const attr = (name, value) => value == null ? '' : ` data-sdt-${name}="${xmlEsc(value)}"`;
                 const lock = kid(props, 'w:lock')?.getAttribute('w:val');
                 const placeholder = kid(kid(props, 'w:placeholder') || props, 'w:docPart')?.getAttribute('w:val');
                 const showing = kid(props, 'w:showingPlcHdr');
-                let attrs = ['alias', 'tag', 'id'].map(name => attr(name,
+                let attrs = ['alias', 'tag', 'id'].map(name => controlAttr(name,
                   kid(props, 'w:' + name)?.getAttribute('w:val'))).join('');
-                attrs += attr('lock', lock) + attr('placeholder', placeholder);
-                if (multiline) attrs += attr('multiline', 'true');
+                attrs += controlAttr('lock', lock) + controlAttr('placeholder', placeholder);
+                if (multiline) attrs += controlAttr('multiline', 'true');
                 if (showing && isOn(showing.getAttribute('w:val'))) {
-                  attrs += attr('placeholder-text', Array.from(content.getElementsByTagName('w:t'),
+                  attrs += controlAttr('placeholder-text', Array.from(content.getElementsByTagName('w:t'),
                     node => node.textContent).join(''));
                 }
-                if (lock === 'contentLocked' || lock === 'sdtContentLocked') attrs += ' contenteditable="false"';
+                const locked = lock === 'contentLocked' || lock === 'sdtContentLocked';
+                if (locked || checkbox) attrs += ' contenteditable="false"';
                 const inner = segs[index].slice(start);
-                segs[index] = segs[index].slice(0, start) + `<span class="pl-sdt-text"${attrs}>${inner}</span>`;
+                const checkboxUi = checkbox ? ` role="checkbox" tabindex="0" aria-label="${xmlEsc(kid(props, 'w:alias')?.getAttribute('w:val') || 'Case à cocher')}" aria-disabled="${locked}"${checkboxAttrs(checkbox)}` : '';
+                const cls = checkbox ? 'pl-sdt-checkbox' : 'pl-sdt-text';
+                segs[index] = segs[index].slice(0, start) + `<span class="${cls}"${attrs}${checkboxUi}>${inner}</span>`;
                 break;
               }
               case 'w:bookmarkStart': {

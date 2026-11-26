@@ -19,8 +19,8 @@
   },
   {
    "path": "css/plume.css",
-   "size": 56734,
-   "sha256": "6421e912f348ba3f70993d91dff6a25722c1c37340e9960f18b73578c9d3393e"
+   "size": 56848,
+   "sha256": "9a06487862b5e78cb5d73682a6b7d23f29b6f267e48f48375845b66923887fb2"
   },
   {
    "path": "js/app.js",
@@ -34,18 +34,18 @@
   },
   {
    "path": "js/docx-export.js",
-   "size": 76370,
-   "sha256": "f01ceac32421d623037a08e9de71fe8153b6b3e843c96e5f64810f72c27f2197"
+   "size": 77035,
+   "sha256": "6aacaecfb0d1b922e21d0644cb73ca2f90bb19ceb68a5258c84c1f8c0d2dcc50"
   },
   {
    "path": "js/docx-import.js",
-   "size": 73111,
-   "sha256": "d771f48aad7f907830530f789493f05e28cb6814d9a5e751a3be68cabaa6a784"
+   "size": 74525,
+   "sha256": "cb568de27f581f15a9d614c18c1c05b24204b5abe50ecfcbc86da0d78040793c"
   },
   {
    "path": "js/editor.js",
-   "size": 86582,
-   "sha256": "2afd5c71a245aaafed6046ea924d69f4e7d0868c6e46d1149bd17f1a79f8127a"
+   "size": 87745,
+   "sha256": "bbe6bf6e20763ec4c7d04ddc3dcf37e0ec8635481b60c3cb3148ec63eafd27cf"
   },
   {
    "path": "js/embed-fonts.js",

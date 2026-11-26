@@ -528,7 +528,7 @@ const DocxExport = (() => {
           if (tag === 'BR') { emit(rPrXml(propsFor(n.parentElement), b), '<w:br/>'); continue; }
           if (tag === 'IMG') { flush(); out += drawing(n, part); continue; }
           if (n.classList.contains('pl-anchor')) { flush(); const id = bookmarkId++; out += `<w:bookmarkStart w:id="${id}" w:name="${xmlEsc(n.id || ('_pl' + id))}"/><w:bookmarkEnd w:id="${id}"/>`; continue; }
-          if (n.classList.contains('pl-sdt-text')) {
+          if (n.matches('.pl-sdt-text,.pl-sdt-checkbox')) {
             flush();
             const properties = [
               ['alias', n.dataset.sdtAlias], ['id', n.dataset.sdtId], ['tag', n.dataset.sdtTag]
@@ -541,7 +541,16 @@ const DocxExport = (() => {
               ? `<w:placeholder><w:docPart w:val="${xmlEsc(n.dataset.sdtPlaceholder)}"/></w:placeholder>` : '';
             const showing = n.dataset.sdtPlaceholderText === n.textContent ? '<w:showingPlcHdr/>' : '';
             const multiline = n.dataset.sdtMultiline === 'true' ? ' w:multiLine="1"' : '';
-            out += `<w:sdt><w:sdtPr>${properties}${lock}${placeholder}${showing}<w:text${multiline}/></w:sdtPr><w:sdtContent>`;
+            let type = `<w:text${multiline}/>`;
+            if (n.classList.contains('pl-sdt-checkbox')) {
+              const state = (name, code, font) => /^[a-f0-9]{4}$/i.test(code || '')
+                ? `<w14:${name}State w14:val="${code}"${font ? ` w14:font="${xmlEsc(font)}"` : ''}/>` : '';
+              const checked = n.getAttribute('aria-checked') === 'true' ? '1' : '0';
+              type = `<w14:checkbox><w14:checked w14:val="${checked}"/>` +
+                state('checked', n.dataset.sdtCheckedCode, n.dataset.sdtCheckedFont) +
+                state('unchecked', n.dataset.sdtUncheckedCode, n.dataset.sdtUncheckedFont) + '</w14:checkbox>';
+            }
+            out += `<w:sdt><w:sdtPr>${properties}${lock}${placeholder}${showing}${type}</w:sdtPr><w:sdtContent>`;
             walk(Array.from(n.childNodes));
             flush();
             out += '</w:sdtContent></w:sdt>';
