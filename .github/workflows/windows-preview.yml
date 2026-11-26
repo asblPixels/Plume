@@ -27,12 +27,13 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
-      - name: Vérifier les scripts modifiés
+      - name: Vérifier le manifeste et les régressions
         shell: pwsh
         run: |
-          node --check js/backstage.js
-          node --check js/docx-export.js
-          node --check js/formats.js
+          node outils/version.js --check
+          node --test tests/*.test.cjs
+          node --check desktop/main.js
+          node --check desktop/preload.js
       - name: Préparer l'application de bureau
         shell: pwsh
         working-directory: desktop
@@ -62,6 +63,57 @@ jobs:
           $files = @(Get-ChildItem out\*.exe)
           if ($files.Count -ne 1 -or $files[0].Length -lt 1000000) { throw "Installateur manquant ou incomplet" }
           Get-FileHash $files[0].FullName -Algorithm SHA256
+      - name: Installer, lancer, fermer et désinstaller Plume
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem out\Plume-Setup-*.exe).FullName
+          $installDir = Join-Path $env:RUNNER_TEMP "Plume-recette"
+          $uninstaller = Join-Path $installDir "Desinstaller Plume.exe"
+          $exe = Join-Path $installDir "Plume.exe"
+          $process = $null
+          # La version locale du candidat doit servir au test.
+          $env:PLUME_UPDATE_URL = "http://127.0.0.1:1/"
+          try {
+            $install = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDir" -PassThru
+            if (-not $install.WaitForExit(120000)) {
+              $install.Kill()
+              throw "L'installation silencieuse dépasse deux minutes"
+            }
+            if ($install.ExitCode -ne 0 -or -not (Test-Path $exe) -or -not (Test-Path $uninstaller)) {
+              throw "L'installation silencieuse n'a pas installé Plume"
+            }
+            $reg = Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Plume
+            $version = node -p "require('./desktop/package.json').version"
+            if ($reg.DisplayVersion -ne $version -or $reg.InstallLocation -ne $installDir) {
+              throw "L'enregistrement Windows de Plume ne correspond pas au candidat"
+            }
+            $process = Start-Process -FilePath $exe -PassThru
+            $deadline = (Get-Date).AddSeconds(45)
+            do {
+              if ($process.HasExited) { throw "Plume a quitté avant d'afficher une fenêtre" }
+              $process.Refresh()
+              if ($process.MainWindowHandle -ne [IntPtr]::Zero) { break }
+              Start-Sleep -Milliseconds 250
+            } while ((Get-Date) -lt $deadline)
+            if ($process.MainWindowHandle -eq [IntPtr]::Zero) { throw "Fenêtre Plume introuvable" }
+            if (-not $process.CloseMainWindow() -or -not $process.WaitForExit(15000)) {
+              throw "Plume n'a pas répondu à la demande de fermeture de Windows"
+            }
+            if ($process.ExitCode -ne 0) { throw "Plume s'est terminé avec le code $($process.ExitCode)" }
+          } finally {
+            if ($process -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+            if (Test-Path $uninstaller) {
+              $remove = Start-Process -FilePath $uninstaller -ArgumentList "/S _?=$installDir" -PassThru
+              if (-not $remove.WaitForExit(120000)) {
+                $remove.Kill()
+                throw "La désinstallation dépasse deux minutes"
+              }
+              if ($remove.ExitCode -ne 0 -or (Test-Path $exe) -or
+                  (Test-Path HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Plume)) {
+                throw "La désinstallation est incomplète"
+              }
+            }
+          }
       - name: Fournir l'installateur Windows
         uses: actions/upload-artifact@v4
         with:
