@@ -19,8 +19,8 @@
   },
   {
    "path": "css/plume.css",
-   "size": 51304,
-   "sha256": "75ef4392429b17ff219e20bfc4c2e8b4e62486017f3eba4dcc960756b5726193"
+   "size": 51452,
+   "sha256": "9c7a3dacb9228a8fc860496cfd6aca62913bbaa6a01a2e9e6201e9ea3671b6d2"
   },
   {
    "path": "js/app.js",
@@ -29,8 +29,8 @@
   },
   {
    "path": "js/backstage.js",
-   "size": 28366,
-   "sha256": "0edd09471155e0e407760245128e52044a1d68b24908eb947b7385531e9bb22c"
+   "size": 31686,
+   "sha256": "b8fd9974c8795dec4eef86dcfcb00e0e0aee6eaa0c909d0289e51ee2efc8a5cb"
   },
   {
    "path": "js/docx-export.js",

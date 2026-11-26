@@ -98,7 +98,7 @@ Plume est un traitement de texte complet qui s'exécute entièrement dans le nav
 ### Fichier
 | Fonction | Détail |
 |---|---|
-| Nouveau | Document vierge ou modèle : **Lettre**, **Curriculum vitae**, **Rapport**, **Compte rendu de réunion** |
+| Nouveau | Document vierge ou modèle : **Lettre**, **Curriculum vitae**, **Rapport**, **Compte rendu de réunion**, **Courrier administratif**, **Préparation de cours**, **Fiche d’exercices** |
 | Démarrage | Plume s'ouvre sur l'**accueil** : **Document vierge** ou **Ouvrir un fichier…** (ordinateur, **clé USB**, disque). Le dernier document n'est **jamais** rouvert automatiquement. |
 | Ouvrir | Tous les formats (voir [Formats de fichiers](#formats-de-fichiers)) ; glisser-déposer d'un fichier dans la fenêtre ; ouverture d'un autre document à tout moment |
 | Enregistrer | `.docx`. Sous Chrome et Edge, **Ctrl+S réécrit directement le fichier d'origine** (File System Access API). Ailleurs, le fichier est téléchargé. |

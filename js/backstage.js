@@ -31,10 +31,41 @@ const TEMPLATES = {
       '<h1>Conclusion</h1><p>Résumez les enseignements et les recommandations.</p>'
   },
   minutes: {
-    name: 'Compte rendu de réunion', html:
+    name: 'Compte rendu de réunion', group: 'Administration', html:
       '<h1 class="title">Compte rendu de réunion</h1><p><b>Date :</b> ' + new Date().toLocaleDateString('fr-BE') + '<br><b>Lieu :</b> <br><b>Présents :</b> <br><b>Excusés :</b> </p>' +
       '<h1>Ordre du jour</h1><ol><li>Point 1</li><li>Point 2</li><li>Divers</li></ol><h1>Décisions</h1><ul><li>Décision prise</li></ul>' +
       '<h1>Actions</h1><table data-borders="all" style="width:600px"><colgroup><col style="width:300px"><col style="width:150px"><col style="width:150px"></colgroup><tbody><tr data-header="1"><td><p><b>Action</b></p></td><td><p><b>Responsable</b></p></td><td><p><b>Échéance</b></p></td></tr><tr><td><p><br></p></td><td><p><br></p></td><td><p><br></p></td></tr></tbody></table>'
+  },
+  adminLetter: {
+    name: 'Courrier administratif', group: 'Administration', html:
+      '<p><b>[Administration ou service]</b><br>[Adresse du service]<br>[Adresse électronique ou téléphone]</p>' +
+      '<p style="text-align:right">[Lieu], le [date]</p>' +
+      '<p style="margin-left:240pt">[Nom du destinataire]<br>[Adresse]</p>' +
+      '<p><b>Objet :</b> [Motif du courrier]<br><b>Référence :</b> [Numéro de dossier, si applicable]</p>' +
+      '<p>Madame, Monsieur,</p><p>[Rappelez le contexte. Précisez la décision ou la démarche à suivre et son échéance.]</p>' +
+      '<p>Veuillez agréer, Madame, Monsieur, l’expression de nos salutations distinguées.</p>' +
+      '<p style="margin-left:240pt">[Nom et fonction]<br>[Signature]</p><p><b>Pièces jointes :</b> [Liste, si applicable]</p>'
+  },
+  lessonPlan: {
+    name: 'Préparation de cours', group: 'Enseignement', html:
+      '<h1 class="title">Préparation de cours</h1><p><b>Matière :</b> [Matière] · <b>Classe :</b> [Classe] · <b>Durée :</b> [Durée]</p>' +
+      '<h1>Objectifs d’apprentissage</h1><p>À la fin de la séance, les élèves pourront [objectif observable].</p>' +
+      '<h1>Matériel et prérequis</h1><p>[Supports à préparer et acquis à mobiliser.]</p>' +
+      '<h1>Déroulement</h1><table data-borders="all" style="width:600px"><colgroup><col style="width:150px"><col style="width:90px"><col style="width:360px"></colgroup><tbody>' +
+      '<tr data-header="1"><th><p>Étape</p></th><th><p>Durée</p></th><th><p>Activité et consignes</p></th></tr>' +
+      '<tr><td><p>Introduction</p></td><td><p>[min]</p></td><td><p>[Mise en situation.]</p></td></tr>' +
+      '<tr><td><p>Activité</p></td><td><p>[min]</p></td><td><p>[Consignes, travail des élèves et accompagnement.]</p></td></tr>' +
+      '<tr><td><p>Synthèse</p></td><td><p>[min]</p></td><td><p>[Mise en commun.]</p></td></tr></tbody></table>' +
+      '<h1>Évaluation</h1><p>[Comment vérifier que l’objectif est atteint ?]</p>'
+  },
+  worksheet: {
+    name: 'Fiche d’exercices', group: 'Enseignement', html:
+      '<h1 class="title">[Titre de la fiche]</h1>' +
+      '<p><b>Nom :</b> ____________________ &nbsp; <b>Classe :</b> __________ &nbsp; <b>Date :</b> __________</p>' +
+      '<h1>Consignes</h1><p>[Précisez le matériel autorisé et la manière de répondre.]</p>' +
+      '<h1>Exercice 1</h1><p>[Écrivez ici la première question.]</p><p>Réponse : _______________________________________________________</p><p><br></p>' +
+      '<h1>Exercice 2</h1><p>[Écrivez ici la deuxième question.]</p><p>Réponse : _______________________________________________________</p><p><br></p>' +
+      '<h1>Exercice 3</h1><p>[Écrivez ici la troisième question.]</p><p>Réponse : _______________________________________________________</p>'
   }
 };
 
@@ -47,8 +78,8 @@ const Backstage = {
     const nav = [['home', 'Accueil', 'feather'], ['new', 'Nouveau', 'file-plus'], ['open', 'Ouvrir', 'folder-open'], ['info', 'Informations', 'info'],
       ['save', 'Enregistrer', 'save'], ['export', 'Exporter / Télécharger', 'file-down'], ['print', 'Imprimer', 'printer']];
     side.append(el('button', { class: 'bs-back', onclick: () => this.close(), title: 'Retour au document (Échap)' }, [icon('arrow-left'), el('span', { class: 't' }, ['Retour'])]));
-    for (const [id, l, ic] of nav) side.append(el('button', { class: section === id ? 'on' : '', onclick: () => this.go(id) }, [icon(ic), el('span', { class: 't' }, [l])]));
-    side.append(el('div', { class: 'sp' }), el('button', { class: section === 'about' ? 'on' : '', onclick: () => this.go('about') }, [icon('sparkles'), el('span', { class: 't' }, ['À propos'])]));
+    for (const [id, l, ic] of nav) side.append(el('button', { class: section === id ? 'on' : '', 'aria-label': l, onclick: () => this.go(id) }, [icon(ic), el('span', { class: 't' }, [l])]));
+    side.append(el('div', { class: 'sp' }), el('button', { class: section === 'about' ? 'on' : '', 'aria-label': 'À propos', onclick: () => this.go('about') }, [icon('sparkles'), el('span', { class: 't' }, ['À propos'])]));
     bs.append(side, main);
     bs.classList.add('open');
     this.render(section, main);
@@ -62,13 +93,20 @@ const Backstage = {
   },
   close() { $('#backstage').classList.remove('open'); document.removeEventListener('keydown', this._esc); Ed.focus(); },
 
-  tplGrid() {
-    const g = el('div', { class: 'tpl-grid' });
-    for (const [k, t] of Object.entries(TEMPLATES)) {
-      const th = el('div', { class: 'thumb' }, [el('div', { class: 'np-tpl', html: t.html })]);
-      g.append(el('button', { class: 'tpl', onclick: () => { this.close(); App.newDoc(k); } }, [th, t.name]));
+  templateGallery(includeBlank = false) {
+    const gallery = document.createDocumentFragment();
+    for (const group of ['Modèles généraux', 'Administration', 'Enseignement']) {
+      const grid = el('div', { class: 'tpl-grid' });
+      for (const [key, template] of Object.entries(TEMPLATES)) {
+        if ((template.group || 'Modèles généraux') !== group || (key === 'blank' && !includeBlank)) continue;
+        const preview = el('div', { class: 'thumb', 'aria-hidden': 'true' }, [
+          el('div', { class: 'np-tpl', html: template.html })
+        ]);
+        grid.append(el('button', { class: 'tpl', onclick: () => { this.close(); App.newDoc(key); } }, [preview, template.name]));
+      }
+      gallery.append(el('h2', {}, [group]), grid);
     }
-    return g;
+    return gallery;
   },
   async recent(limit = 20) {
     const list = el('div', { class: 'recent-list' });
@@ -101,14 +139,14 @@ const Backstage = {
             el('button', { class: 'bs-card', onclick: () => { this.close(); App.newDoc('blank'); } }, [icon('file-plus', 'lg'), el('b', {}, ['Document vierge']), el('span', {}, ['Une page blanche, prête à écrire.'])]),
             el('button', { class: 'bs-card', onclick: () => { this.close(); App.openPicker(); } }, [icon('folder-open', 'lg'), el('b', {}, ['Ouvrir un fichier…']), el('span', {}, ['Depuis l’ordinateur, une clé USB ou un disque : Word, OpenDocument, PDF, texte…'])])
           ]),
-          el('h2', {}, ['Modèles']), this.tplGrid());
+          this.templateGallery());
         const docs = await Store.listDocs().catch(() => []);
         if (App.keepLocal()) main.append(el('h2', {}, ['Documents récents (sur cet appareil)']), await this.recent(8));
         else if (docs.length) main.append(el('h2', {}, ['Copies gardées sur cet appareil par une version précédente']), await this.recent(8),
           el('button', { class: 'btn', onclick: async () => { await App.purgeLocal(); toast('Copies effacées de cet appareil.'); this.open('home'); } }, [icon('trash-2'), ' Tout effacer de cet appareil']));
         main.append(this.privacyBox());
         break;
-      case 'new': main.append(el('h1', {}, ['Nouveau']), this.tplGrid()); break;
+      case 'new': main.append(el('h1', {}, ['Nouveau']), this.templateGallery(true)); break;
       case 'open':
         main.append(el('h1', {}, ['Ouvrir']),
           el('div', { class: 'bs-actions' }, [

@@ -564,6 +564,10 @@ body.reading #exitReading { display: inline-flex; }
   .bs-side { width: 64px; }
   .bs-side button span.t { display: none; }
   .bs-main { padding: 20px; }
+  .tpl-grid { gap: 12px; }
+  .tpl, .tpl .thumb { width: 115px; }
+  .tpl .thumb { height: 150px; }
+  .tpl .thumb .np-tpl { transform: scale(.145); }
   .fld { grid-template-columns: 1fr; }
 }
 
