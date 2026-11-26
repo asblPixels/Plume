@@ -1506,7 +1506,22 @@ const Ed = {
     this.editor.addEventListener('keydown', () => this.selectImage(null));
   },
 
+  toggleWordCheckbox(checkbox) {
+    if (this.editor.contentEditable === 'false' || checkbox.getAttribute('aria-disabled') === 'true') return;
+    const checked = checkbox.getAttribute('aria-checked') !== 'true';
+    const code = checked ? checkbox.dataset.sdtCheckedCode : checkbox.dataset.sdtUncheckedCode;
+    const font = checked ? checkbox.dataset.sdtCheckedFont : checkbox.dataset.sdtUncheckedFont;
+    const glyph = /^[a-f0-9]{4}$/i.test(code || '') ? String.fromCharCode(parseInt(code, 16)) : (checked ? '☒' : '☐');
+    checkbox.setAttribute('aria-checked', String(checked));
+    const span = document.createElement('span');
+    if (font) span.style.fontFamily = JSON.stringify(font);
+    span.textContent = glyph;
+    checkbox.replaceChildren(span);
+    this.changed(false);
+  },
   onClick(e) {
+    const checkbox = e.target.closest('.pl-sdt-checkbox');
+    if (checkbox) { e.preventDefault(); this.toggleWordCheckbox(checkbox); return; }
     if (e.target.tagName === 'IMG') { this.selectImage(e.target); const r = document.createRange(); r.selectNode(e.target); const s = getSelection(); s.removeAllRanges(); s.addRange(r); this.lastRange = r; }
     else this.selectImage(null);
     const isl = e.target.closest('.pl-island');
@@ -1529,6 +1544,14 @@ const Ed = {
 
   /* ---------- Clavier ---------- */
   onKeyDown(e) {
+    const checkbox = e.target.closest('.pl-sdt-checkbox');
+    if (checkbox) {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        this.toggleWordCheckbox(checkbox);
+      }
+      return;
+    }
     // Effacement près d'un saut de page en milieu de paragraphe : on retire d'abord les artefacts
     if ((e.key === 'Backspace' || e.key === 'Delete') && this.editor.querySelector('span[data-pl-artifact]')) {
       const r = this.range();

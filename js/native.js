@@ -17,7 +17,7 @@ const Native = {
   /** Enregistre le fichier dans Documents/Plume puis propose de le partager */
   async save(blob, name) {
     const FS = this.plugin('Filesystem'), Share = this.plugin('Share');
-    if (!FS) { toast('Enregistrement impossible sur cet appareil.'); return; }
+    if (!FS) throw new Error('Enregistrement impossible sur cet appareil : accès aux fichiers indisponible.');
     const data = await this.blobToBase64(blob);
     const path = 'Plume/' + name;
     let uri;
@@ -57,7 +57,7 @@ const Native = {
         const d = $('.dlg-back'); if (d) { d.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return; }
         if ($('#backstage.open')) { Backstage.close(); return; }
         if (Menus.el) { Menus.close(); return; }
-        AppPlugin.minimizeApp ? AppPlugin.minimizeApp() : AppPlugin.exitApp();
+        App.requestQuit();
       });
     }
   }

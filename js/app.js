@@ -31,26 +31,28 @@ const App = {
     $('#fileInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) this.fileInputCb(f); });
     $('#exitReading').addEventListener('click', () => this.setReading(false));
     $('#themeBtn').addEventListener('click', () => this.toggleTheme());
+    $('#quitBtn').addEventListener('click', () => this.requestQuit());
 
     // Démarrage : toujours une page blanche, jamais le dernier document (ordinateurs partagés, écoles).
     // L'écran d'accueil propose un document vierge ou l'ouverture d'un fichier (ordinateur, clé USB…).
     this.newDoc('blank', true);
-    try { await Store.setKV('lastDoc', null); } catch { /* stockage indisponible */ }
-    const quiet = new URLSearchParams(location.search).has('new') || navigator.webdriver;
-    if (!quiet) setTimeout(() => { if (!this._launched) Backstage.open('home'); }, 50);
-
     // Ouverture depuis le système (application installée)
     // Application de bureau (Electron) : fichiers ouverts depuis l'Explorateur / le Finder
     if (window.plumeDesktop) {
       document.documentElement.classList.add('desktop');
       window.plumeDesktop.onOpenFile(f => this.openFile(new File([f.data], f.name), null, f.path));
+      window.plumeDesktop.onQuitRequested(() => this.requestQuit());
     }
+    try { await Store.setKV('lastDoc', null); } catch { /* stockage indisponible */ }
+    const quiet = new URLSearchParams(location.search).has('new') || navigator.webdriver;
+    if (!quiet) setTimeout(() => { if (!this._launched) Backstage.open('home'); }, 50);
+
     if ('launchQueue' in window) {
       launchQueue.setConsumer(async p => { if (p.files && p.files.length) { this._launched = true; const h = p.files[0]; this.openFile(await h.getFile(), h); } });
     }
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !window.plumeDesktop && !(window.Native && Native.on)) navigator.serviceWorker.register('sw.js').catch(() => { });
     this.initUpdates();
-    window.addEventListener('beforeunload', e => { if (this.dirty && !(this.savedLocally && this.keepLocal())) { e.preventDefault(); e.returnValue = ''; } });
+    window.addEventListener('beforeunload', e => { if (!this._quitAllowed && this.dirty && !(this.savedLocally && this.keepLocal())) { e.preventDefault(); e.returnValue = ''; } });
     Ed.editor.focus();
     if (!localStorage.getItem('plume-guide-vu') && !navigator.webdriver) { localStorage.setItem('plume-guide-vu', '1'); setTimeout(() => Guide.open(), 600); }
     // petits écrans : la page s'adapte à la largeur
@@ -116,9 +118,65 @@ const App = {
 
   name() { return ($('#docTitle').value || 'Document').trim(); },
 
+  /* ---------- Fermeture partagée : Windows, Linux, macOS et mobile ---------- */
+  async requestQuit() {
+    if (this._closing) return;
+    this._closing = true;
+    try {
+      if (this.dirty) {
+        const action = await dialog({
+          title: 'Quitter Plume',
+          body: '<p>Ce document contient des modifications non enregistrées.</p><p>Que souhaitez-vous faire ?</p>',
+          buttons: [
+            { label: 'Annuler', value: 'cancel' },
+            { label: 'Quitter sans enregistrer', value: 'discard' },
+            { label: 'Enregistrer et quitter', value: 'save', primary: true }
+          ]
+        });
+        if (!action || action === 'cancel') return;
+        if (action === 'save') {
+          await this.save();
+          // L'enregistrement peut être annulé ou échouer. Ne jamais quitter
+          // tant que le document comporte des modifications non enregistrées.
+          if (this.dirty) return;
+        }
+      }
+      if (window.plumeDesktop && window.plumeDesktop.quit) {
+        this._quitAllowed = true;
+        try {
+          const approved = await window.plumeDesktop.quit();
+          if (!approved) this._quitAllowed = false;
+        } catch (error) {
+          this._quitAllowed = false;
+          throw error;
+        }
+      } else if (window.Native && Native.on) {
+        const appPlugin = Native.plugin('App');
+        if (appPlugin && appPlugin.exitApp) await appPlugin.exitApp();
+        else if (appPlugin && appPlugin.minimizeApp) await appPlugin.minimizeApp();
+      } else {
+        // Les navigateurs interdisent généralement window.close() sur un
+        // onglet ouvert par l'utilisateur. Proposer une instruction fiable.
+        await dialog({ title: 'Fermer Plume',
+          body: '<p>Vous pouvez fermer cet onglet ou cette fenêtre dans votre navigateur.</p>',
+          buttons: [{ label: 'OK', primary: true }]
+        });
+      }
+    } finally {
+      this._closing = false;
+    }
+  },
+
   /* ---------- Documents ---------- */
   async newDoc(tpl = 'blank', silent) {
+    if (!silent && this.dirty && typeof PdfEditor !== 'undefined' && PdfEditor.active) {
+      const answer = await dialog({ title: 'PDF non enregistré',
+        body: '<p>Des modifications du PDF ne sont pas encore enregistrées. Ouvrir un nouveau document les abandonnera.</p>',
+        buttons: [{ label: 'Continuer le PDF', value:false }, { label: 'Abandonner les modifications', value:true, primary:true }] });
+      if (!answer) return;
+    }
     if (!silent && this.dirty) await this.flushAutosave();
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
     const t = TEMPLATES[tpl] || TEMPLATES.blank;
     this.docId = uid(); this.fileHandle = null; this.desktopPath = null; this.format = 'docx'; Ed.source = null;
     this.infoBar(null);
@@ -135,6 +193,7 @@ const App = {
     this.navRefresh(); this.drawRuler(); Ribbon.refresh(); this.updateStatus();
   },
   async openStored(id, silent) {
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
     const d = await Store.getDoc(id).catch(() => null);
     if (!d) return false;
     this.docId = d.id; this.fileHandle = null; this.desktopPath = null; this.format = d.format || 'docx';
@@ -165,9 +224,27 @@ const App = {
     if ($('#backstage').classList.contains('open')) Backstage.close();
     const base = file.name.replace(/\.[^.]+$/, '');
     try {
+      if (this.dirty && typeof PdfEditor !== 'undefined' && PdfEditor.active) {
+        const answer = await dialog({ title: 'PDF non enregistré',
+          body: '<p>Ce PDF contient des modifications non enregistrées. Ouvrir un autre fichier les abandonnera.</p>',
+          buttons: [{ label:'Annuler', value:false }, { label:'Abandonner les modifications', value:true, primary:true }] });
+        if (!answer) return;
+      }
       if (this.dirty) await this.flushAutosave();
       this.setSaveState('Ouverture…');
       const r = await Formats.open(file, { registerImage: b => Ed.registerImage(b) });
+      if (r.pdfBytes) {
+        await PdfEditor.open(r.pdfBytes);
+        this.docId = uid(); this.format = 'pdf'; Ed.source = null;
+        this.fileHandle = handle; this.desktopPath = desktopPath;
+        $('#docTitle').value = base;
+        document.title = this.name() + ' — Plume PDF';
+        this.dirty = false; this.savedLocally = false;
+        this.setSaveState('PDF original');
+        this.infoBar({ icon: 'info', html: 'PDF affiché sans conversion. Les annotations conservent les pages originales. Modifier ou supprimer un texte aplatit uniquement sa page lors de l’export ; signatures numériques et éléments interactifs peuvent être affectés.' });
+        return;
+      }
+      if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
       Ed.source = r.source ? { zip: r.source, bytes: r.bytes || null } : null;
       this.docId = uid();
       this.format = r.format || 'docx';
@@ -211,20 +288,81 @@ const App = {
     if (!info) { bar.hidden = true; bar.innerHTML = ''; return; }
     bar.innerHTML = '';
     bar.append(icon(info.icon || 'info'), el('span', { class: 'ib-text', html: info.html }), el('button', { class: 'ib-close', title: 'Fermer', onclick: () => this.infoBar(null) }, [icon('x')]));
+    if (info.action) bar.insertBefore(el('button', {
+      type: 'button', class: 'ib-action', onclick: info.action.run
+    }, info.action.label), bar.lastElementChild);
     bar.hidden = false;
+  },
+  async showMacros() {
+    const zip = Ed.source?.zip;
+    if (!zip || !this.hasMacros()) return;
+    const docId = this.docId;
+    const body = el('div');
+    try {
+      const project = zip.file(/(^|\/)vbaProject\.bin$/i)[0];
+      const bytes = await project.async('uint8array');
+      const stream = LegacyDoc.readCfb(bytes, new Set(['PROJECT'])).PROJECT;
+      if (!stream) throw new Error('Flux PROJECT absent.');
+      const projectText = new TextDecoder('windows-1252').decode(stream).split(/^\[/m)[0];
+      const modules = [...projectText.matchAll(/^(Module|Class|BaseClass|Document)=([^\r\n]+)/gm)];
+      if (modules.length) {
+        const types = { Module: 'Module', Class: 'Classe', BaseClass: 'Formulaire', Document: 'Objet Word' };
+        body.append(el('p', {}, 'Composants du projet VBA'), el('ul', {}, modules.map(([, type, name]) =>
+          el('li', {}, types[type] + ' · ' + name.split('/&H')[0]))));
+      } else body.append(el('p', {}, 'Le projet ne déclare aucun composant lisible.'));
+      try {
+        for (const module of VbaProject.readSources(bytes)) {
+          const code = module.source == null
+            ? el('p', {}, 'Source indisponible pour ce module.')
+            : el('pre', { style: 'white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto' }, module.source);
+          const procedures = module.procedures.length
+            ? el('p', {}, 'Procédures : ' + module.procedures.join(', ')) : null;
+          body.append(el('details', {}, [el('summary', {}, module.name), procedures, code]));
+        }
+      } catch {
+        body.append(el('p', {}, 'La source VBA de ce projet ne peut pas être lue dans Plume.'));
+      }
+    } catch (err) {
+      console.warn('Projet VBA illisible', err);
+      body.append(el('p', {}, 'La liste des composants VBA est indisponible pour ce fichier.'));
+    }
+    if (this.docId !== docId) return;
+    const bridge = window.plumeDesktop;
+    const wordAvailable = bridge?.platform === 'win32' && bridge.openInWord;
+    const filePath = this.desktopPath;
+    const canOpen = wordAvailable && /\.(docm|dotm)$/i.test(filePath || '') && !this.dirty;
+    body.append(el('p', {}, canOpen
+      ? 'Dans Word, Alt+F11 affiche le code VBA et Alt+F8 ouvre la liste des macros exécutables.'
+      : wordAvailable
+        ? 'Enregistrez le document sur le disque en .docm ou .dotm, puis rouvrez ce panneau.'
+        : 'Pour exécuter une macro, ouvrez le fichier dans Microsoft Word pour ordinateur.'));
+    const buttons = [{ label: 'Fermer', value: false }];
+    if (canOpen) buttons.push({ label: 'Ouvrir dans Word', value: true, primary: true });
+    const open = await dialog({ title: 'Macros VBA', body, buttons });
+    if (!open || this.docId !== docId || this.desktopPath !== filePath || this.dirty) return;
+    try {
+      await bridge.openInWord(filePath);
+    } catch (err) {
+      toast(htmlEsc(err.message || String(err)), 6500);
+    }
   },
   macroBar() {
     const on = this.hasMacros();
-    if (on) this.infoBar({ icon: 'lock', html: '<b>Macros</b> — Ce document contient des macros : elles sont conservées mais jamais exécutées. Enregistrez-le en <b>.docm</b> (ou <b>.dotm</b> pour un modèle) pour les garder.' });
+    if (on) this.infoBar({ icon: 'lock', html: '<b>Macros VBA</b> — Enregistrez en <b>.docm</b> ou <b>.dotm</b> pour conserver le projet.', action: { label: 'Consulter les macros', run: () => this.showMacros() } });
     else this.infoBar(null);
     return on;
   },
   /** Ctrl+S : même format que le fichier ouvert s'il est réinscriptible, sinon .docx */
   async save(asNew = false) {
-    const fmt = (!asNew && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop))) ? this.format : 'docx';
+    const fmt = typeof PdfEditor !== 'undefined' && PdfEditor.active ? 'pdf' :
+      (!asNew && (Formats.SAVABLE.has(this.format) || (this.format === 'doc' && window.plumeDesktop))) ? this.format : 'docx';
     return this.saveAs(fmt, asNew);
   },
   async saveAs(fmt = 'docx', asNew = true) {
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active && fmt !== 'pdf') {
+      dialog({ title: 'Document PDF', body: '<p>Ce document PDF conserve sa structure originale. Seul l’enregistrement au format PDF est disponible dans ce mode.</p>', buttons: [{ label: 'OK', primary: true }] });
+      return;
+    }
     // macros : un .docx ou .dotx ne peut pas les contenir → avertissement et choix
     if ((fmt === 'docx' || fmt === 'dotx') && this.hasMacros()) {
       const keep = fmt === 'dotx' ? 'dotm' : 'docm';
@@ -241,9 +379,9 @@ const App = {
       this.setSaveState('Enregistrement…');
       if (fmt === 'pdf' && !(window.plumeDesktop && window.plumeDesktop.printToPdf)) this.setSaveState('Création du PDF…');
       // PDF vectoriel (application de bureau) : rendu d'impression ; PDF direct : pages affichées telles quelles
-      const vector = fmt === 'pdf' && window.plumeDesktop && window.plumeDesktop.printToPdf;
+      const vector = fmt === 'pdf' && !(typeof PdfEditor !== 'undefined' && PdfEditor.active) && window.plumeDesktop && window.plumeDesktop.printToPdf;
       if (vector) this.preparePrint();
-      const blob = await Formats.build(fmt, this.exportCtx());
+      const blob = typeof PdfEditor !== 'undefined' && PdfEditor.active ? await PdfEditor.exportPdf() : await Formats.build(fmt, this.exportCtx());
       if (vector) this.endPrint();
       const fname = this.fileName(fmt);
       if (this.desktopPath && window.plumeDesktop && !asNew) {
@@ -261,7 +399,7 @@ const App = {
           const w = await h.createWritable(); await w.write(blob); await w.close();
           if (Formats.SAVABLE.has(fmt)) { this.fileHandle = h; this.desktopPath = null; this.format = fmt; $('#docTitle').value = h.name.replace(/\.[^.]+$/, ''); }
         } catch (e) { if (e.name === 'AbortError') { this.setSaveState('Modifié'); return; } throw e; }
-      } else downloadBlob(blob, fname);
+      } else await downloadBlob(blob, fname);
       await this.flushAutosave(true);
       this.dirty = false;
       this.setSaveState('Enregistré');
@@ -277,6 +415,9 @@ const App = {
   autosave: debounce(function () { App.flushAutosave(); }, 1500),
   async flushAutosave(force) {
     if (!this.docId) return;
+    // En mode PDF, la source et ses modifications restent en mémoire : aucune
+    // copie de secours simplifiée susceptible de détruire la mise en page.
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) { this.savedLocally = false; return; }
     // mode confidentiel (par défaut) : rien n'est écrit sur l'appareil
     if (!this.keepLocal()) { this.savedLocally = false; return; }
     try {
@@ -336,6 +477,7 @@ const App = {
     Comments.highlight();
   },
   print() {
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) { window.print(); return; }
     if (Native.on) { dialog({ title: 'Imprimer', body: '<p style="line-height:1.55">Sur téléphone ou tablette, créez un <b>PDF</b> puis utilisez le bouton <b>Partager</b> pour l’envoyer à une imprimante ou à une autre application.</p>', buttons: [{ label: 'Créer le PDF', primary: true, onClick: () => { App.saveAs('pdf'); } }, { label: 'Fermer' }] }); return; }
     this.preparePrint();
     setTimeout(() => { window.print(); this.endPrint(); }, 50);
@@ -596,6 +738,7 @@ const App = {
       const inField = e.target.closest && e.target.closest('input,textarea,select') && !e.target.closest('#editor');
       const run = id => { e.preventDefault(); CMD[id].run(); };
       if (e.altKey && k === 'q') { e.preventDefault(); $('#cmdSearch').focus(); return; }
+      if (mod && !e.shiftKey && !e.altKey && k === 'q') { e.preventDefault(); this.requestQuit(); return; }
       if (e.key === 'F12') return run('saveAs');
       if (e.key === 'F11') return run('fullscreen');
       if (e.key === 'F7') return run('spell');

@@ -44,8 +44,8 @@ const Backstage = {
     bs.innerHTML = '';
     const side = el('div', { class: 'bs-side' });
     const main = el('div', { class: 'bs-main' });
-    const nav = [['home', 'Accueil', 'feather'], ['new', 'Nouveau', 'file-plus'], ['open', 'Ouvrir', 'folder-open'], ['info', 'Informations', 'info'],
-      ['save', 'Enregistrer', 'save'], ['export', 'Exporter / Télécharger', 'file-down'], ['print', 'Imprimer', 'printer']];
+    const nav = [['home', 'Accueil', 'feather'], ['learn', 'Découvrir Plume', 'book-open'], ['new', 'Nouveau', 'file-plus'], ['open', 'Ouvrir', 'folder-open'], ['info', 'Informations', 'info'],
+      ['save', 'Enregistrer', 'save'], ['export', 'Exporter / Télécharger', 'file-down'], ['print', 'Imprimer', 'printer'], ['quit', 'Quitter Plume', 'x']];
     side.append(el('button', { class: 'bs-back', onclick: () => this.close(), title: 'Retour au document (Échap)' }, [icon('arrow-left'), el('span', { class: 't' }, ['Retour'])]));
     for (const [id, l, ic] of nav) side.append(el('button', { class: section === id ? 'on' : '', onclick: () => this.go(id) }, [icon(ic), el('span', { class: 't' }, [l])]));
     side.append(el('div', { class: 'sp' }), el('button', { class: section === 'about' ? 'on' : '', onclick: () => this.go('about') }, [icon('sparkles'), el('span', { class: 't' }, ['À propos'])]));
@@ -58,6 +58,7 @@ const Backstage = {
   go(id) {
     if (id === 'save') { this.close(); App.save(); return; }
     if (id === 'print') { this.close(); App.print(); return; }
+    if (id === 'quit') { this.close(); App.requestQuit(); return; }
     this.open(id);
   },
   close() { $('#backstage').classList.remove('open'); document.removeEventListener('keydown', this._esc); Ed.focus(); },
@@ -106,8 +107,43 @@ const Backstage = {
         if (App.keepLocal()) main.append(el('h2', {}, ['Documents récents (sur cet appareil)']), await this.recent(8));
         else if (docs.length) main.append(el('h2', {}, ['Copies gardées sur cet appareil par une version précédente']), await this.recent(8),
           el('button', { class: 'btn', onclick: async () => { await App.purgeLocal(); toast('Copies effacées de cet appareil.'); this.open('home'); } }, [icon('trash-2'), ' Tout effacer de cet appareil']));
-        main.append(this.privacyBox());
+        main.append(
+          el('div', { class: 'learn-home' }, [
+            el('div', {}, [el('b', {}, ['Premiers pas avec Plume']), el('p', {}, ['Découvrez en six étapes où écrire, insérer un tableau, mettre en page et enregistrer un document Word.'])]),
+            el('button', { class: 'btn primary', onclick: () => this.go('learn') }, ['Découvrir Plume'])
+          ]),
+          this.privacyBox()
+        );
         break;
+      case 'learn': {
+        const groups = [
+          { n: '1', title: 'Écrire et mettre en forme', where: 'Accueil', details: 'Police, taille, gras, alignement, listes et styles de titres.', action: () => { this.close(); Ribbon.select && Ribbon.select('accueil'); } },
+          { n: '2', title: 'Ajouter des éléments', where: 'Insertion', details: 'Tableaux, images, liens, numéros de page et zones de texte.', action: () => { this.close(); Ribbon.select && Ribbon.select('insertion'); } },
+          { n: '3', title: 'Organiser les pages', where: 'Mise en page', details: 'Marges, portrait ou paysage, colonnes et sauts de section.', action: () => { this.close(); Ribbon.select && Ribbon.select('miseenpage'); } },
+          { n: '4', title: 'Relire et commenter', where: 'Révision', details: 'Orthographe, commentaires et suivi des modifications.', action: () => { this.close(); Ribbon.select && Ribbon.select('revision'); } },
+          { n: '5', title: 'Enregistrer ou partager', where: 'Fichier → Enregistrer / Exporter', details: 'Conserver un document Word (.docx), créer un PDF ou imprimer.', action: () => this.go('export') },
+          { n: '6', title: 'Retrouver une fonction', where: 'Rechercher une commande (Alt+Q)', details: 'Tapez simplement « tableau », « marge » ou « commentaire ».', action: () => { this.close(); $('#cmdSearch').focus(); } }
+        ];
+        main.append(
+          el('h1', {}, ['Découvrir Plume']),
+          el('p', { class: 'learn-intro' }, ['Six repères simples pour écrire, présenter et partager vos documents. Choisissez une étape pour retrouver l’outil.']),
+          el('div', { class: 'learn-steps' }, groups.map(g =>
+            el('button', { class: 'learn-step', onclick: g.action, title: 'Voir où se trouve cette fonction' }, [
+              el('span', { class: 'learn-number' }, [g.n]),
+              el('span', { class: 'learn-copy' }, [
+                el('b', {}, [g.title]),
+                el('span', { class: 'learn-where' }, ['Où ? ' + g.where]),
+                el('span', {}, [g.details])
+              ]),
+              icon('arrow-right')
+            ])
+          )),
+          el('h2', {}, ['Essayer sans risque']),
+          el('p', {}, ['Créez un document vierge, écrivez une phrase, appliquez un titre, puis enregistrez en .docx. Tout fonctionne localement, même hors ligne.']),
+          el('button', { class: 'btn primary', onclick: () => { this.close(); App.newDoc('blank'); } }, ['Commencer un document'])
+        );
+        break;
+      }
       case 'new': main.append(el('h1', {}, ['Nouveau']), this.tplGrid()); break;
       case 'open':
         main.append(el('h1', {}, ['Ouvrir']),

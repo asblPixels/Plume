@@ -15,13 +15,14 @@
 const LegacyDoc = (() => {
 
   /** Lecture d'un fichier composé OLE2 → { nom: Uint8Array } */
-  function readCfb(buf) {
+  function readCfb(buf, names = null) {
     const b = new Uint8Array(buf);
     const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
     const sig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
     if (!sig.every((v, i) => b[i] === v)) throw new Error('Ce fichier n’est pas un document Word 97-2003 (.doc).');
     const ssz = 1 << dv.getUint16(0x1E, true);
     const mssz = 1 << dv.getUint16(0x20, true);
+    if (![512, 4096].includes(ssz) || mssz !== 64) throw new Error('Taille de secteur OLE invalide.');
     const firstDir = dv.getUint32(0x30, true);
     const cutoff = dv.getUint32(0x38, true);
     const firstMiniFat = dv.getUint32(0x3C, true);
@@ -38,11 +39,22 @@ const LegacyDoc = (() => {
     }
     const fat = [];
     for (const s of fatSectors) { const o = sectorOff(s); for (let i = 0; i < ssz / 4; i++) fat.push(dv.getUint32(o + i * 4, true)); }
-    const chain = (start, table) => { const out = []; let s = start, guard = 0; while (s < 0xFFFFFFFA && guard++ < 1e6) { out.push(s); s = table[s]; } return out; };
+    const chain = (start, table) => {
+      const out = [], visited = new Set();
+      for (let s = start; s < 0xFFFFFFFA; s = table[s]) {
+        if (s >= table.length || visited.has(s)) throw new Error('Chaîne OLE invalide.');
+        visited.add(s);
+        out.push(s);
+      }
+      return out;
+    };
     const readChain = (start, size) => {
-      const out = new Uint8Array(size === undefined ? chain(start, fat).length * ssz : size);
+      const sectors = chain(start, fat);
+      const capacity = sectors.length * ssz;
+      if (capacity > b.length || size > capacity) throw new Error('Flux OLE tronqué.');
+      const out = new Uint8Array(size === undefined ? capacity : size);
       let pos = 0;
-      for (const s of chain(start, fat)) {
+      for (const s of sectors) {
         const o = sectorOff(s); const n = Math.min(ssz, out.length - pos);
         if (n <= 0) break;
         out.set(b.subarray(o, o + n), pos); pos += n;
@@ -63,10 +75,11 @@ const LegacyDoc = (() => {
     const ministream = root ? readChain(root.start, root.size) : new Uint8Array(0);
     const minifat = [];
     if (nMiniFat) { const m = readChain(firstMiniFat); const mdv = new DataView(m.buffer); for (let i = 0; i < m.length / 4; i++) minifat.push(mdv.getUint32(i * 4, true)); }
-    const files = {};
+    const files = Object.create(null);
     for (const e of entries) {
-      if (e.type !== 2) continue;
+      if (e.type !== 2 || (names && !names.has(e.name))) continue;
       if (e.size < cutoff) {
+        if (e.size > ministream.length) throw new Error('Flux OLE tronqué.');
         const out = new Uint8Array(e.size); let pos = 0;
         for (const s of chain(e.start, minifat)) { const n = Math.min(mssz, e.size - pos); if (n <= 0) break; out.set(ministream.subarray(s * mssz, s * mssz + n), pos); pos += n; }
         files[e.name] = out;

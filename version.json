@@ -4,8 +4,8 @@
  "files": [
   {
    "path": "index.html",
-   "size": 5710,
-   "sha256": "ea46a04945944025c48e45eeb9f154850189e284ced48de3fe45b339b80461ba"
+   "size": 6043,
+   "sha256": "ed2cc0f69ba68d6cc065dba423824718c3c49c07ece009c2c2d6cab4718bb6aa"
   },
   {
    "path": "manifest.webmanifest",
@@ -19,33 +19,33 @@
   },
   {
    "path": "css/plume.css",
-   "size": 51304,
-   "sha256": "75ef4392429b17ff219e20bfc4c2e8b4e62486017f3eba4dcc960756b5726193"
+   "size": 56848,
+   "sha256": "9a06487862b5e78cb5d73682a6b7d23f29b6f267e48f48375845b66923887fb2"
   },
   {
    "path": "js/app.js",
-   "size": 59825,
-   "sha256": "eb8853d4b1ad43ba13a4302865d60a0abb11721f2775663a21488e118e874dc6"
+   "size": 67867,
+   "sha256": "7a5cc12bf1990c40983cd29953b0f363524550d49176f1cd2df042e62a1739b2"
   },
   {
    "path": "js/backstage.js",
-   "size": 28366,
-   "sha256": "0edd09471155e0e407760245128e52044a1d68b24908eb947b7385531e9bb22c"
+   "size": 31437,
+   "sha256": "a1f4728f2c0401bc4ead7da5571cba73749c609a88c6a6ba0ed2b5fbd965aaed"
   },
   {
    "path": "js/docx-export.js",
-   "size": 74037,
-   "sha256": "8810e740a11fde4d998b978ab7b1c1386125ea6f1487873b49ac6898deef7d2b"
+   "size": 77035,
+   "sha256": "6aacaecfb0d1b922e21d0644cb73ca2f90bb19ceb68a5258c84c1f8c0d2dcc50"
   },
   {
    "path": "js/docx-import.js",
-   "size": 70465,
-   "sha256": "2ed614621bf459e345881b7b28dbee6dc32e6d8db6e59c9f30c8d7b98171d133"
+   "size": 74552,
+   "sha256": "da4c908f62cf846cbfa77cfdb79bdb7e93d77bdbae8506c3e2b64ca91b422b51"
   },
   {
    "path": "js/editor.js",
-   "size": 86582,
-   "sha256": "2afd5c71a245aaafed6046ea924d69f4e7d0868c6e46d1149bd17f1a79f8127a"
+   "size": 87745,
+   "sha256": "bbe6bf6e20763ec4c7d04ddc3dcf37e0ec8635481b60c3cb3148ec63eafd27cf"
   },
   {
    "path": "js/embed-fonts.js",
@@ -54,8 +54,8 @@
   },
   {
    "path": "js/formats.js",
-   "size": 21619,
-   "sha256": "9966201b2a8b6046459cf78112510f081ac6bd7f7539eafcf792b5c2475cce2f"
+   "size": 22470,
+   "sha256": "0c279a29a2b41419d4b580a367dfb050540f1ff1d5a7c3dc70b3d972057f7c45"
   },
   {
    "path": "js/icons.js",
@@ -69,8 +69,8 @@
   },
   {
    "path": "js/legacy.js",
-   "size": 30754,
-   "sha256": "8aceae2ef08691e66b2cb098092d6c0e7d240d18ec1e0f1996101233b7145c31"
+   "size": 31285,
+   "sha256": "d46e21da72eaa24e0bfd6817357cc3a446c7fc7be4c34dfec017fb131b1dc6d1"
   },
   {
    "path": "js/markdown.js",
@@ -79,8 +79,8 @@
   },
   {
    "path": "js/native.js",
-   "size": 3272,
-   "sha256": "f756b9b05427a43ed41fc86a128e4cbd1a96eb8cef067c7b7c0efd2bac3f7aeb"
+   "size": 3253,
+   "sha256": "2bfdf4e516a5c49c875177b6bc4f16155c3a55bc9cf7dc89a0609448ada68120"
   },
   {
    "path": "js/odt.js",
@@ -88,9 +88,14 @@
    "sha256": "1a82bcc20d439838be1bb0e4f5ce8b788bf650e232d516dae52ca2e17e251ecb"
   },
   {
+   "path": "js/pdf-editor.js",
+   "size": 22419,
+   "sha256": "286bd9431d56ec605d092464f9738d7b79ac291c84dc5a841d85a60542d81ece"
+  },
+  {
    "path": "js/ribbon.js",
-   "size": 46302,
-   "sha256": "10b8d15e5d3984de628f8a9f0dc826c325e3f9cc90f67a4c87711ed7a32858d7"
+   "size": 46383,
+   "sha256": "b2c609cfe5b99873c3e56751a75ff42fd8c8732815a867a2dbef16598889220d"
   },
   {
    "path": "js/rtf.js",
@@ -109,8 +114,13 @@
   },
   {
    "path": "js/util.js",
-   "size": 8350,
-   "sha256": "3e4bc86b9abf2906d5e06d0b6bdbd85905cd12339ebf28869ef921e26fd5af39"
+   "size": 8363,
+   "sha256": "9f22c3d7061351efdeadf05ca04650d78b7a0cffe9d490ec6024f9ef03a6eb57"
+  },
+  {
+   "path": "js/vba.js",
+   "size": 6047,
+   "sha256": "ad36edad95fee96f80c71736aab7dfe38572c79ab3e52cb4eaf2d1d3e9600c03"
   },
   {
    "path": "vendor/fonts/andika-latin-400-italic.woff2",
@@ -356,6 +366,16 @@
    "path": "vendor/jszip.min.js",
    "size": 97781,
    "sha256": "7f839b2d4688b845c105ebf5d2f9803075f91ea0fe72bdaac176c3a04dd3d2c1"
+  },
+  {
+   "path": "vendor/pdf-lib-LICENSE.md",
+   "size": 1070,
+   "sha256": "f2c9fc00fdb66eb99ac156ba52d734af66d8d309f65753ae809ad34ee2883bcb"
+  },
+  {
+   "path": "vendor/pdf-lib.min.js",
+   "size": 525099,
+   "sha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f"
   },
   {
    "path": "vendor/pdfjs/LICENSE",

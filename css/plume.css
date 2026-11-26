@@ -411,6 +411,8 @@ html.page-dark .pl-colsep { border-color: #bbb; }
 #editor.pl-wlh, #editor.pl-wlh * { line-height: var(--pl-lhx, calc(var(--pl-lh) * var(--pl-fr))) !important; }
 #editor.pl-wlh .pl-fn { --pl-lhx: 0; }
 #editor .pl-tab { white-space: pre; }
+#editor .pl-sdt-checkbox { cursor: pointer; }
+#editor .pl-sdt-checkbox[aria-disabled='true'] { cursor: default; }
 #editor .pl-field { background: #eef1f3; border-radius: 2px; }
 #editor .pl-fn, .hf .pl-fn { color: var(--brand-ink); cursor: pointer; font-size: .75em; vertical-align: super; line-height: 0; padding: 0 1px; }
 #editor .pl-textbox { border: 1px solid #b8c2c9; padding: 4pt 6pt; margin: 0 0 8pt; border-radius: 2px; }
@@ -758,3 +760,75 @@ body.pdf-export #editor .pl-merge, body.pdf-export #editor .pl-field { backgroun
 #updateBar button { border: 1px solid #3a444c; background: transparent; color: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 #updateBar button.primary { background: #26EFC5; border-color: #26EFC5; color: #0d1013; font-weight: 600; }
 #updateBar button.x { border: 0; font-size: 18px; padding: 2px 6px; opacity: .7; }
+
+/* Parcours de découverte : identité Plume, lisibilité et accès clavier. */
+.learn-home { margin: 24px 0 20px; padding: 18px 22px; display:flex; align-items:center; justify-content:space-between; gap:18px; border:1px solid var(--ui-line,#c5dad4); border-radius:16px; background:var(--ui-bg-2,rgba(38,239,197,.06)); }
+.learn-home p { margin:6px 0 0; line-height:1.5; }
+.learn-intro { max-width:720px; line-height:1.6; }
+.learn-steps { display:grid; grid-template-columns: repeat(2,minmax(220px,1fr)); gap:14px; max-width:1000px; margin:24px 0 30px; }
+.learn-step { min-width:0; display:flex; gap:14px; align-items:flex-start; padding:18px; text-align:left; color:var(--ui-fg,#1c2925); background:var(--ui-bg,#fff); border:1px solid var(--ui-line,#c5dad4); border-radius:16px; cursor:pointer; transition:border-color .15s,transform .15s; }
+.learn-step:hover,.learn-step:focus-visible { border-color:#0b9c7f; transform:translateY(-1px); outline-offset:2px; }
+.learn-number { display:flex; flex:0 0 34px; align-items:center; justify-content:center; height:34px; border-radius:11px; color:#0d1013; font-weight:800; background:#26efc5; }
+.learn-copy { display:flex; flex:1; flex-direction:column; gap:7px; line-height:1.4; }
+.learn-copy b { font-size:15px; }
+.learn-where { font-weight:600; color:#087d69; }
+[data-theme="dark"] .learn-where { color:#26efc5; }
+@media(max-width:740px) { .learn-steps { grid-template-columns:1fr; }.learn-home { flex-direction:column; align-items:flex-start; } }
+@media(prefers-reduced-motion:reduce) { .learn-step { transition:none; }.learn-step:hover { transform:none; } }
+
+/* Mode PDF natif : aucune conversion du document en HTML modifiable. */
+body.pdf-mode #canvas, body.pdf-mode #navpane, body.pdf-mode #rulerWrap,
+body.pdf-mode #tabbar, body.pdf-mode #ribbon, body.pdf-mode #statusbar,
+body.pdf-mode #exitReading { display:none !important; }
+body.pdf-mode #main { position:relative; overflow:hidden; }
+.pdf-workspace { position:absolute; inset:0; display:flex; flex-direction:column;
+  background:var(--ui-bg-2,#e5e9ec); color:var(--ui-fg,#202c2a); min-width:0; z-index:2; }
+.pdf-tools { position:sticky; top:0; z-index:9; display:flex; flex-wrap:wrap; align-items:center;
+  gap:7px; padding:11px 16px; border-bottom:1px solid var(--ui-line,#ddd);
+  background:var(--ui-bg,#fff); }
+.pdf-tool { border:1px solid var(--ui-line,#ccc); background:var(--ui-bg,#fff); color:inherit;
+  padding:9px 13px; border-radius:9px; font:inherit; cursor:pointer; }
+.pdf-tool:hover,.pdf-tool:focus-visible { outline:2px solid #0a9e83; outline-offset:1px; }
+.pdf-tool.on { background:#26efc5; border-color:#0c866f; color:#0d1013; font-weight:700; }
+.pdf-save { margin-left:auto; background:#0b795f; color:white; font-weight:700; }
+.pdf-status { padding:7px 16px; font-size:13px; border-bottom:1px solid var(--ui-line,#ddd);
+  background:var(--ui-bg,#fff); }
+.pdf-pages { flex:1; overflow:auto; padding:24px max(20px,calc((100vw - 1000px)/2)); }
+.pdf-page { position:relative; margin:0 auto 25px; background:white; box-shadow:0 6px 22px #0003;
+  isolation:isolate; }
+.pdf-original-canvas { position:absolute; inset:0; display:block; }
+.pdf-text-hitboxes,.pdf-preview-layer { position:absolute; inset:0; }
+.pdf-text-hitboxes { z-index:2; user-select:text; }
+.pdf-selectable-text { position:absolute; display:block; overflow:hidden; color:transparent;
+  cursor:text; white-space:pre; user-select:text; font-family:Arial,sans-serif; }
+.pdf-mode .pdf-selectable-text::selection { background:#26efc577; color:transparent; }
+.pdf-preview-layer { z-index:3; pointer-events:none; }
+.pdf-drag-selection { position:absolute; z-index:8; pointer-events:none; border:2px dashed #ba2020; background:#e85b5b35; box-sizing:border-box; }
+.pdf-edit-preview { position:absolute; box-sizing:border-box; outline:1px dashed #3078a3;
+  color:#0f3b72; line-height:1.12; white-space:pre-wrap; overflow-wrap:anywhere; }
+.pdf-edit-preview.note { background:#f5fbffdd; }
+.pdf-edit-preview.redact { background:#fff; color:#141414; }
+.pdf-edit-preview.highlight { background:#ffd94a66; border:0; outline:none; }
+.pdf-edit-preview { pointer-events:auto; cursor:help; }
+@media(max-width:680px) {
+ .pdf-tools { padding:6px; gap:4px; }
+ .pdf-tool { padding:7px; font-size:12px; }
+ .pdf-pages { padding:14px 8px; }
+}
+@media print {
+ body.pdf-mode #titlebar,body.pdf-mode #tabbar,body.pdf-mode #ribbon,
+ body.pdf-mode #infoBar,body.pdf-mode #statusbar,
+ body.pdf-mode .pdf-tools,body.pdf-mode .pdf-status,
+ body.pdf-mode #backstage,body.pdf-mode #toast { display:none!important; }
+ body.pdf-mode #main,body.pdf-mode .pdf-workspace,body.pdf-mode .pdf-pages {
+   position:static!important; overflow:visible!important; display:block!important; padding:0!important;
+ }
+ body.pdf-mode .pdf-page { margin:0!important; box-shadow:none!important; break-after:page; }
+ body.pdf-mode .pdf-text-hitboxes { display:none!important; }
+}
+
+/* Fermeture explicite disponible sur bureau et tablette, sans fenêtre externe. */
+.plume-quit-btn { width:auto; min-width:32px; height:30px; padding:0 10px; display:inline-flex; align-items:center; gap:6px; border-radius:6px; flex:none; }
+.plume-quit-btn:hover,.plume-quit-btn:focus-visible { background:#a32435; color:white; outline-offset:2px; }
+.plume-quit-btn .quit-label { font-weight:600; font-size:12px; }
+@media(max-width:720px) { .plume-quit-btn { padding:0 7px; } .plume-quit-btn .quit-label { display:none; } }

@@ -177,15 +177,29 @@ const DocxExport = (() => {
     let imgN = 0;
     for (const img of allImgs) {
       const src = img.getAttribute('src');
-      if (!src || imgData.has(src)) continue;
+      if (src && imgData.has(src)) continue;
       try {
-        const blob = await (await fetch(src)).blob();
+        if (!src) throw new Error('Source d’image manquante');
+        const response = await fetch(src);
+        if (!response.ok) throw new Error('Image inaccessible (HTTP ' + response.status + ')');
+        const blob = await response.blob();
         let ext = ({ 'image/png': 'png', 'image/jpeg': 'jpeg', 'image/gif': 'gif' })[blob.type];
         let bytes;
         if (ext) bytes = new Uint8Array(await blob.arrayBuffer());
         else { bytes = await toPng(img); ext = 'png'; }
-        if (bytes) imgData.set(src, { bytes, ext, name: `plume-image${++imgN}.${ext}` });
-      } catch (e) { console.warn('Image ignorée', src, e); }
+        if (!bytes || !bytes.length) throw new Error('Image vide ou conversion impossible');
+        imgData.set(src, { bytes, ext, name: `plume-image${++imgN}.${ext}` });
+      } catch (e) {
+        // Ne pas produire silencieusement un DOCX amputé de ses images.
+        // Rétablir l'état d'affichage avant de laisser App.saveAs signaler l'échec.
+        if (zoomBox) zoomBox.style.zoom = prevZoom;
+        if (darkPage) document.documentElement.classList.add('page-dark');
+        delete editor.dataset.exporting;
+        console.error('Export Word interrompu : image non conservable', e);
+        const error = new Error('Export Word annulé : une image ne peut pas être conservée.');
+        error.userMessage = 'Le document Word n’a pas été enregistré : une image est manquante ou illisible. Vérifiez les images du document puis réessayez. Aucun fichier incomplet n’a été créé.';
+        throw error;
+      }
     }
 
     const numbering = { abstracts: [], nums: [] };
@@ -514,6 +528,34 @@ const DocxExport = (() => {
           if (tag === 'BR') { emit(rPrXml(propsFor(n.parentElement), b), '<w:br/>'); continue; }
           if (tag === 'IMG') { flush(); out += drawing(n, part); continue; }
           if (n.classList.contains('pl-anchor')) { flush(); const id = bookmarkId++; out += `<w:bookmarkStart w:id="${id}" w:name="${xmlEsc(n.id || ('_pl' + id))}"/><w:bookmarkEnd w:id="${id}"/>`; continue; }
+          if (n.matches('.pl-sdt-text,.pl-sdt-checkbox')) {
+            flush();
+            const properties = [
+              ['alias', n.dataset.sdtAlias], ['id', n.dataset.sdtId], ['tag', n.dataset.sdtTag]
+            ].filter(([name, value]) => value !== undefined &&
+              (name !== 'id' || (/^-?\d+$/.test(value) && Number(value) >= -2147483648 && Number(value) <= 2147483647)))
+              .map(([name, value]) => `<w:${name} w:val="${xmlEsc(value)}"/>`).join('');
+            const lock = ['sdtLocked', 'contentLocked', 'sdtContentLocked', 'unlocked'].includes(n.dataset.sdtLock)
+              ? `<w:lock w:val="${n.dataset.sdtLock}"/>` : '';
+            const placeholder = n.dataset.sdtPlaceholder
+              ? `<w:placeholder><w:docPart w:val="${xmlEsc(n.dataset.sdtPlaceholder)}"/></w:placeholder>` : '';
+            const showing = n.dataset.sdtPlaceholderText === n.textContent ? '<w:showingPlcHdr/>' : '';
+            const multiline = n.dataset.sdtMultiline === 'true' ? ' w:multiLine="1"' : '';
+            let type = `<w:text${multiline}/>`;
+            if (n.classList.contains('pl-sdt-checkbox')) {
+              const state = (name, code, font) => /^[a-f0-9]{4}$/i.test(code || '')
+                ? `<w14:${name}State w14:val="${code}"${font ? ` w14:font="${xmlEsc(font)}"` : ''}/>` : '';
+              const checked = n.getAttribute('aria-checked') === 'true' ? '1' : '0';
+              type = `<w14:checkbox><w14:checked w14:val="${checked}"/>` +
+                state('checked', n.dataset.sdtCheckedCode, n.dataset.sdtCheckedFont) +
+                state('unchecked', n.dataset.sdtUncheckedCode, n.dataset.sdtUncheckedFont) + '</w14:checkbox>';
+            }
+            out += `<w:sdt><w:sdtPr>${properties}${lock}${placeholder}${showing}${type}</w:sdtPr><w:sdtContent>`;
+            walk(Array.from(n.childNodes));
+            flush();
+            out += '</w:sdtContent></w:sdt>';
+            continue;
+          }
           if (n.classList.contains('pl-field') && n.dataset.field) {
             flush();
             const rp = rPrXml(propsFor(n), b);
@@ -906,7 +948,8 @@ const DocxExport = (() => {
       for (const r of Object.values(mr)) {
         const rk = r.type.split('/').pop();
         // macros : conservées (jamais exécutées) dans un .docm / .dotm, retirées sinon
-        if (!['theme', 'fontTable', 'webSettings', 'settings'].includes(rk) && !(K.macros && MACRO_RELS.includes(rk))) continue;
+        if (!['theme', 'fontTable', 'webSettings', 'settings', 'glossaryDocument'].includes(rk) && !(K.macros && MACRO_RELS.includes(rk))) continue;
+        if (r.mode === 'External') continue;
         const path = resolve('word/document.xml', r.target);
         if (rk === 'settings') { if (path !== 'word/settings.xml') continue; useSrcSettings = true; }
         await copyPart(path);
