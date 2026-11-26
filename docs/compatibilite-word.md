@@ -97,3 +97,11 @@ Les listes déroulantes, les dates, l’exécution VBA dans Plume et la fidélit
 des PDF complexes restent à valider ou à développer avant la publication
 finale. L’audit DOCX en CI vérifie la structure du fichier. La réouverture
 dans Word vérifie le comportement du document et sa mise en page.
+
+### Critères avant publication Windows
+
+- [ ] Réouvrir dans Microsoft Word les fichiers enregistrés par Plume. Vérifier la pagination et les sections, les champs, les commentaires, les tableaux et les notes sur des documents complexes.
+- [ ] Compléter puis tester les listes déroulantes et les champs de date. Vérifier également les champs texte et cases déjà pris en charge.
+- [ ] Valider la lecture VBA sur des projets Word réels et l’exécution explicite dans Plume sur des macros simples et complexes.
+- [ ] Comparer les PDF retouchés sur un corpus complexe. Vérifier le texte restant et la fidélité des zones non modifiées.
+- [ ] Construire un candidat Windows x64, vérifier l’installation neuve et la mise à niveau sur Windows, puis vérifier le téléchargement public de la version retenue.

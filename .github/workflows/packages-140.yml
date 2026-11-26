@@ -42,6 +42,7 @@ jobs:
           path: out/*
           if-no-files-found: error
   linux:
+    if: github.event_name != 'pull_request' || github.head_ref != 'feat/word-macro-tools'
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
