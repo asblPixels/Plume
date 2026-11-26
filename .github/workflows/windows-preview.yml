@@ -128,6 +128,15 @@ jobs:
               if (-not $ready) { Start-Sleep -Milliseconds 250 }
             } while (-not $ready -and (Get-Date) -lt $deadline)
             if (-not $ready) { throw "Le document Plume ne s’est pas chargé" }
+            # Une mise à jour silencieuse doit préserver la session ouverte.
+            $retryInstall = Start-Process -FilePath $installer -ArgumentList "/S /D=$installDir" -PassThru
+            if (-not $retryInstall.WaitForExit(30000)) {
+              $retryInstall.Kill()
+              throw "La mise à jour en présence d’une session ouverte ne s’est pas terminée"
+            }
+            if ($retryInstall.ExitCode -ne 2 -or $process.HasExited) {
+              throw "La mise à jour n’a pas protégé la session Plume ouverte"
+            }
             $process.Refresh()
             if (-not $process.CloseMainWindow()) {
               throw "Windows a refusé la demande de fermeture de la fenêtre $($process.MainWindowTitle)"
