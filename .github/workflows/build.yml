@@ -151,7 +151,7 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           node prepare.js
-          npx electron-builder --mac dmg --x64 --arm64 --publish never
+          npx electron-builder --mac dmg --x64 --arm64 --publish never -c.mac.icon=build/icon.png -c.artifactName='Plume-${version}-mac-${arch}.${ext}'
           for dmg in dist/*.dmg; do hdiutil verify "$dmg"; done
       - uses: actions/upload-artifact@v4
         with: { name: macos, path: desktop/dist/*.dmg, if-no-files-found: error }
