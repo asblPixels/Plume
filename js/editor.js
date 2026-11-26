@@ -317,8 +317,9 @@ const Ed = {
     const hd = card.querySelector('.header'), ft = card.querySelector('.footer');
     // Première page différente (document Word d'origine) : affichée, conservée telle quelle
     const s0 = this.sections()[0];
-    const first = i === 0 && (s0.titlePg || this.page.titlePg) && this.page.first;
+    const first = i === 0 && s0.titlePg && this.page.first;
     for (const [elx, html, firstHtml] of [[hd, this.headerHTML, first && this.page.first.header], [ft, this.footerHTML, first && this.page.first.footer]]) {
+      elx.toggleAttribute('data-pl-first-page', !!first);
       if (first) {
         elx.contentEditable = 'false';
         elx.title = 'En-tête/pied de la première page — conservé tel quel depuis le document d’origine';
@@ -347,8 +348,8 @@ const Ed = {
     this.changed(true);
   },
   inHF(n) { return !!(n && (n.nodeType === 1 ? n : n.parentElement)?.closest('.hf')); },
-  headerEl() { return this.pagesLayer.querySelector('.header'); },
-  footerEl() { return this.pagesLayer.querySelector('.footer'); },
+  headerEl() { return this.pagesLayer.querySelector('.header:not([data-pl-first-page])'); },
+  footerEl() { return this.pagesLayer.querySelector('.footer:not([data-pl-first-page])'); },
 
   /** Unités de pagination : blocs de premier niveau, et éléments de liste */
   units() {

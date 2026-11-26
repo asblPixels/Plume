@@ -701,15 +701,26 @@ const DocxExport = (() => {
     /* ---------- Parties ---------- */
     const mainPart = makePart('word/document.xml');
     let bodyXml = blocks(editor, mainPart);
-    const hdrPart = makePart('word/plume-header.xml'), ftrPart = makePart('word/plume-footer.xml');
-    const hasHF = elx => elx && (elx.textContent.trim() || elx.querySelector('img,.pl-field'));
-    const headerXml = hasHF(headerEl) ? blocks(headerEl, hdrPart) || '<w:p/>' : null;
-    const footerXml = hasHF(footerEl) ? blocks(footerEl, ftrPart) || '<w:p/>' : null;
+    const allSections = [...sectData, page];
+    const stories = {};
+    for (const [kind, el] of [['header', headerEl], ['footer', footerEl]]) {
+      let name = `plume-${kind}.xml`;
+      for (let i = 2; src && src.file('word/' + name); i++) name = `plume-${kind}-${i}.xml`;
+      const part = makePart('word/' + name);
+      const original = page.hfEditable?.[kind];
+      const replaces = src && allSections.some(sd => (sd.hfExtra || []).some(
+        x => x.tag === `w:${kind}Reference` && x.type === 'default' && x.part === original));
+      const hasContent = el && (el.textContent.trim() || el.querySelector('img,.pl-field,.pl-island,table'));
+      const xml = el && (hasContent || replaces) ? blocks(el, part) || '<w:p/>' : null;
+      stories[kind] = { name, part, original: replaces ? original : null, xml };
+    }
+    const headerXml = stories.header.xml, footerXml = stories.footer.xml;
 
-    // Sections : propriétés modélisées (taille, orientation, marges, colonnes, type) + éléments conservés
-    const hdrRef = headerXml ? `<w:headerReference w:type="default" r:id="${mainPart.addRel(REL + '/header', 'plume-header.xml')}"/>` : '';
-    const ftrRef = footerXml ? `<w:footerReference w:type="default" r:id="${mainPart.addRel(REL + '/footer', 'plume-footer.xml')}"/>` : '';
-    for (const sd of [...sectData, page]) for (const x of (sd.hfExtra || [])) if (src && src.file(x.part)) await copyPart(x.part);
+    // Recopie les en-têtes et pieds propres à chaque section, avec leurs dépendances.
+    for (const sd of allSections) for (const x of (sd.hfExtra || [])) {
+      const story = stories[x.tag === 'w:headerReference' ? 'header' : 'footer'];
+      if (x.type !== 'default' || x.part !== story.original || !story.xml) await copyPart(x.part);
+    }
     const ORDER = ['w:footnotePr', 'w:endnotePr', 'w:type', 'w:pgSz', 'w:pgMar', 'w:paperSrc', 'w:pgBorders', 'w:lnNumType', 'w:pgNumType', 'w:cols', 'w:formProt', 'w:vAlign', 'w:noEndnote', 'w:titlePg', 'w:textDirection', 'w:bidi', 'w:rtlGutter', 'w:docGrid', 'w:printerSettings'];
     const nameOf = x => (x.match(/^<([\w:]+)/) || [])[1];
     const strip = x => x.replace(/\sxmlns(:\w+)?="[^"]*"/g, '');
@@ -738,10 +749,19 @@ const DocxExport = (() => {
       if (!parts.some(p => p[0] === 9)) parts.push([9, '<w:cols w:space="708"/>']);
       if (!extras.length) parts.push([17, '<w:docGrid w:linePitch="360"/>']);
       parts.sort((a, b) => a[0] - b[0]);
-      let refs = hdrRef + ftrRef;
-      for (const x of (P.hfExtra || [])) {
-        if (!src || !src.file(x.part)) continue;
-        refs += `<${x.tag} w:type="${x.type}" r:id="${mainPart.addRel(REL + (x.tag === 'w:headerReference' ? '/header' : '/footer'), relTarget('word/document.xml', x.part))}"/>`;
+      let refs = '';
+      for (const kind of ['header', 'footer']) {
+        const tag = `w:${kind}Reference`;
+        const story = stories[kind];
+        const appendRef = (type, target) => {
+          refs += `<${tag} w:type="${xmlEsc(type)}" r:id="${mainPart.addRel(REL + '/' + kind, target)}"/>`;
+        };
+        if (sd === allSections[0] && story.xml && !story.original) appendRef('default', story.name);
+        for (const x of (P.hfExtra || [])) {
+          if (x.tag !== tag) continue;
+          if (x.type === 'default' && x.part === story.original && story.xml) appendRef(x.type, story.name);
+          else if (src && src.file(x.part)) appendRef(x.type, relTarget('word/document.xml', x.part));
+        }
       }
       return `<w:sectPr>${refs}${parts.map(p => p[1]).join('')}</w:sectPr>`;
     }
@@ -948,8 +968,8 @@ const DocxExport = (() => {
       '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>',
       numberingXml ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' : '',
       footnotesXml ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : '',
-      headerXml ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' : '',
-      footerXml ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : '',
+      headerXml ? `<Override PartName="/word/${stories.header.name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>` : '',
+      footerXml ? `<Override PartName="/word/${stories.footer.name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>` : '',
       '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
       '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>',
       '%%NOTES%%',
@@ -959,7 +979,7 @@ const DocxExport = (() => {
         '<Override PartName="/word/commentsExtensible.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml"/>' +
         '<Override PartName="/word/people.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.people+xml"/>' : '',
       '</Types>'].join('');
-    let ctFinal = ct.replace('%%NOTES%%', (footnotesXml && !ct.includes('/word/footnotes.xml') ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : '') + (endnotesXml ? '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' : '')).replace('/word/header1.xml', '/word/plume-header.xml').replace('/word/footer1.xml', '/word/plume-footer.xml');
+    let ctFinal = ct.replace('%%NOTES%%', (footnotesXml && !ct.includes('/word/footnotes.xml') ? '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' : '') + (endnotesXml ? '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' : ''));
     if (srcCT) {
       const have = new Set(Array.from(ctFinal.matchAll(/Extension="([^"]+)"/g), m => m[1].toLowerCase()));
       let extra = '';
@@ -1001,13 +1021,12 @@ const DocxExport = (() => {
     if (endnotesXml) zip.file('word/endnotes.xml', endnotesXml);
     if (numberingXml) zip.file('word/numbering.xml', numberingXml);
     if (footnotesXml) zip.file('word/footnotes.xml', footnotesXml);
-    if (headerXml) {
-      zip.file('word/plume-header.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:hdr ${NS} ${IGNORABLE}>${fixNum(headerXml)}</w:hdr>`);
-      if (hdrPart.rels.length) zip.file('word/_rels/plume-header.xml.rels', relsXml(hdrPart.rels));
-    }
-    if (footerXml) {
-      zip.file('word/plume-footer.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr ${NS} ${IGNORABLE}>${fixNum(footerXml)}</w:ftr>`);
-      if (ftrPart.rels.length) zip.file('word/_rels/plume-footer.xml.rels', relsXml(ftrPart.rels));
+    for (const [kind, root] of [['header', 'hdr'], ['footer', 'ftr']]) {
+      const { name, part, xml } = stories[kind];
+      if (!xml) continue;
+      const path = 'word/' + name;
+      zip.file(path, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:${root} ${NS} ${IGNORABLE}>${fixNum(xml)}</w:${root}>`);
+      if (part.rels.length) zip.file(relsPathOf(path), relsXml(part.rels));
     }
     for (const d of imgData.values()) zip.file('word/media/' + d.name, d.bytes);
     zip.file('docProps/core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xmlEsc(props.title || '')}</dc:title><dc:creator>${xmlEsc(props.author || '')}</dc:creator><cp:lastModifiedBy>${xmlEsc(props.author || '')}</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${props.created || now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`);

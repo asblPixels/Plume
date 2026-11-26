@@ -584,6 +584,7 @@ const DocxImport = (() => {
 
     let convertInline = null;
     /* ---------- Conversion d'une "story" (corps, en-tête, pied) ---------- */
+    const sections = [];
     async function convertStory(part, rootEl) {
       const rels = await relsFor(part);
       const out = document.createElement('div');
@@ -685,7 +686,9 @@ const DocxImport = (() => {
           closeLists();
           const hr = document.createElement('hr');
           hr.className = 'pl-section'; hr.contentEditable = 'false';
-          hr.dataset.sect = JSON.stringify(parseSect(direct.sectPr));
+          const section = parseSect(direct.sectPr);
+          sections.push(section);
+          hr.dataset.sect = JSON.stringify(section);
           target.append(hr);
         }
 
@@ -1250,11 +1253,10 @@ const DocxImport = (() => {
       page.hfExtra = [];
       for (const tag of ['w:headerReference', 'w:footerReference']) for (const ref of kids(sect, tag)) {
         const type = ref.getAttribute('w:type') || 'default';
-        if (type === 'default') continue;
         const rel = mainRels[ref.getAttribute('r:id')];
         if (rel) page.hfExtra.push({ tag, type, part: resolveTarget(mainPart, rel.target) });
       }
-      page.titlePg = !!kid(sect, 'w:titlePg') && val(kid(sect, 'w:titlePg')) !== '0';
+      page.titlePg = onOff(kid(sect, 'w:titlePg')) === true;
       return page;
     }
 
@@ -1265,31 +1267,27 @@ const DocxImport = (() => {
 
     const sect = kid(body, 'w:sectPr');
     const page = parseSect(sect);
-    let headerHtml = '', footerHtml = '';
-    if (sect) {
-      page.first = { header: '', footer: '' };
-      if (page.titlePg) for (const x of page.hfExtra.filter(h => h.type === 'first')) {
-        const xml = await read(x.part);
-        if (xml) page.first[x.tag === 'w:headerReference' ? 'header' : 'footer'] = await convertStory(x.part, parseXml(xml).documentElement);
-      }
-      const pick = tag => {
-        const refs = kids(sect, tag);
-        return refs.find(r => r.getAttribute('w:type') === 'default') || refs[0];
-      };
-      for (const [tag, set] of [['w:headerReference', v => headerHtml = v], ['w:footerReference', v => footerHtml = v]]) {
-        const ref = pick(tag);
-        if (!ref) continue;
-        const rel = mainRels[ref.getAttribute('r:id')];
-        if (!rel) continue;
-        const p = resolveTarget(mainPart, rel.target);
-        const x = await read(p);
-        if (!x) continue;
-        set(await convertStory(p, parseXml(x).documentElement));
+    sections.push(page);
+    page.hfEditable = {};
+    page.first = { header: '', footer: '' };
+    const readStory = async ref => {
+      const xml = ref && await read(ref.part);
+      return xml ? convertStory(ref.part, parseXml(xml).documentElement) : '';
+    };
+    const editable = {};
+    const firstSection = sections[0];
+    const refs = sections.flatMap(s => s.hfExtra || []).reverse();
+    for (const kind of ['header', 'footer']) {
+      const tag = `w:${kind}Reference`;
+      // L'absence de référence conserve l'en-tête ou le pied de la section précédente.
+      const ref = refs.find(r => r.tag === tag && r.type === 'default');
+      if (ref) page.hfEditable[kind] = ref.part;
+      const html = await readStory(ref);
+      editable[kind] = html.replace(/<br>|<p[^>]*>|<\/p>|\s|&nbsp;/g, '') ? html : '';
+      if (firstSection.titlePg) {
+        page.first[kind] = await readStory(firstSection.hfExtra.find(r => r.tag === tag && r.type === 'first'));
       }
     }
-    const isEmptyHF = h => !h || !h.replace(/<br>|<p[^>]*>|<\/p>|\s|&nbsp;/g, '');
-    if (isEmptyHF(headerHtml)) headerHtml = '';
-    if (isEmptyHF(footerHtml)) footerHtml = '';
 
     // Propriétés
     let title = '', author = '';
@@ -1301,7 +1299,7 @@ const DocxImport = (() => {
     }
 
     return {
-      html: html || '<p><br></p>', header: headerHtml, footer: footerHtml,
+      html: html || '<p><br></p>', header: editable.header, footer: editable.footer,
       page, settings: { ...settings, fontCss: cssFont(settings.font), tableStyles: usedTableStyles }, props: { title, author },
       source: zip
     };

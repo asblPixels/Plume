@@ -243,7 +243,7 @@ Résultat : un document ouvert puis réenregistré par Plume se rouvre dans Word
 | Trame et alignement vertical des cellules, ligne d'en-tête répétée | ✅ | ✅ | |
 | Images en ligne PNG, JPEG, GIF | ✅ | ✅ | WebP, SVG et BMP convertis en PNG à l'export |
 | Liens hypertextes (externes et internes) et signets | ✅ | ✅ | |
-| En-tête et pied de page, champs PAGE / NUMPAGES | ✅ | ✅ | |
+| En-tête et pied de page, champs PAGE / NUMPAGES | ✅ | ✅ | Variantes de section, de première page et de pages paires conservées |
 | Notes de bas de page et de fin | ✅ | ✅ | Les notes de fin deviennent des notes de bas de page |
 | Table des matières (champ TOC) | ✅ | ✅ | Mise à jour automatique à l'ouverture dans Word |
 | Sauts de page, de colonne et de section | ✅ | ✅ | |
