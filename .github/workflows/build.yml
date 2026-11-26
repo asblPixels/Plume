@@ -151,7 +151,14 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           node prepare.js
-          npx electron-builder --mac dmg --x64 --arm64 --publish never -c.mac.icon=build/icon.png -c.artifactName='Plume-${version}-mac-${arch}.${ext}'
+          ICONSET=$(mktemp -d)/Plume.iconset
+          mkdir "$ICONSET"
+          for size in 16 32 128 256 512; do
+            sips -z "$size" "$size" build/icon.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+            sips -z "$((size * 2))" "$((size * 2))" build/icon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+          done
+          iconutil -c icns "$ICONSET" -o build/icon.icns
+          npx electron-builder --mac dmg --x64 --arm64 --publish never -c.artifactName='Plume-${version}-mac-${arch}.${ext}'
           for dmg in dist/*.dmg; do hdiutil verify "$dmg"; done
       - uses: actions/upload-artifact@v4
         with: { name: macos, path: desktop/dist/*.dmg, if-no-files-found: error }
