@@ -310,6 +310,18 @@ const App = {
         body.append(el('p', {}, 'Composants du projet VBA'), el('ul', {}, modules.map(([, type, name]) =>
           el('li', {}, types[type] + ' · ' + name.split('/&H')[0]))));
       } else body.append(el('p', {}, 'Le projet ne déclare aucun composant lisible.'));
+      try {
+        for (const module of VbaProject.readSources(bytes)) {
+          const code = module.source == null
+            ? el('p', {}, 'Source indisponible pour ce module.')
+            : el('pre', { style: 'white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto' }, module.source);
+          const procedures = module.procedures.length
+            ? el('p', {}, 'Procédures : ' + module.procedures.join(', ')) : null;
+          body.append(el('details', {}, [el('summary', {}, module.name), procedures, code]));
+        }
+      } catch {
+        body.append(el('p', {}, 'La source VBA de ce projet ne peut pas être lue dans Plume.'));
+      }
     } catch (err) {
       console.warn('Projet VBA illisible', err);
       body.append(el('p', {}, 'La liste des composants VBA est indisponible pour ce fichier.'));
@@ -323,7 +335,7 @@ const App = {
       ? 'Dans Word, Alt+F11 affiche le code VBA et Alt+F8 ouvre la liste des macros exécutables.'
       : wordAvailable
         ? 'Enregistrez le document sur le disque en .docm ou .dotm, puis rouvrez ce panneau.'
-        : 'Pour consulter le code VBA ou exécuter une macro, ouvrez le fichier dans Microsoft Word pour ordinateur.'));
+        : 'Pour exécuter une macro, ouvrez le fichier dans Microsoft Word pour ordinateur.'));
     const buttons = [{ label: 'Fermer', value: false }];
     if (canOpen) buttons.push({ label: 'Ouvrir dans Word', value: true, primary: true });
     const open = await dialog({ title: 'Macros VBA', body, buttons });

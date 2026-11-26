@@ -4,8 +4,8 @@
  "files": [
   {
    "path": "index.html",
-   "size": 6009,
-   "sha256": "f4f603f879e99420f9165be58a6e48f76bb229907af1ccbf205fc5271d671615"
+   "size": 6043,
+   "sha256": "ed2cc0f69ba68d6cc065dba423824718c3c49c07ece009c2c2d6cab4718bb6aa"
   },
   {
    "path": "manifest.webmanifest",
@@ -24,8 +24,8 @@
   },
   {
    "path": "js/app.js",
-   "size": 67216,
-   "sha256": "7af9e581f0323340ac8ba22b6ef286cff0c69cbd7de2de96069542272e30ecd6"
+   "size": 67867,
+   "sha256": "7bd71a1f8880d977c2b4b91424bbf35621dc589dd01185900cd984589e9df74f"
   },
   {
    "path": "js/backstage.js",
@@ -116,6 +116,11 @@
    "path": "js/util.js",
    "size": 8363,
    "sha256": "9f22c3d7061351efdeadf05ca04650d78b7a0cffe9d490ec6024f9ef03a6eb57"
+  },
+  {
+   "path": "js/vba.js",
+   "size": 6047,
+   "sha256": "ad36edad95fee96f80c71736aab7dfe38572c79ab3e52cb4eaf2d1d3e9600c03"
   },
   {
    "path": "vendor/fonts/andika-latin-400-italic.woff2",
