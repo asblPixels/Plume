@@ -412,6 +412,9 @@ html.page-dark .pl-colsep { border-color: #bbb; }
 #editor.pl-wlh .pl-fn { --pl-lhx: 0; }
 #editor .pl-tab { white-space: pre; }
 #editor .pl-sdt-checkbox { cursor: pointer; }
+#editor .pl-sdt-date { cursor: pointer; }
+#editor .pl-sdt-date[aria-disabled="true"] { cursor: default; }
+#editor .pl-sdt-date:empty::before { content: "Choisir une date"; color: var(--ui-fg-2); }
 #editor .pl-sdt-checkbox[aria-disabled='true'] { cursor: default; }
 #editor .pl-field { background: #eef1f3; border-radius: 2px; }
 #editor .pl-fn, .hf .pl-fn { color: var(--brand-ink); cursor: pointer; font-size: .75em; vertical-align: super; line-height: 0; padding: 0 1px; }

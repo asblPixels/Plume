@@ -98,6 +98,7 @@ function registerCommands() {
   // Révision
   cmd('spell', 'Orthographe', 'spell-check', () => { E.editor.spellcheck = !E.editor.spellcheck; toast('Vérification orthographique ' + (E.editor.spellcheck ? '<b>activée</b>' : '<b>désactivée</b>')); Ribbon.refresh(); });
   cmd('language', 'Langue', 'type', l => App.setLang(l));
+  cmd('documentReview', 'Relecture du document', 'list-tree', () => DocumentReview.open());
   cmd('wordCount', 'Statistiques', 'hash', () => Dialogs.stats());
   cmd('speak', 'Lecture à voix haute', 'volume-2', () => App.speak());
   cmd('comment', 'Nouveau commentaire', 'message-square-plus', () => Comments.add(), { kbd: 'Ctrl+Alt+M' });
@@ -212,6 +213,7 @@ const Ribbon = {
         G('Terminer', [{ big: 'mergeFinish' }])
       ]),
       T('revision', 'Révision', [
+        G('Compléments', [{ big: 'documentReview' }]),
         G('Vérification', [{ big: 'spell' }, { col: ['wordCount', 'autocorrect'] }]),
         G('Commentaires', [{ big: 'comment' }, { col: ['prevComment', 'nextComment'] }, { col: ['showComments', 'delComments', 'printMarkup'] }]),
         G('Suivi', [{ big: 'track' }, { bigMenu: 'revView', menu: 'revViews' }, { col: ['userName'] }]),

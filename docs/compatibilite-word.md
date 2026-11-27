@@ -21,7 +21,7 @@ ne peut pas être présumée.
 3. Ouvrir le document avec Plume; modifier une zone définie, puis exporter en DOCX.
 4. Lancer l'audit des parties XML, relations et objets incorporés :
 
-   \`python3 tests/audit_docx_roundtrip.py original.docx apres-plume.docx --json\`
+   `python3 tests/audit_docx_roundtrip.py original.docx apres-plume.docx --json`
 
 5. Vérifier la sortie dans Microsoft Word : absence de réparation,
    contenu, styles, pagination, tableaux, notes, commentaires, modifications
@@ -37,7 +37,7 @@ une erreur pour éviter les pertes silencieuses.
 
 Exécuter les tests unitaires sans dépendance externe :
 
-\`python3 -m unittest discover -s tests -p 'test_audit_docx_roundtrip.py' -v\`
+`python3 -m unittest discover -s tests -p 'test_audit_docx_roundtrip.py' -v`
 
 ## Compatibilité prioritaire
 
@@ -58,7 +58,7 @@ Exécuter les tests unitaires sans dépendance externe :
   graphiques, ni les fichiers binaires de Microsoft Office.
 - Vérifier séparément les licences de chaque police : droit de
   distribution, d'incorporation et éventuelles restrictions de sous-ensemble.
-  L'obscurcissement \`.odttf\` n'est **pas** une autorisation de redistribution.
+  L'obscurcissement `.odttf` n'est **pas** une autorisation de redistribution.
 - N'ajouter aux tests que des fichiers dont l'usage et la diffusion
   sont permis. Éviter les données personnelles réelles.
 - Préserver les fonctions originales de Plume (travail local/hors ligne,

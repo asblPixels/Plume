@@ -28,7 +28,7 @@ const pdfPage = {
   getSize() { return { width: 100, height: 200 }; },
   setSize() {},
   setOrEmbedFont() { return { newFontKey: "F1" }; },
-  drawRectangle() { calls.push('vector-rectangle'); },
+  drawRectangle(rect) { calls.push('vector-rectangle'); this.rectangle = rect; },
   drawText() { calls.push('vector-text'); },
   drawImage() { calls.push('image'); }
 };
@@ -63,7 +63,7 @@ vm.createContext(sandbox);
 const file = fs.readFileSync(path.join(__dirname, '..', 'js', 'pdf-editor.js'), 'utf8');
 const hooked = file.replace(
   '  return { open, close, exportPdf,',
-  '  return { __test: { seed(data, changes, num=1) { original=data; edits=changes; pdf={numPages:num,getPage:async()=>mockPage}; }, reset(){ original=null; edits=[]; } }, open, close, exportPdf,'
+  '  return { __test: { seed(data, changes, num=1, nodes=[]) { pageNodes=nodes; original=data; edits=changes; pdf={numPages:num,getPage:async()=>mockPage}; }, reset(){ original=null; edits=[]; } }, open, close, exportPdf,'
 );
 assert.notEqual(hooked, file, 'L’interface du module a changé');
 sandbox.mockPage = mockPage;
@@ -85,6 +85,14 @@ async function run() {
   assert.ok(calls.includes('vector-text'));
   assert.ok(!calls.includes('render'), 'Une annotation ne doit pas rasteriser le document');
 
+  calls.length = 0;
+  const rotated = { width: 200, height: 100, convertToPdfPoint: (x, y) => [y + 12, x + 24] };
+  editor.__test.seed(bytes, [{ kind: 'highlight', page: 0, x: .25, y: .5, w: .25, h: .25 }],
+    1, [{ needsFlatten: true, viewport: rotated }]);
+  await editor.exportPdf();
+  const { x, y, width, height } = pdfPage.rectangle;
+  assert.deepEqual([x, y, width, height], [62, 74, 25, 50]);
+  assert.ok(!calls.includes('render'));
   calls.length = 0;
   editor.__test.seed(new Uint8Array(bytes), [testEdit], 2);
   await editor.exportPdf();

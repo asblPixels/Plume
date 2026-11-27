@@ -71,7 +71,7 @@ async function run() {
   assert.deepEqual(mobileBox.calls,['quit-mobile']);
 
   assert.match(main, /win\.on\('close', requestWindowClose\)/, 'Fermeture native interceptée');
-  assert.match(main, /ipcMain\.handle\('plume:quit'/, 'IPC de fermeture native');
+  assert.match(main, /handle\('plume:quit'/, 'IPC de fermeture native');
   assert.match(read('desktop/preload.js'), /onQuitRequested/, 'Notification de fermeture disponible');
   assert.match(read('js/backstage.js'), /\['quit', 'Quitter Plume'/, 'Menu Fichier Quitter');
   assert.match(read('js/native.js'), /App\.requestQuit\(\)/, 'Retour Android sécurisé');

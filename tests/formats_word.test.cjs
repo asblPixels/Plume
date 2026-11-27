@@ -12,8 +12,9 @@ const context = {
   console,
   Uint8Array,
   TextDecoder,
-  JSZip: {
-    async loadAsync() {
+  OfficeArchive: {
+    limits: { compressed: 128 * 1024 * 1024 },
+    async load() {
       return { file(name) {
         return Object.prototype.hasOwnProperty.call(packageParts, name)
           ? { async: async () => packageParts[name] }

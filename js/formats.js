@@ -47,41 +47,36 @@ const Formats = (() => {
   const extOf = name => (String(name).split('.').pop() || '').toLowerCase();
 
   /** Détecte le vrai format à partir des premiers octets (le nom peut mentir) */
-  async function sniff(buf, ext) {
+  async function sniff(buf, ext, zip) {
     const b = new Uint8Array(buf.slice(0, 8));
     if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return 'pdf';
     if (b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0) return ['doc', 'dot', 'wps', 'xls'].includes(ext) ? ext : 'doc';
     if (b[0] === 0x7B && b[1] === 0x5C && b[2] === 0x72 && b[3] === 0x74) return 'rtf';
     if (b[0] === 0x50 && b[1] === 0x4B) {
-      try {
-        const z = await JSZip.loadAsync(buf);
-        const mt = z.file('mimetype') ? (await z.file('mimetype').async('string')).trim() : '';
-        if (/opendocument\.text/.test(mt)) return /template/.test(mt) ? 'ott' : 'odt';
-        // Ne pas traiter un classeur ou une présentation ZIP comme un document Word.
-        // Le contenu OOXML prime sur le nom de fichier, notamment pour les macros.
-        if (z.file('word/document.xml')) {
-          const ct = z.file('[Content_Types].xml') ? await z.file('[Content_Types].xml').async('string') : '';
-          const main = [...ct.matchAll(/<Override\b[^>]*>/g)].find(m => /PartName=["']\/word\/document\.xml["']/i.test(m[0]));
-          const kind = main && /ContentType=["']([^"']+)/i.exec(main[0])?.[1] || '';
-          if (/macroEnabledTemplate\.main\+xml/i.test(kind)) return 'dotm';
-          if (/macroEnabled\.main\+xml/i.test(kind)) return 'docm';
-          if (/wordprocessingml\.template\.main\+xml/i.test(kind)) return 'dotx';
-          if (/wordprocessingml\.document\.main\+xml/i.test(kind)) return 'docx';
-          // Compatibilité avec les documents anciens sans type explicite.
-          return ['docx', 'docm', 'dotx', 'dotm'].includes(ext) ? ext : 'docx';
-        }
-        if (['docx', 'docm', 'dotx', 'dotm'].includes(ext)) {
-          const e = new Error('INVALID_WORD');
-          e.userMessage = 'Cette archive ne contient pas de document Word valide (word/document.xml absent).';
-          throw e;
-        }
-        if (z.file('index.xml') && ext === 'pages') return 'pages';
-        if (/sun\.xml\.writer/.test(mt)) return 'sxw';
-        if (mt === 'application/epub+zip') return 'epub';
-      } catch (e) {
-        if (e && e.message === 'INVALID_WORD') throw e;
-        // ZIP endommagé : l'importeur produira une erreur explicite.
+      const z = zip;
+      const mt = z.file('mimetype') ? (await z.file('mimetype').async('string')).trim() : '';
+      if (/opendocument\.text/.test(mt)) return /template/.test(mt) ? 'ott' : 'odt';
+      // Ne pas traiter un classeur ou une présentation ZIP comme un document Word.
+      // Le contenu OOXML prime sur le nom de fichier, notamment pour les macros.
+      if (z.file('word/document.xml')) {
+        const ct = z.file('[Content_Types].xml') ? await z.file('[Content_Types].xml').async('string') : '';
+        const main = [...ct.matchAll(/<Override\b[^>]*>/g)].find(m => /PartName=["']\/word\/document\.xml["']/i.test(m[0]));
+        const kind = main && /ContentType=["']([^"']+)/i.exec(main[0])?.[1] || '';
+        if (/macroEnabledTemplate\.main\+xml/i.test(kind)) return 'dotm';
+        if (/macroEnabled\.main\+xml/i.test(kind)) return 'docm';
+        if (/wordprocessingml\.template\.main\+xml/i.test(kind)) return 'dotx';
+        if (/wordprocessingml\.document\.main\+xml/i.test(kind)) return 'docx';
+        // Compatibilité avec les documents anciens sans type explicite.
+        return ['docx', 'docm', 'dotx', 'dotm'].includes(ext) ? ext : 'docx';
       }
+      if (['docx', 'docm', 'dotx', 'dotm'].includes(ext)) {
+        const e = new Error('INVALID_WORD');
+        e.userMessage = 'Cette archive ne contient pas de document Word valide (word/document.xml absent).';
+        throw e;
+      }
+      if (z.file('index.xml') && ext === 'pages') return 'pages';
+      if (/sun\.xml\.writer/.test(mt)) return 'sxw';
+      if (mt === 'application/epub+zip') return 'epub';
       return ext;
     }
     if (ext === 'fodt' || ext === 'xml') {
@@ -187,18 +182,26 @@ const Formats = (() => {
       e.userMessage = `Ce fichier est un simple raccourci Google Drive : le document lui-même est en ligne.<br><br>Ouvrez-le dans Google Docs puis <b>Fichier → Télécharger → Microsoft Word (.docx)</b> ou <b>OpenDocument (.odt)</b>, et ouvrez le fichier téléchargé dans Plume.${url ? `<br><br><a href="${htmlEsc(url)}" target="_blank" rel="noopener">Ouvrir le document dans Google Docs</a>` : ''}`;
       throw e;
     }
+    if (file.size > OfficeArchive.limits.compressed) {
+      const prefix = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+      if (WORD_XML.has(ext) || ['odt', 'ott'].includes(ext) || (prefix[0] === 0x50 && prefix[1] === 0x4b)) {
+        throw OfficeArchive.exceeded();
+      }
+    }
     const buf = await file.arrayBuffer();
-    ext = await sniff(buf, ext);
+    const prefix = new Uint8Array(buf, 0, Math.min(buf.byteLength, 2));
+    const zip = prefix[0] === 0x50 && prefix[1] === 0x4b ? await OfficeArchive.load(buf) : null;
+    ext = await sniff(buf, ext, zip);
     const reg = opts.registerImage;
 
     switch (ext) {
       case 'docx': case 'docm': case 'dotx': case 'dotm': {
-        const r = await DocxImport.importDocx(buf, { registerImage: reg });
+        const r = await DocxImport.importDocx(buf, { registerImage: reg, zip });
         // macros : jamais exécutées ; conservées à l'enregistrement en .docm / .dotm
         const macros = DocxExport.hasMacros(r.source);
         return { ...r, format: ext, macros, bytes: new Uint8Array(buf) };
       }
-      case 'odt': case 'ott': case 'fodt': return { ...(await Odt.importOdt(buf, { registerImage: reg })), format: ext === 'odt' ? 'odt' : 'odt' };
+      case 'odt': case 'ott': case 'fodt': return { ...(await Odt.importOdt(buf, { registerImage: reg, zip })), format: ext === 'odt' ? 'odt' : 'odt' };
       case 'rtf': return { ...Rtf.importRtf(buf, { registerImage: reg }), format: 'rtf' };
       case 'pdf': return { pdfBytes: new Uint8Array(buf), format: 'pdf' };
       case 'html': case 'htm': case 'xhtml': return { html: Sanitize.html(decodeText(buf)), format: 'html' };

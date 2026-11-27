@@ -156,9 +156,7 @@ const PdfEditor = (() => {
     const textLayer = $new('div', 'pdf-text-hitboxes');
     const preview = $new('div', 'pdf-preview-layer');
     frame.append(textLayer, preview);
-    // Les annotations vectorielles seraient décalées sur les pages tournées
-    // ou dont la boîte de découpe ne commence pas à zéro. Leur export
-    // utilise alors le rendu PDF natif de cette seule page.
+    // Les notes de texte sur pages tournées ou décalées nécessitent un rendu aplati.
     const view = page.view || [0, 0];
     const needsFlatten = (viewport.rotation % 360 !== 0) || view[0] !== 0 || view[1] !== 0;
     pageNodes[index] = { frame, page, viewport, preview, needsFlatten };
@@ -298,11 +296,17 @@ const PdfEditor = (() => {
       h: edit.h * height
     };
   }
-  function applyVector(page, note, font) {
+  function applyVector(page, note, font, viewport) {
     const { rgb } = window.PDFLib;
     const { width, height } = page.getSize();
     const r = pageXY(note, width, height);
     if (note.kind === 'highlight') {
+      // PDF.js maps display coordinates through the crop box, rotation and user unit.
+      if (viewport?.convertToPdfPoint) {
+        const [x1, y1] = viewport.convertToPdfPoint(note.x * viewport.width, note.y * viewport.height);
+        const [x2, y2] = viewport.convertToPdfPoint((note.x + note.w) * viewport.width, (note.y + note.h) * viewport.height);
+        Object.assign(r, { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) });
+      }
       page.drawRectangle({ x: r.x, y: r.y, width: r.w, height: r.h,
         color: rgb(...PDF_COLORS.highlight), opacity: .32, borderWidth: 0 });
     } else if (note.kind === 'note') {
@@ -427,13 +431,14 @@ const PdfEditor = (() => {
       }
       const flattened = new Set();
       for (const [index, changes] of byPage) {
-        if (pageNodes[index]?.needsFlatten || changes.some(edit => edit.kind === 'redact' ||
+        if (changes.some(edit => edit.kind === 'redact' ||
+            (edit.kind === 'note' && pageNodes[index]?.needsFlatten) ||
             (edit.kind === 'note' && !supportsFont(sourceFont, edit.value)))) flattened.add(index);
       }
       let result = source;
       if (!flattened.size) {
         for (const [index, changes] of byPage) {
-          changes.forEach(edit => applyVector(source.getPage(index), edit, sourceFont));
+          changes.forEach(edit => applyVector(source.getPage(index), edit, sourceFont, pageNodes[index]?.viewport));
         }
       } else {
         result = await PDFDocument.create();
@@ -447,7 +452,7 @@ const PdfEditor = (() => {
             await flattenedPage(result, await pdf.getPage(i + 1), changes, font);
           } else {
             const page = result.addPage(nativePages[nativeIndex++]);
-            changes.forEach(edit => applyVector(page, edit, font));
+            changes.forEach(edit => applyVector(page, edit, font, pageNodes[i]?.viewport));
           }
         }
       }

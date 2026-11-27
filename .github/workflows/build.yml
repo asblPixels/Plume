@@ -40,10 +40,12 @@ jobs:
         with: { name: linux-paquets, path: out/* }
 
   windows:
+    environment: ${{ (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v')) && 'release-signing' || 'build-preview' }}
     name: Windows (installateur et portable)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with: { persist-credentials: false }
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - name: Application Windows
@@ -53,7 +55,8 @@ jobs:
           npm install --no-audit --no-fund
           node prepare.js
           npx electron-builder --win dir --x64 --publish never
-      - name: Installateur NSIS et version portable
+      - name: Trouver le compilateur NSIS
+        id: nsis
         working-directory: desktop
         shell: pwsh
         run: |
@@ -68,14 +71,17 @@ jobs:
             }
           }
           if (-not $nsis) { throw "makensis.exe introuvable" }
-          $v = node -p "require('./package.json').version"
-          $d = (Get-Location).Path
-          & $nsis "/DVERSION=$v" "/DSRC=$d\dist\win-unpacked" "/DOUT=$d\dist\Plume-Setup-$v-x64.exe" "/DICON=$d\build\icon.ico" installer\plume.nsi
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          New-Item -ItemType Directory -Force ..\out | Out-Null
-          Copy-Item -Recurse dist\win-unpacked Plume
-          Compress-Archive -Path Plume -DestinationPath "..\out\Plume-Portable-$v-x64.zip"
-          Copy-Item "dist\Plume-Setup-$v-x64.exe" ..\out\
+          "path=$nsis" >> $env:GITHUB_OUTPUT
+      - name: Installateur NSIS et version portable
+        working-directory: desktop
+        shell: pwsh
+        env:
+          PLUME_REQUIRE_SIGNED_RELEASE: ${{ vars.PLUME_REQUIRE_SIGNED_RELEASE }}
+          PLUME_WINDOWS_PFX_B64: ${{ (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v')) && secrets.PLUME_WINDOWS_PFX_B64 || '' }}
+          PLUME_WINDOWS_PFX_PASSWORD: ${{ (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v')) && secrets.PLUME_WINDOWS_PFX_PASSWORD || '' }}
+          PLUME_WINDOWS_CERT_SHA256: ${{ vars.PLUME_WINDOWS_CERT_SHA256 }}
+          PLUME_NSIS_PATH: ${{ steps.nsis.outputs.path }}
+        run: ./installer/build-windows.ps1 -Nsis $env:PLUME_NSIS_PATH
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: out/* }
 
@@ -102,10 +108,12 @@ jobs:
         with: { name: flatpak, path: flatpak/Plume.flatpak, if-no-files-found: error }
 
   android:
+    environment: ${{ (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v')) && 'release-signing' || 'build-preview' }}
     name: Android (APK)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { persist-credentials: false }
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - uses: actions/setup-java@v4
@@ -122,18 +130,16 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           CODE=$(node -p "require('./package.json').version.split('.').reduce((n, part) => n * 100 + Number(part), 0)")
           sed -i -E "s/versionCode [0-9]+/versionCode $CODE/; s/versionName \"[^\"]+\"/versionName \"$VERSION\"/" android/app/build.gradle
-      - name: Compilation de l'APK
+      - name: Compilation et vérification de l’APK
         working-directory: mobile/android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-          VERSION=$(node -p "require('../package.json').version")
-          APK="../../out/Plume-$VERSION-android-debug.apk"
-          mkdir -p ../../out
-          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
-          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$BUILD_TOOLS/apksigner" verify "$APK"
-          "$BUILD_TOOLS/aapt" dump badging "$APK" | grep "package: name='be.asblpixels.plume'"
+        env:
+          PLUME_REQUIRE_SIGNED_RELEASE: ${{ vars.PLUME_REQUIRE_SIGNED_RELEASE }}
+          PLUME_ANDROID_KEYSTORE_B64: ${{ (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v')) && secrets.PLUME_ANDROID_KEYSTORE_B64 || '' }}
+          PLUME_ANDROID_STORE_PASSWORD: ${{ (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v')) && secrets.PLUME_ANDROID_STORE_PASSWORD || '' }}
+          PLUME_ANDROID_KEY_PASSWORD: ${{ (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/tags/v')) && secrets.PLUME_ANDROID_KEY_PASSWORD || '' }}
+          PLUME_ANDROID_KEY_ALIAS: ${{ vars.PLUME_ANDROID_KEY_ALIAS }}
+          PLUME_ANDROID_CERT_SHA256: ${{ vars.PLUME_ANDROID_CERT_SHA256 }}
+        run: bash ../build-android-apk.sh
       - uses: actions/upload-artifact@v4
         with: { name: android, path: out/*.apk }
 

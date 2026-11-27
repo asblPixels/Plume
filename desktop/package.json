@@ -25,6 +25,9 @@
     "files": [
       "main.js",
       "preload.js",
+      "signed-updater.js",
+      "update-key.json",
+      "native-access.js",
       "app/**/*"
     ],
     "fileAssociations": [
