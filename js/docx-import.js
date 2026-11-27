@@ -458,7 +458,7 @@ const DocxImport = (() => {
      Conversion principale
      ===================================================================== */
   async function importDocx(buffer, opts = {}) {
-    const zip = await JSZip.loadAsync(buffer);
+    const zip = opts.zip || await OfficeArchive.load(buffer);
     const read = async p => { const f = zip.file(p); return f ? f.async('string') : null; };
     // polices jointes au fichier par Word (« Incorporer les polices »)
     if (typeof EmbedFonts !== 'undefined') await EmbedFonts.loadFrom(zip);
@@ -846,6 +846,9 @@ const DocxImport = (() => {
                 const text = props && kid(props, 'w:text');
                 const checkbox = checkboxChild(props, 'checkbox');
                 const dropdown = props && kid(props, 'w:dropDownList');
+                const date = kid(props, 'w:date');
+                const dateKeys = ['dateFormat', 'lid', 'storeMappedDataAs', 'calendar'];
+                const dateType = date && kids(date).every(item => dateKeys.includes(item.localName) && item.nodeName === 'w:' + item.localName) ? date : null;
                 const choices = dropdown && kids(dropdown).filter(item => item.nodeName === 'w:listItem').map(item => ({
                   value: item.getAttribute('w:value') ?? item.getAttribute('w:displayText') ?? '',
                   label: item.getAttribute('w:displayText')
@@ -853,7 +856,7 @@ const DocxImport = (() => {
                 const supportedDropdown = choices?.length && choices.length === kids(dropdown).length;
                 const multilineValue = text?.getAttribute('w:multiLine');
                 const multiline = multilineValue != null && isOn(multilineValue);
-                if (!content || !(text || checkbox || supportedDropdown) || !isSimpleControl(props, content, text || checkbox || dropdown, multiline)) {
+                if (!content || !(text || checkbox || supportedDropdown || dateType) || !isSimpleControl(props, content, text || checkbox || dropdown || dateType, multiline)) {
                   await walk(content || n);
                   break;
                 }
@@ -874,7 +877,7 @@ const DocxImport = (() => {
                     node => node.textContent).join(''));
                 }
                 const locked = lock === 'contentLocked' || lock === 'sdtContentLocked';
-                if (locked || checkbox || supportedDropdown) attrs += ' contenteditable="false"';
+                if (locked || checkbox || supportedDropdown || dateType) attrs += ' contenteditable="false"';
                 const inner = segs[index].slice(start);
                 const checkboxUi = checkbox ? ` role="checkbox" tabindex="0" aria-label="${xmlEsc(kid(props, 'w:alias')?.getAttribute('w:val') || 'Case à cocher')}" aria-disabled="${locked}"${checkboxAttrs(checkbox)}` : '';
                 if (supportedDropdown) {
@@ -882,7 +885,14 @@ const DocxImport = (() => {
                   attrs += controlAttr('last-value', dropdown.getAttribute('w:lastValue'));
                   attrs += ` role="button" tabindex="0" aria-label="${xmlEsc(kid(props, 'w:alias')?.getAttribute('w:val') || 'Liste déroulante')}" aria-disabled="${locked}"`;
                 }
-                const cls = checkbox ? 'pl-sdt-checkbox' : supportedDropdown ? 'pl-sdt-dropdown' : 'pl-sdt-text';
+                if (dateType) {
+                  attrs += controlAttr('date-value', dateType.getAttribute('w:fullDate'));
+                  attrs += controlAttr('date-options', JSON.stringify(Object.fromEntries(dateKeys.map(key =>
+                    [key, kid(dateType, 'w:' + key)?.getAttribute('w:val') ?? null]))));
+                  attrs += ` role="button" tabindex="0" aria-label="${xmlEsc(kid(props, 'w:alias')?.getAttribute('w:val') || 'Sélecteur de date')}" aria-disabled="${locked}"`;
+                }
+                const cls = checkbox ? 'pl-sdt-checkbox' : supportedDropdown ? 'pl-sdt-dropdown' :
+                  dateType ? 'pl-sdt-date' : 'pl-sdt-text';
                 segs[index] = segs[index].slice(0, start) + `<span class="${cls}"${attrs}${checkboxUi}>${inner}</span>`;
                 break;
               }

@@ -30,6 +30,15 @@ Plume lit et enregistre les DOCX. Les champs texte, cases à cocher et listes d�
 
 Les fichiers sont traités sur l’appareil. La copie de secours locale est facultative.
 
+## Nouveautés en validation
+
+- Dans **Révision → Compléments → Relecture du document**, sélectionnez un constat pour retrouver le titre, le lien ou l’image à examiner. Le contrôle fonctionne localement.
+- Les formulaires DOCX permettent de renseigner les champs de date simples. Les surlignages PDF gardent leur forme vectorielle sur les pages recadrées ou tournées.
+- Sous Windows, la commande de lancement des macros propose de créer une copie à ouvrir dans Word. L’utilisateur choisit ensuite la procédure à lancer dans Word.
+- Les imports Office contrôlent le volume décompressé. Le bureau limite les écritures aux fichiers autorisés et vérifie la signature des mises à jour. La distribution signée nécessite les clés de l’éditeur.
+
+[Signature des mises à jour](docs/mises-a-jour-signees.md) · [Signature Windows et Android](docs/signature-des-distributions.md)
+
 ## Évolutions majeures
 
 | Version | Apport principal |

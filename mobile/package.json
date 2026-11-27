@@ -1,6 +1,6 @@
 {
   "name": "plume-mobile",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "description": "Plume pour Android et iOS (Capacitor)",
   "scripts": {

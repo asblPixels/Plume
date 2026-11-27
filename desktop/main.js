@@ -10,64 +10,44 @@ const { app, BrowserWindow, ipcMain, shell, Menu, dialog, protocol, net } = requ
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const crypto = require('node:crypto');
+const { execFile, spawn } = require('child_process');
 const { pathToFileURL } = require('url');
+
+const { assetPath, isEditor, isTrusted, DocumentGrants } = require('./native-access');
+const grants = new DocumentGrants();
+
+function handle(channel, callback) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!isTrusted(event, win)) throw new Error('Accès natif refusé.');
+    return callback(event, ...args);
+  });
+}
 
 const BUNDLED_DIR = path.join(__dirname, 'app');
 
-/* ---------- Mises à jour automatiques de l'application ----------
-   La version en ligne (GitHub Pages) publie version.json : liste des fichiers avec empreintes.
-   Si elle est plus récente, ses fichiers sont téléchargés et vérifiés dans le dossier de
-   l'utilisateur, puis utilisés au lancement suivant. L'installation d'origine n'est jamais modifiée. */
-const UPDATE_URL = (process.env.PLUME_UPDATE_URL || 'https://asblpixels.github.io/Plume/').replace(/\/?$/, '/');
-const UPDATE_DIR = path.join(app.getPath('userData'), 'mise-a-jour');
-const crypto = require('crypto');
-const cmpVer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); } return 0; };
-const readVer = dir => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'version.json'), 'utf8')).version; } catch { return '0'; } };
-const BUNDLED_VERSION = readVer(BUNDLED_DIR);
-// dossier servi : la mise à jour téléchargée si elle est complète et plus récente que l'installation
-const APP_DIR = (() => {
-  const live = path.join(UPDATE_DIR, 'actuelle');
-  if (fs.existsSync(path.join(live, 'index.html')) && cmpVer(readVer(live), BUNDLED_VERSION) > 0) return live;
-  return BUNDLED_DIR;
-})();
-let updateState = { current: readVer(APP_DIR), available: null, ready: false };
+/* Les mises à jour du contenu web sont vérifiées avant installation et au démarrage. */
+const updater = require('./signed-updater');
+const UPDATE_URL = 'https://asblpixels.github.io/Plume/';
+const UPDATE_DIR = path.join(app.getPath('userData'), 'versions-signees');
+const UPDATE_KEY = require('./update-key.json').publicKey;
+const readVer = dir => JSON.parse(fs.readFileSync(path.join(dir, 'version.json'), 'utf8')).version;
+const APP_DIR = updater.installed(UPDATE_DIR, BUNDLED_DIR, readVer(BUNDLED_DIR), UPDATE_KEY);
+const updateState = { current: readVer(APP_DIR), available: null, ready: false };
 
 async function checkUpdate() {
   try {
-    const res = await net.fetch(UPDATE_URL + 'version.json?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return;
-    const remote = await res.json();
-    if (!remote || !remote.version || !Array.isArray(remote.files) || cmpVer(remote.version, updateState.current) <= 0) return;
-    updateState.available = remote.version;
-    const tmp = path.join(UPDATE_DIR, 'telechargement');
-    fs.rmSync(tmp, { recursive: true, force: true });
-    for (const f of remote.files) {
-      if (!/^[\w./-]+$/.test(f.path) || f.path.includes('..')) throw new Error('chemin refusé : ' + f.path);
-      const r = await net.fetch(UPDATE_URL + f.path.split('/').map(encodeURIComponent).join('/') + '?v=' + remote.version, { cache: 'no-store' });
-      if (!r.ok) throw new Error(f.path + ' : HTTP ' + r.status);
-      const data = Buffer.from(await r.arrayBuffer());
-      if (data.length !== f.size || crypto.createHash('sha256').update(data).digest('hex') !== f.sha256) throw new Error(f.path + ' : fichier incomplet');
-      const dest = path.join(tmp, f.path);
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, data);
-    }
-    fs.writeFileSync(path.join(tmp, 'version.json'), JSON.stringify(remote));
-    // bascule atomique : l'ancienne mise à jour est remplacée seulement quand tout est vérifié
-    const live = path.join(UPDATE_DIR, 'actuelle');
-    fs.rmSync(live + '-ancienne', { recursive: true, force: true });
-    if (fs.existsSync(live)) fs.renameSync(live, live + '-ancienne');
-    fs.renameSync(tmp, live);
-    fs.rmSync(live + '-ancienne', { recursive: true, force: true });
+    const version = await updater.stage(UPDATE_DIR, updateState.current, UPDATE_URL, UPDATE_KEY, net.fetch.bind(net));
+    if (!version) return;
+    updateState.available = version;
     updateState.ready = true;
-    if (win) win.webContents.send('plume:update-ready', remote.version);
+    if (win) win.webContents.send('plume:update-ready', version);
   } catch (e) {
     console.error('Mise à jour impossible :', e.message || e);
-    fs.rmSync(path.join(UPDATE_DIR, 'telechargement'), { recursive: true, force: true });
   }
 }
-ipcMain.handle('plume:update-state', () => updateState);
-ipcMain.handle('plume:update-restart', () => { app.relaunch(); app.exit(0); });
+handle('plume:update-state', () => updateState);
+handle('plume:update-restart', () => { app.relaunch(); app.exit(0); });
 const OPENABLE = /\.(docx|docm|dotx|dotm|doc|dot|odt|ott|fodt|rtf|pdf|html?|xhtml|md|markdown|txt|csv|wpd|wps|pages|sxw|stw|abw|zabw|lwp|hwp|wri|xml|epub|cwk|sdw|uot|602|gdoc)$/i;
 
 let win = null;
@@ -79,12 +59,55 @@ const filesFromArgv = argv => argv.slice(1).filter(a => OPENABLE.test(a) && fs.e
 
 function sendFile(p) {
   try {
+    if (!OPENABLE.test(p) || !fs.statSync(p).isFile()) return;
     const data = fs.readFileSync(p);
+    p = grants.grant(p);
     const payload = { name: path.basename(p), path: p, data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) };
     if (win && !win.webContents.isLoading()) win.webContents.send('plume:open-file', payload);
     else pending.push(payload);
   } catch (e) { console.error('Ouverture impossible :', p, e); }
 }
+
+let exitApproved = false;
+let quitAcknowledgement = null;
+// Le gestionnaire de fenêtre vaut sur Linux, Windows et macOS : la fermeture
+// native (Alt+F4, bouton X, Cmd+Q) passe par la même confirmation de Plume.
+function requestWindowClose(event) {
+  if (exitApproved) return;
+  event.preventDefault();
+  if (!win || win.isDestroyed()) return;
+  if (win.webContents.isLoading() || win.webContents.isDestroyed() || (typeof win.webContents.isCrashed === 'function' && win.webContents.isCrashed())) {
+    const answer = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Quitter Plume',
+      message: 'Le document n’est pas accessible. Quitter Plume ?',
+      detail: 'Les modifications non enregistrées pourraient être perdues.',
+      buttons: ['Annuler', 'Quitter'], defaultId: 0, cancelId: 0
+    });
+    if (answer === 1) { exitApproved = true; win.destroy(); app.quit(); }
+    return;
+  }
+  win.webContents.send('plume:request-quit');
+  // Secours quand le moteur JS ne répond pas : une app doit toujours
+  // pouvoir être fermée depuis le système, même après un plantage partiel.
+  if (quitAcknowledgement) clearTimeout(quitAcknowledgement);
+  quitAcknowledgement = setTimeout(() => {
+    quitAcknowledgement = null;
+    if (!win || win.isDestroyed() || exitApproved) return;
+    const answer = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Plume ne répond pas',
+      message: 'Plume n’a pas répondu à la demande de fermeture.',
+      detail: 'Forcer la fermeture peut perdre des modifications non enregistrées.',
+      buttons: ['Annuler', 'Forcer la fermeture'], defaultId: 0, cancelId: 0
+    });
+    if (answer === 1) { exitApproved = true; win.destroy(); app.quit(); }
+  }, 2500);
+}
+ipcMain.on('plume:quit-ack', event => {
+  if (isTrusted(event, win) && quitAcknowledgement) {
+    clearTimeout(quitAcknowledgement);
+    quitAcknowledgement = null;
+  }
+});
 
 function createWindow() {
   win = new BrowserWindow({
@@ -93,7 +116,20 @@ function createWindow() {
     icon: path.join(APP_DIR, 'icons', 'icon-512.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true }
   });
-  Menu.setApplicationMenu(null);   // le ruban de Plume remplace la barre de menus
+  // Barre de menus native conservée en secours, y compris sous Wayland :
+  // l'utilisateur peut toujours quitter via le système d'exploitation.
+  const applicationMenu = Menu.buildFromTemplate([
+    { label: 'Fichier', submenu: [
+      { label: 'Quitter Plume', accelerator: process.platform === 'darwin' ? 'Command+Q' : 'Ctrl+Q',
+        click: () => win && !win.isDestroyed() && win.close() }
+    ] },
+    { label: 'Édition', submenu: [
+      { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
+      { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }
+    ] }
+  ]);
+  Menu.setApplicationMenu(applicationMenu);
+  win.on('close', requestWindowClose);
   const ses = win.webContents.session;
   const langs = ['fr', 'fr-FR', 'fr-BE', 'nl', 'en-GB'].filter(l => ses.availableSpellCheckerLanguages.includes(l));
   if (langs.length) ses.setSpellCheckerLanguages(langs.slice(0, 3));
@@ -101,7 +137,10 @@ function createWindow() {
   win.once('ready-to-show', () => { win.maximize(); win.show(); });
   win.webContents.on('did-finish-load', () => { while (pending.length) win.webContents.send('plume:open-file', pending.shift()); });
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^(https?:|mailto:)/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
-  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('plume://')) { e.preventDefault(); if (/^(https?:|mailto:)/.test(url)) shell.openExternal(url); } });
+  win.webContents.on('will-navigate', (e, url) => { if (!isEditor(url)) { e.preventDefault(); if (/^(https?:|mailto:)/.test(url)) shell.openExternal(url); } });
+  win.webContents.on('will-redirect', (event, url, _inPlace, isMainFrame) => {
+    if (isMainFrame && !isEditor(url)) event.preventDefault();
+  });
   // menu contextuel : suggestions orthographiques + copier/coller
   win.webContents.on('context-menu', (e, params) => {
     const items = [];
@@ -121,10 +160,8 @@ else {
   app.on('open-file', (e, p) => { e.preventDefault(); sendFile(p); });   // macOS
   app.whenReady().then(() => {
     protocol.handle('plume', req => {
-      const u = new URL(req.url);
-      const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
-      const file = path.normalize(path.join(APP_DIR, rel));
-      if (!file.startsWith(APP_DIR)) return new Response('Interdit', { status: 403 });
+      const file = assetPath(APP_DIR, req.url);
+      if (!file) return new Response('Introuvable', { status: 404 });
       return net.fetch(pathToFileURL(file).toString());
     });
     createWindow();
@@ -134,13 +171,72 @@ else {
   app.on('window-all-closed', () => app.quit());
 }
 
-/* ---------- Fichiers ---------- */
-ipcMain.handle('plume:write-file', async (e, { path: p, data }) => { fs.writeFileSync(p, Buffer.from(data)); return true; });
-ipcMain.handle('plume:save-dialog', async (e, { name, ext, label }) => {
-  const r = await dialog.showSaveDialog(win, { title: 'Enregistrer sous', defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: label, extensions: [ext] }, { name: 'Tous les fichiers', extensions: ['*'] }] });
-  return r.canceled ? null : r.filePath;
+/* ---------- Fermeture contrôlée pour toutes les plateformes de bureau ---------- */
+handle('plume:quit', event => {
+  exitApproved = true;
+  if (quitAcknowledgement) { clearTimeout(quitAcknowledgement); quitAcknowledgement = null; }
+  win.close();
+  app.quit();
+  return true;
 });
-ipcMain.handle('plume:print-pdf', async () => {
+
+/* ---------- Fichiers ---------- */
+handle('plume:open-in-word', async (event, file) => {
+  if (process.platform !== 'win32' || !win || event.sender !== win.webContents ||
+      event.senderFrame !== win.webContents.mainFrame ||
+      typeof file !== 'string' || !/^[a-z]:[\\/]/i.test(file) || !/\.(docm|dotm)$/i.test(file)) {
+    throw new Error('Sélectionnez un document Word avec macros enregistré sur ce PC.');
+  }
+  const original = grants.target(file);
+  if (await fs.promises.realpath(original) !== original || !(await fs.promises.stat(original)).isFile()) {
+    throw new Error('Le document enregistré est introuvable.');
+  }
+  const programs = [process.env.ProgramW6432, process.env.ProgramFiles, process.env['ProgramFiles(x86)']];
+  const word = programs.filter(Boolean).flatMap(dir => [
+    path.join(dir, 'Microsoft Office', 'root', 'Office16', 'WINWORD.EXE'),
+    path.join(dir, 'Microsoft Office', 'Office16', 'WINWORD.EXE')
+  ]).find(candidate => fs.existsSync(candidate));
+  if (!word) throw new Error('Microsoft Word n’a pas été trouvé dans les dossiers d’installation standard.');
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question', title: 'Ouvrir une copie dans Microsoft Word',
+    message: path.basename(original),
+    detail: 'Plume crée une copie à côté de ce fichier. Vous pourrez choisir une macro dans Word selon ses paramètres de sécurité.',
+    buttons: ['Annuler', 'Créer la copie et ouvrir Word'], defaultId: 0, cancelId: 0
+  });
+  if (response !== 1) return false;
+  const { dir, name, ext } = path.parse(original);
+  const copy = path.join(dir, name.slice(0, 180) + ' - essai VBA ' + crypto.randomUUID() + ext);
+  const zone = async filePath => {
+    try { return await fs.promises.readFile(filePath + ':Zone.Identifier'); }
+    catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  };
+  const sourceZone = await zone(original);
+  await fs.promises.copyFile(original, copy, fs.constants.COPYFILE_EXCL);
+  try {
+    const copyZone = await zone(copy);
+    if (sourceZone && (!copyZone || !sourceZone.equals(copyZone))) {
+      throw new Error('La provenance du document n’a pas pu être conservée dans la copie.');
+    }
+    await new Promise((resolve, reject) => {
+      const child = spawn(word, ['/m', copy], { detached: true, stdio: 'ignore' });
+      child.once('error', reject);
+      child.once('spawn', () => { child.unref(); resolve(); });
+    });
+  } catch (error) {
+    await fs.promises.unlink(copy).catch(() => {});
+    throw error;
+  }
+  return copy;
+});
+handle('plume:write-file', async (e, { path: p, data }) => { grants.write(p, data); return true; });
+handle('plume:save-dialog', async (e, { name, ext, label }) => {
+  if (typeof name !== 'string' || typeof ext !== 'string' || !/^[a-z0-9]{1,10}$/i.test(ext) || typeof label !== 'string') throw new Error('Format invalide.');
+  name = path.basename(path.win32.basename(name)).replace(/[\x00-\x1f:]/g, '').slice(0, 240);
+  if (!name || name === '.' || name === '..') name = 'Document.' + ext;
+  const r = await dialog.showSaveDialog(win, { title: 'Enregistrer sous', defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: label, extensions: [ext] }, { name: 'Tous les fichiers', extensions: ['*'] }] });
+  return r.canceled ? null : grants.grant(r.filePath);
+});
+handle('plume:print-pdf', async () => {
   const data = await win.webContents.printToPDF({ preferCSSPageSize: true, printBackground: true, generateDocumentOutline: true });
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
 });
@@ -153,16 +249,17 @@ function findSoffice() {
       : ['/usr/bin/soffice', '/usr/bin/libreoffice', '/usr/local/bin/soffice', '/opt/libreoffice/program/soffice', '/snap/bin/libreoffice', '/var/lib/flatpak/exports/bin/org.libreoffice.LibreOffice'];
   return cands.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || null;
 }
-ipcMain.handle('plume:converter-available', () => !!findSoffice());
-ipcMain.handle('plume:convert', async (e, { data, from, to }) => {
+handle('plume:converter-available', () => !!findSoffice());
+handle('plume:convert', async (e, { data, from, to }) => {
+  if (typeof from !== 'string' || !/^[a-z0-9]{1,10}$/i.test(from) || !['docx', 'doc', 'odt', 'pdf'].includes(to) || !(data instanceof ArrayBuffer || Buffer.isBuffer(data))) throw new Error('Conversion invalide.');
   const soffice = findSoffice();
   if (!soffice) return null;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plume-'));
   const input = path.join(dir, 'document.' + String(from).replace(/[^a-z0-9]/gi, ''));
-  fs.writeFileSync(input, Buffer.from(data));
   const filter = { docx: 'docx:MS Word 2007 XML', doc: 'doc:MS Word 97', odt: 'odt', pdf: 'pdf' }[to] || to;   // pas de guillemets : arguments passés sans shell
-  const profile = pathToFileURL(path.join(os.tmpdir(), 'plume-lo-profile')).toString();
+  const profile = pathToFileURL(path.join(dir, 'profile')).toString();
   try {
+    fs.writeFileSync(input, Buffer.from(data));
     await new Promise((resolve, reject) => execFile(soffice, [`-env:UserInstallation=${profile}`, '--headless', '--norestore', '--nologo', '--convert-to', filter, '--outdir', dir, input], { timeout: 180000, windowsHide: true }, err => err ? reject(err) : resolve()));
     const out = path.join(dir, 'document.' + to);
     if (!fs.existsSync(out)) return null;

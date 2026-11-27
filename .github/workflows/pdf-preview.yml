@@ -1,0 +1,87 @@
+name: PDF - test Windows et Linux
+on:
+  pull_request:
+    branches: [compat/word-roundtrip-audit, feat/pdf-fidelity-editor]
+    paths:
+      - "js/**"
+      - "css/**"
+      - "index.html"
+      - "vendor/pdf-lib.min.js"
+      - "desktop/**"
+      - ".github/workflows/pdf-preview.yml"
+      - "tests/quit_flow.test.cjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    name: Windows x64 PDF
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Bibliothèque PDF hors ligne
+        shell: pwsh
+        run: |
+          if (-not (Test-Path vendor/pdf-lib.min.js)) { throw "pdf-lib absent" }
+          node --check js/pdf-editor.js
+          node tests/pdf_editor.test.cjs
+          node tests/pdf_native_real.test.cjs
+          node tests/quit_flow.test.cjs
+          node --check desktop/main.js
+          node --check desktop/preload.js
+          node --check js/app.js
+          node --check js/native.js
+          node --check js/backstage.js
+      - name: Compiler Plume Windows
+        shell: pwsh
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          node prepare.js
+          npx electron-builder --win dir --x64 --publish never
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress | Out-Null }
+          $nsis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $nsis) { $nsis = "C:\Program Files (x86)\NSIS\makensis.exe" }
+          $v = node -p "require('./package.json').version"
+          $d = (Get-Location).Path
+          & $nsis "/DVERSION=$v" "/DSRC=$d\dist\win-unpacked" "/DOUT=$d\dist\Plume-PDF-Apercu-$v-x64.exe" "/DICON=$d\build\icon.ico" installer\plume.nsi
+          if ($LASTEXITCODE -ne 0) { throw "Échec NSIS" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Plume-PDF-Windows-EXE-Apercu
+          path: desktop/dist/Plume-PDF-Apercu-*.exe
+          if-no-files-found: error
+          retention-days: 30
+  linux:
+    name: Linux x64 PDF
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Paquets Linux
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
+      - name: Vérifier la fermeture sur toutes plateformes
+        run: |
+          node tests/quit_flow.test.cjs
+          node --check desktop/main.js
+          node --check desktop/preload.js
+          node --check js/app.js
+          node --check js/native.js
+      - name: Compiler Plume Linux
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          node prepare.js
+          npx electron-builder --linux AppImage deb rpm --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Plume-PDF-Linux-Apercu
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+            desktop/dist/*.rpm
+          if-no-files-found: error
+          retention-days: 30

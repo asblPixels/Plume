@@ -528,7 +528,7 @@ const DocxExport = (() => {
           if (tag === 'BR') { emit(rPrXml(propsFor(n.parentElement), b), '<w:br/>'); continue; }
           if (tag === 'IMG') { flush(); out += drawing(n, part); continue; }
           if (n.classList.contains('pl-anchor')) { flush(); const id = bookmarkId++; out += `<w:bookmarkStart w:id="${id}" w:name="${xmlEsc(n.id || ('_pl' + id))}"/><w:bookmarkEnd w:id="${id}"/>`; continue; }
-          if (n.matches('.pl-sdt-text,.pl-sdt-checkbox,.pl-sdt-dropdown')) {
+          if (n.matches('.pl-sdt-text,.pl-sdt-checkbox,.pl-sdt-dropdown,.pl-sdt-date')) {
             flush();
             const properties = [
               ['alias', n.dataset.sdtAlias], ['id', n.dataset.sdtId], ['tag', n.dataset.sdtTag]
@@ -556,6 +556,13 @@ const DocxExport = (() => {
               type = `<w:dropDownList${last === undefined ? '' : ` w:lastValue="${xmlEsc(last)}"`}>` +
                 choices.map(({ value, label }) => `<w:listItem w:value="${xmlEsc(value)}"${label == null ? '' : ` w:displayText="${xmlEsc(label)}"`}/>`).join('') +
                 '</w:dropDownList>';
+            }
+            if (n.classList.contains('pl-sdt-date')) {
+              const options = JSON.parse(n.dataset.sdtDateOptions || '{}');
+              const date = n.dataset.sdtDateValue;
+              const format = ['dateFormat', 'lid', 'storeMappedDataAs', 'calendar'].map(key =>
+                typeof options[key] === 'string' ? `<w:${key} w:val="${xmlEsc(options[key])}"/>` : '').join('');
+              type = `<w:date${date === undefined ? '' : ` w:fullDate="${xmlEsc(date)}"`}>${format}</w:date>`;
             }
             out += `<w:sdt><w:sdtPr>${properties}${lock}${placeholder}${showing}${type}</w:sdtPr><w:sdtContent>`;
             walk(Array.from(n.childNodes));

@@ -193,11 +193,12 @@ const App = {
     this.navRefresh(); this.drawRuler(); Ribbon.refresh(); this.updateStatus();
   },
   async openStored(id, silent) {
-    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
     const d = await Store.getDoc(id).catch(() => null);
     if (!d) return false;
+    const source = d.source ? { zip: await OfficeArchive.load(d.source), bytes: d.source } : null;
+    if (typeof PdfEditor !== 'undefined' && PdfEditor.active) PdfEditor.close();
     this.docId = d.id; this.fileHandle = null; this.desktopPath = null; this.format = d.format || 'docx';
-    Ed.source = d.source ? { zip: await JSZip.loadAsync(d.source), bytes: d.source } : null;
+    Ed.source = source;
     this.macroBar();
     $('#docTitle').value = d.name;
     Ed.load({ html: await Ed.hydrateImages(d.html), header: await Ed.hydrateImages(d.header || ''), footer: await Ed.hydrateImages(d.footer || ''), page: d.page, settings: d.settings, props: d.props });
@@ -332,16 +333,17 @@ const App = {
     const filePath = this.desktopPath;
     const canOpen = wordAvailable && /\.(docm|dotm)$/i.test(filePath || '') && !this.dirty;
     body.append(el('p', {}, canOpen
-      ? 'Dans Word, Alt+F11 affiche le code VBA et Alt+F8 ouvre la liste des macros exécutables.'
+      ? 'Plume ouvre une copie à côté du document enregistré. Dans Word, Alt+F8 affiche la liste des macros exécutables selon ses paramètres de sécurité.'
       : wordAvailable
         ? 'Enregistrez le document sur le disque en .docm ou .dotm, puis rouvrez ce panneau.'
         : 'Pour exécuter une macro, ouvrez le fichier dans Microsoft Word pour ordinateur.'));
     const buttons = [{ label: 'Fermer', value: false }];
-    if (canOpen) buttons.push({ label: 'Ouvrir dans Word', value: true, primary: true });
+    if (canOpen) buttons.push({ label: 'Ouvrir une copie dans Word', value: true, primary: true });
     const open = await dialog({ title: 'Macros VBA', body, buttons });
     if (!open || this.docId !== docId || this.desktopPath !== filePath || this.dirty) return;
     try {
-      await bridge.openInWord(filePath);
+      const copy = await bridge.openInWord(filePath);
+      if (copy) toast('Copie VBA ouverte dans Word : ' + htmlEsc(copy), 6500);
     } catch (err) {
       toast(htmlEsc(err.message || String(err)), 6500);
     }

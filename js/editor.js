@@ -1537,7 +1537,76 @@ const Ed = {
     control.textContent = choice.label ?? choice.value;
     this.changed(false);
   },
+  formatWordDate(value, { dateFormat, lid, calendar }) {
+    if (calendar && calendar !== 'gregorian') return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const day = new Date(value + 'T00:00:00Z');
+    if (isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== value) return null;
+    const [year, month, number] = value.split('-');
+    let locale = lid || 'en-US';
+    try { locale = Intl.getCanonicalLocales(locale)[0]; } catch { return null; }
+    if (!Intl.DateTimeFormat.supportedLocalesOf(locale).length) return null;
+    const localized = options => new Intl.DateTimeFormat(locale, {
+      ...options, calendar: 'gregory', timeZone: 'UTC'
+    }).format(day);
+    if (!dateFormat) return localized({ year: 'numeric', month: 'numeric', day: 'numeric' });
+    const pattern = /'[^']*'|"[^"]*"|d+|M+|y+|[^a-zA-Z'"]+|./g;
+    const values = {
+      d: () => String(Number(number)), dd: () => number,
+      ddd: () => localized({ weekday: 'short' }), dddd: () => localized({ weekday: 'long' }),
+      M: () => String(Number(month)), MM: () => month,
+      MMM: () => localized({ month: 'short' }), MMMM: () => localized({ month: 'long' }),
+      yy: () => year.slice(2), yyyy: () => year
+    };
+    const parts = [];
+    for (const token of dateFormat.match(pattern) || []) {
+      if (Object.hasOwn(values, token)) parts.push(values[token]());
+      else if (/^(?:'[^']*'|"[^"]*")$/.test(token)) parts.push(token.slice(1, -1));
+      else if (/^[^a-zA-Z'"]+$/.test(token) && !token.includes('\\')) parts.push(token);
+      else return null;
+    }
+    return parts.join('');
+  },
+  async chooseWordDate(control) {
+    if (control.getAttribute('aria-disabled') === 'true' || this.editor.contentEditable === 'false') return;
+    const docId = App.docId;
+    const options = JSON.parse(control.dataset.sdtDateOptions || '{}');
+    const field = el('input', { type: 'date', 'aria-label': 'Date du champ Word' });
+    if (!Object.hasOwn(control.dataset, 'sdtPlaceholderText')) field.value = control.dataset.sdtDateValue?.slice(0, 10) || '';
+    const confirmed = await dialog({
+      title: control.dataset.sdtAlias || 'Date du document Word', body: field,
+      buttons: [{ label: 'Annuler', value: false }, { label: 'Valider', value: true, primary: true }]
+    });
+    if (!confirmed || docId !== App.docId || !this.editor.contains(control) ||
+        this.editor.contentEditable === 'false') return;
+    if (field.value && field.value === control.dataset.sdtDateValue?.slice(0, 10) &&
+        !Object.hasOwn(control.dataset, 'sdtPlaceholderText')) return;
+    const display = this.formatWordDate(field.value, options);
+    if (display === null) {
+      toast('Sélectionnez une date valide dans un format et un calendrier pris en charge.');
+      return;
+    }
+    control.dataset.sdtDateValue = field.value + 'T00:00:00Z';
+    delete control.dataset.sdtPlaceholderText;
+    const text = document.createTextNode(display);
+    // Garder la mise en forme du premier segment de texte du champ.
+    const walker = document.createTreeWalker(control, NodeFilter.SHOW_TEXT);
+    const original = walker.nextNode();
+    if (!original) control.append(text);
+    else {
+      let styled = text;
+      for (let node = original.parentElement; node !== control; node = node.parentElement) {
+        const wrapper = node.cloneNode(false);
+        wrapper.append(styled);
+        styled = wrapper;
+      }
+      control.replaceChildren(styled);
+    }
+    this.changed(false);
+  },
   onClick(e) {
+    const date = e.target.closest('.pl-sdt-date');
+    if (date) { e.preventDefault(); this.chooseWordDate(date); return; }
     const dropdown = e.target.closest('.pl-sdt-dropdown');
     if (dropdown) { e.preventDefault(); this.chooseWordDropdown(dropdown); return; }
     const checkbox = e.target.closest('.pl-sdt-checkbox');
@@ -1564,6 +1633,12 @@ const Ed = {
 
   /* ---------- Clavier ---------- */
   onKeyDown(e) {
+    const date = e.target.closest('.pl-sdt-date');
+    if (date && (e.key === ' ' || e.key === 'Enter')) {
+      e.preventDefault();
+      this.chooseWordDate(date);
+      return;
+    }
     const dropdown = e.target.closest('.pl-sdt-dropdown');
     if (dropdown && (e.key === ' ' || e.key === 'Enter')) {
       e.preventDefault();

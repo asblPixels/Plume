@@ -1,7 +1,7 @@
 {
   "name": "plume",
   "productName": "Plume",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Plume — traitement de texte de Pixel's ASBL, compatible .docx",
   "author": "Pixel's ASBL <info@asblpixels.be>",
   "homepage": "https://github.com/asblPixels/plume",
@@ -25,6 +25,9 @@
     "files": [
       "main.js",
       "preload.js",
+      "signed-updater.js",
+      "update-key.json",
+      "native-access.js",
       "app/**/*"
     ],
     "fileAssociations": [

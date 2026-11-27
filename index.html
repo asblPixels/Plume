@@ -2,6 +2,7 @@
 <html lang="fr" data-theme="light">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Plume — traitement de texte</title>
 <meta name="description" content="Plume, le traitement de texte libre de Pixel's ASBL. Compatible .docx, fonctionne hors ligne sur Windows, macOS, Linux, Android et iOS.">
@@ -94,6 +95,7 @@
 </svg>
 
 <script src="vendor/jszip.min.js"></script>
+<script src="js/office-archive.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/util.js"></script>
 <script src="js/table-styles.js"></script>
@@ -109,6 +111,7 @@
 <script src="js/pdf-editor.js"></script>
 <script src="js/formats.js"></script>
 <script src="js/editor.js"></script>
+<script src="js/document-review.js"></script>
 <script src="js/ribbon.js"></script>
 <script src="js/backstage.js"></script>
 <script src="js/tools.js"></script>

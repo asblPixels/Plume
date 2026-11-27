@@ -4,8 +4,8 @@
  "files": [
   {
    "path": "index.html",
-   "size": 6043,
-   "sha256": "ed2cc0f69ba68d6cc065dba423824718c3c49c07ece009c2c2d6cab4718bb6aa"
+   "size": 6306,
+   "sha256": "f348d9ed15fd3231290d2decb6a3e91d38619c65fbfbf73e0080c4cd3826cb6e"
   },
   {
    "path": "manifest.webmanifest",
@@ -19,13 +19,13 @@
   },
   {
    "path": "css/plume.css",
-   "size": 56848,
-   "sha256": "9a06487862b5e78cb5d73682a6b7d23f29b6f267e48f48375845b66923887fb2"
+   "size": 57045,
+   "sha256": "6091073261e50e9bdb5966646b31732770959e1b0e5e26eddf16242448031adf"
   },
   {
    "path": "js/app.js",
-   "size": 67867,
-   "sha256": "c2c6cc802b599367e11272beb23d2221edea5d6dec8c79231bee34a7f11a9417"
+   "size": 68063,
+   "sha256": "efc8421688e54133e533d2a591063cd052542f1096708542347a8933b1d8cb42"
   },
   {
    "path": "js/backstage.js",
@@ -33,19 +33,24 @@
    "sha256": "a1f4728f2c0401bc4ead7da5571cba73749c609a88c6a6ba0ed2b5fbd965aaed"
   },
   {
+   "path": "js/document-review.js",
+   "size": 2663,
+   "sha256": "31035d0d16552454fdd3ca60faf60a0e64012b1b0586c25a6bab622758c9d2d9"
+  },
+  {
    "path": "js/docx-export.js",
-   "size": 77552,
-   "sha256": "5712c7999d299fedf4e5b65b73a8a7df48cb530f7e42bdf1c097405e6e926afb"
+   "size": 78080,
+   "sha256": "4570e4f49ad4c77043cbd99b436f04c4bdff3b7c4ceb095ae202ee6b96577fe0"
   },
   {
    "path": "js/docx-import.js",
-   "size": 75525,
-   "sha256": "4543ec7fdd6bc0a5cc89ae7d83d9b0a7ad0d8aa16ed2ce07ea8d003128f2c386"
+   "size": 76436,
+   "sha256": "4ff25bcd6faca88991218ae9185d2f8e54d9258459f40be06c700e50d25bfc9e"
   },
   {
    "path": "js/editor.js",
-   "size": 89263,
-   "sha256": "806bc2a080128f69d50afe4ead5af5326ce3bf7a4b5e1c998dee44b9db8dd3f9"
+   "size": 93065,
+   "sha256": "2e0e0f051d86c97f9a675d38f4dd41d43a96b2cbd9ae76757db6b93b3bfcf18d"
   },
   {
    "path": "js/embed-fonts.js",
@@ -54,8 +59,8 @@
   },
   {
    "path": "js/formats.js",
-   "size": 22470,
-   "sha256": "0c279a29a2b41419d4b580a367dfb050540f1ff1d5a7c3dc70b3d972057f7c45"
+   "size": 22714,
+   "sha256": "dc9d161da03a4a8ee127c1c930f6d71c3bc9a2615964351ef8ce7f3b7164f8f7"
   },
   {
    "path": "js/icons.js",
@@ -84,18 +89,28 @@
   },
   {
    "path": "js/odt.js",
-   "size": 61004,
-   "sha256": "1a82bcc20d439838be1bb0e4f5ce8b788bf650e232d516dae52ca2e17e251ecb"
+   "size": 61019,
+   "sha256": "f5f8d1e0baaecffed7d71e77ed5e69f8bcd6d5fbab6e5e4accf85dee081ef0ee"
+  },
+  {
+   "path": "js/office-archive-worker.js",
+   "size": 283,
+   "sha256": "a708ba46a0e405f274e9446c4c52d27ff6ec10faac4c6ab340e2ada472997130"
+  },
+  {
+   "path": "js/office-archive.js",
+   "size": 4066,
+   "sha256": "3dafc10a3c050816b7f0cd306e4ab6c7945d486c445bc94dbfe839ec08dbf683"
   },
   {
    "path": "js/pdf-editor.js",
-   "size": 22419,
-   "sha256": "286bd9431d56ec605d092464f9738d7b79ac291c84dc5a841d85a60542d81ece"
+   "size": 22875,
+   "sha256": "21474f76245835b90f02051b5051cb14c949346988fe031eea39893c495dea96"
   },
   {
    "path": "js/ribbon.js",
-   "size": 46383,
-   "sha256": "b2c609cfe5b99873c3e56751a75ff42fd8c8732815a867a2dbef16598889220d"
+   "size": 46531,
+   "sha256": "688f29c54cfe8cd0cb3c93e9be90cf9acf956f73641aa082929dd8e9aa40f7b7"
   },
   {
    "path": "js/rtf.js",

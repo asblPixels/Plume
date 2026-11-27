@@ -39,7 +39,7 @@ const Odt = (() => {
     let content, stylesDoc, metaDoc = null, zip = null;
     const head = new Uint8Array(buffer.slice ? buffer.slice(0, 4) : buffer);
     if (head[0] === 0x50 && head[1] === 0x4B) {          // archive ZIP (.odt/.ott)
-      zip = await JSZip.loadAsync(buffer);
+      zip = opts.zip || await OfficeArchive.load(buffer);
       const read = async p => { const f = zip.file(p); return f ? f.async('string') : null; };
       const c = await read('content.xml');
       if (!c) throw new Error('Ce fichier ne contient pas de texte OpenDocument (content.xml manquant).');
